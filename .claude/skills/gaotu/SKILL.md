@@ -317,6 +317,8 @@ source "$SCRIPTS_DIR/upload_screenshots.sh" "$SHOT_DIR" "$BITABLE_APP_TOKEN"
 
 ### 飞书 Wiki 报告 & 群通知
 
+> 生成报告内容时遵循 **feishu-format** skill 的格式规范（架构图/流程图用 Mermaid，禁止 ASCII 文字图）。
+
 ```bash
 # 获取 App 版本（Android）
 APP_VERSION=$(adb -s <UDID> shell dumpsys package com.gaotu100.superclass \
