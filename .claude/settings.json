@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb*)",
+      "Bash(python3*)",
+      "Bash(mkdir*)",
+      "Bash(date*)",
+      "Bash(sips*)",
+      "mcp__appium-mcp__list_sessions",
+      "mcp__appium-mcp__select_device",
+      "mcp__appium-mcp__create_session",
+      "mcp__appium-mcp__delete_session",
+      "mcp__appium-mcp__appium_screenshot",
+      "mcp__appium-mcp__appium_find_element",
+      "mcp__appium-mcp__appium_gesture",
+      "mcp__appium-mcp__appium_set_value",
+      "mcp__appium-mcp__appium_get_active_element",
+      "mcp__appium-mcp__appium_get_page_source",
+      "mcp__appium-mcp__appium_get_text",
+      "mcp__appium-mcp__appium_get_element_attribute",
+      "mcp__appium-mcp__appium_mobile_press_key",
+      "mcp__appium-mcp__appium_mobile_hide_keyboard",
+      "mcp__appium-mcp__appium_mobile_set_clipboard",
+      "mcp__appium-mcp__appium_app_lifecycle",
+      "mcp__appium-mcp__appium_alert",
+      "mcp__appium-mcp__appium_orientation",
+      "mcp__feishu__bitable_v1_appTableRecord_update",
+      "mcp__feishu__bitable_v1_appTableRecord_search",
+      "mcp__feishu__bitable_v1_appTableField_list",
+      "mcp__Banshan__testCaseDetail",
+      "mcp__Banshan__tagNode"
+    ]
+  }
+}

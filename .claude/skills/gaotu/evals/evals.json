@@ -1,0 +1,26 @@
+{
+  "skill_name": "gaotu-test-setup",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "eval-android-explicit",
+      "prompt": "帮我执行高途 app 用例：进入上课 tab，找到语文课程并点击进入。使用 Android 设备 ce67d979。",
+      "expected_output": "正确走 Android 分支：检查 adb devices、uiautomator2 驱动、APK 文件；创建 uiautomator2 session；执行 adb 权限预授权；adb force-stop + am start 重启 app；处理登录和弹窗；确认上课 tab 就绪",
+      "assertions": []
+    },
+    {
+      "id": 1,
+      "eval_name": "eval-ios-platform",
+      "prompt": "我要在 iPhone 上测高途 app，设备 UDID 是 00008110-001234AB。帮我准备好环境，账号用默认的。",
+      "expected_output": "正确走 iOS 分支：用 tidevice list 检查设备；检查 xcuitest 驱动；创建 XCUITest session（含 bundleId、autoAcceptAlerts）；用 appium_app_lifecycle terminate+activate 重启 app；iOS 登录全程 AI 视觉；弹窗处理含系统权限弹窗",
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "eval_name": "eval-no-platform",
+      "prompt": "帮我跑高途 app 自动化，登录后截图确认上课 tab 加载完成。",
+      "expected_output": "第零步主动追问：平台（Android/iOS）、设备 UDID、账号；不做任何设备操作直到收到回复",
+      "assertions": []
+    }
+  ]
+}
