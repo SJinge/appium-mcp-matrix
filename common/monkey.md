@@ -1,0 +1,90 @@
+# Monkey 测试协议
+
+> 由各 App skill 在选择「Monkey 测试」后调用。调用方须先完成 common/device.md Session 创建和 common/login.md 登录。
+
+---
+
+## 输入参数
+
+调用方传入以下变量（均有默认值）：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APP_ID` | — | 必填，如 `gaotu` |
+| `PKG` | — | 必填，Android packageName 或 iOS bundleId |
+| `PLATFORM` | Android | `Android` 或 `iOS` |
+| `UDID` | — | 设备 UDID |
+| `ACCOUNT` | — | 登录账号（用于报告） |
+| `VERSION` | — | App 版本号（用于报告） |
+| `max_ops` | 500 | 最大操作步数 |
+| `max_minutes` | 30 | 最大运行时长（分钟） |
+| `anomaly_interval` | 10 | 异常检查间隔步数 |
+
+---
+
+## 初始化
+
+```bash
+MONKEY_DIR="$HOME/mcp_shots/${APP_ID}/monkey_$(date +%Y%m%d_%H%M)"
+mkdir -p "$MONKEY_DIR"
+START_TS=$(date +%s)
+ops_count=0
+anomaly_log="$MONKEY_DIR/anomaly_log.json"
+actions_log="$MONKEY_DIR/actions_log.json"
+echo "[]" > "$anomaly_log"
+echo "[]" > "$actions_log"
+echo "[Monkey] 初始化完成 → $MONKEY_DIR"
+echo "[Monkey] 目标: max_ops=$max_ops, max_minutes=$max_minutes"
+```
+
+---
+
+## 主循环
+
+终止条件（先到先停）：`ops_count >= max_ops` 或 `(now - START_TS)/60 >= max_minutes`
+
+### 每步操作流程
+
+**Step A — 获取可交互元素**
+
+调用 `appium_get_page_source`，从返回的 XML/JSON 中提取满足以下条件的元素：
+- Android：`clickable="true"` 或 `enabled="true"` 且 `bounds` 不为空
+- iOS：`enabled="true"` 且有 `name` 或 `label`
+
+**Step B — 元素为空时的恢复策略**
+
+```
+if 元素列表为空:
+  重试 appium_back，最多 3 次
+  if 仍为空:
+    appium_tap 底部导航栏第一个 Tab（坐标：屏幕宽/5, 屏幕高*0.95）
+```
+
+**Step C — 加权随机决策**
+
+```
+random_value = random(0, 100)
+if random_value < 80:
+    随机选一个元素，取 bounds 中心坐标 → appium_tap x y
+elif random_value < 95:
+    随机选方向（up/down/left/right）→ appium_swipe
+else:
+    appium_back
+```
+
+**Step D — 记录操作到 actions_log**
+
+```bash
+python3 -c "
+import json, sys
+log = json.load(open('$actions_log'))
+log.append({'step': $ops_count, 'action': '$action', 'bounds': '$bounds', 'element_desc': '$element_desc', 'timestamp': '$(date +%H:%M:%S)'})
+json.dump(log, open('$actions_log','w'), ensure_ascii=False)
+"
+```
+
+**Step E — 递增计数**
+
+```bash
+ops_count=$((ops_count + 1))
+```
