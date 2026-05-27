@@ -147,6 +147,7 @@ fi
 ### 发现异常时追加到 anomaly_log
 
 ```bash
+STEP="$ops_count" ATYPE="$anomaly_type" ADESC="$anomaly_desc" ASHOT="$SHOT_PATH" PLATFORM="$PLATFORM" \
 python3 -c "
 import json, os
 log = json.load(open('$anomaly_log'))
@@ -159,7 +160,7 @@ log.append({
     'timestamp': '$(date +%H:%M:%S)'
 })
 json.dump(log, open('$anomaly_log', 'w'), ensure_ascii=False)
-" STEP="$ops_count" ATYPE="$anomaly_type" ADESC="$anomaly_desc" ASHOT="$SHOT_PATH" PLATFORM="$PLATFORM"
+"
 echo "[Monkey] 已记录异常: $anomaly_type (step $ops_count)"
 ```
 
