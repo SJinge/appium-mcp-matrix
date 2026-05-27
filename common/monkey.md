@@ -106,3 +106,90 @@ json.dump(log, open('$actions_log', 'w'), ensure_ascii=False)
 ```bash
 ops_count=$((ops_count + 1))
 ```
+
+---
+
+## 每 anomaly_interval 步的异常检测
+
+在每步 Step E 递增后执行：
+
+```bash
+if [ $((ops_count % anomaly_interval)) -eq 0 ]; then
+  echo "[Monkey] step $ops_count — 开始异常检测"
+  SHOT_PATH="$MONKEY_DIR/step_$(printf '%04d' $ops_count).png"
+fi
+```
+
+当 `ops_count % anomaly_interval == 0` 时，调用 `appium_screenshot`，将截图保存到 `$SHOT_PATH`。
+
+### 视觉检测（Claude 判断）
+
+逐一检查以下四类异常：
+
+| 类型 | 判断依据 |
+|------|---------|
+| `blank_screen` | 屏幕全白或全黑，无可识别 UI |
+| `crash` | "已停止运行"、"应用无响应" 等系统崩溃弹窗 |
+| `unexpected_dialog` | 非业务逻辑触发的系统权限弹窗或未知弹窗 |
+| `error_content` | 明显错误文案、Error Toast、异常空状态 |
+
+### 日志检测（Android 专属）
+
+```bash
+if [ "$PLATFORM" = "Android" ]; then
+  adb -s "$UDID" logcat -d -t 200 \
+    | grep -E "FATAL EXCEPTION|ANR in|NullPointerException|java.lang.RuntimeException" \
+    > /tmp/monkey_logcat_tmp.txt 2>/dev/null || true
+  # 若 /tmp/monkey_logcat_tmp.txt 非空 → 判定为 crash 或 anr
+fi
+```
+
+### 发现异常时追加到 anomaly_log
+
+```bash
+python3 -c "
+import json, os
+log = json.load(open('$anomaly_log'))
+log.append({
+    'step': int(os.environ['STEP']),
+    'type': os.environ['ATYPE'],
+    'description': os.environ['ADESC'],
+    'screenshot': os.environ['ASHOT'],
+    'logcat': open('/tmp/monkey_logcat_tmp.txt').read()[:500] if os.environ.get('PLATFORM') == 'Android' else '',
+    'timestamp': '$(date +%H:%M:%S)'
+})
+json.dump(log, open('$anomaly_log', 'w'), ensure_ascii=False)
+" STEP="$ops_count" ATYPE="$anomaly_type" ADESC="$anomaly_desc" ASHOT="$SHOT_PATH" PLATFORM="$PLATFORM"
+echo "[Monkey] 已记录异常: $anomaly_type (step $ops_count)"
+```
+
+其中 `$anomaly_type` 和 `$anomaly_desc` 由 Claude 根据截图和 logcat 内容确定后赋值。
+
+---
+
+## 崩溃恢复（非阻塞）
+
+检测到 `crash` 或 `anr` 类型异常时，在记录完异常后执行以下恢复流程，**不中断主循环，ops_count 不重置**：
+
+```bash
+echo "[Monkey] 检测到 $anomaly_type，开始恢复流程"
+
+# 1. 强制停止 App
+if [ "$PLATFORM" = "Android" ]; then
+  adb -s "$UDID" shell am force-stop "$PKG"
+else
+  # iOS：调用 appium_terminate_app
+  echo "[Monkey] iOS: 调用 appium_terminate_app 终止 $PKG"
+fi
+
+# 2. 重新启动 App
+echo "[Monkey] 重新启动 App..."
+# 调用 appium_launch_app，等待启动完成（最长 10s）
+
+# 3. 重新登录
+# 按 common/login.md 对应 App 的登录流程执行登录
+echo "[Monkey] 执行登录流程（common/login.md）"
+
+# 4. 继续主循环
+echo "[Monkey] 恢复完成，继续主循环（ops_count=$ops_count）"
+```
