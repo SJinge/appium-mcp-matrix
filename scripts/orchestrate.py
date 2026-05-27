@@ -61,6 +61,93 @@ def _notify(app_id: str, version: str, message: str):
     pass  # implemented in Task 10
 
 
+def _get_token() -> str:
+    data = json.dumps({"app_id": APP_ID, "app_secret": APP_SECRET}).encode()
+    req  = urllib.request.Request(
+        "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+        data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    return json.load(urllib.request.urlopen(req))["tenant_access_token"]
+
+
+def _text_field(value) -> str:
+    if isinstance(value, list):
+        return "".join(item.get("text", "") for item in value)
+    return str(value) if value else ""
+
+
+def parse_record(record: dict) -> dict:
+    fields = record["fields"]
+    num    = fields.get("用例编号", "")
+    name   = _text_field(fields.get("用例名称", ""))
+    steps  = []
+
+    for line in _text_field(fields.get("预置条件", "")).splitlines():
+        line = line.strip()
+        if line:
+            steps.append({"type": "PRECOND", "text": line})
+
+    raw_steps = _text_field(fields.get("测试步骤", ""))
+    for line in raw_steps.splitlines():
+        line = line.strip()
+        if line:
+            steps.append({"type": "ACTION", "text": line})
+
+    for line in _text_field(fields.get("验证点", "")).splitlines():
+        line = line.strip()
+        if line:
+            steps.append({"type": "ASSERT", "text": line})
+    result_text = _text_field(fields.get("预期结果", "")).strip()
+    if result_text:
+        steps.append({"type": "ASSERT", "text": result_text})
+
+    return {
+        "record_id":      record["record_id"],
+        "name":           f"{num} {name}".strip(),
+        "steps":          steps,
+        "android_device": _text_field(fields.get("Android设备", "")),
+        "ios_device":     _text_field(fields.get("ios设备", "")),
+        "module":         _text_field(fields.get("模块", "")),
+    }
+
+
+def fetch_cases(app_id: str) -> list:
+    cfg   = BITABLE_CONFIGS[app_id]
+    token = _get_token()
+    url   = (f"https://open.feishu.cn/open-apis/bitable/v1/apps"
+             f"/{cfg['app_token']}/tables/{cfg['table_id']}/records/search")
+    body  = json.dumps({
+        "filter": {
+            "conjunction": "and",
+            "conditions": [{"field_name": "是否执行自动化", "operator": "is",
+                            "value": ["true"]}]
+        },
+        "page_size": 500
+    }).encode()
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json"},
+        method="POST"
+    )
+    resp  = json.load(urllib.request.urlopen(req))
+    items = resp.get("data", {}).get("items", [])
+    return [parse_record(r) for r in items]
+
+
+def group_by_device(entries: list) -> dict:
+    groups = {}
+    for entry in entries:
+        for platform, field in [("Android", "android_device"), ("iOS", "ios_device")]:
+            udid = entry.get(field, "").strip()
+            if not udid:
+                continue
+            if udid not in groups:
+                groups[udid] = {"platform": platform, "entries": []}
+            groups[udid]["entries"].append(entry)
+    return groups
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--app",     required=True)

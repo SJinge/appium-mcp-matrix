@@ -35,3 +35,42 @@ def test_install_android_calls_adb(mock_run):
     args = mock_run.call_args[0][0]
     assert "adb" in args[0]
     assert "a1" in args
+
+def test_parse_bitable_record():
+    record = {
+        "record_id": "rec001",
+        "fields": {
+            "用例编号": 1,
+            "用例名称": [{"text": "测试登录", "type": "text"}],
+            "测试步骤": [{"text": "1. 点击登录按钮\n2. 输入手机号", "type": "text"}],
+            "预期结果": [{"text": "进入首页", "type": "text"}],
+            "验证点":   [{"text": "显示用户头像", "type": "text"}],
+            "预置条件": [{"text": "当前在登录页", "type": "text"}],
+            "Android设备": [{"text": "a1", "type": "text"}],
+            "ios设备":    [{"text": "i1", "type": "text"}],
+            "是否执行自动化": True,
+        }
+    }
+    entry = orchestrate.parse_record(record)
+    assert entry["record_id"] == "rec001"
+    assert entry["name"] == "1 测试登录"
+    assert any(s["type"] == "PRECOND" for s in entry["steps"])
+    assert any(s["type"] == "ACTION"  for s in entry["steps"])
+    assert any(s["type"] == "ASSERT"  for s in entry["steps"])
+    assert entry["android_device"] == "a1"
+    assert entry["ios_device"] == "i1"
+
+def test_group_by_device():
+    entries = [
+        {"record_id": "r1", "android_device": "a1", "ios_device": "i1",
+         "name": "case1", "steps": []},
+        {"record_id": "r2", "android_device": "a2", "ios_device": "",
+         "name": "case2", "steps": []},
+    ]
+    groups = orchestrate.group_by_device(entries)
+    assert "a1" in groups
+    assert groups["a1"]["platform"] == "Android"
+    assert "i1" in groups
+    assert groups["i1"]["platform"] == "iOS"
+    assert "a2" in groups
+    assert "" not in groups  # empty device not grouped
