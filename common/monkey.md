@@ -194,3 +194,50 @@ echo "[Monkey] 执行登录流程（common/login.md）"
 # 4. 继续主循环
 echo "[Monkey] 恢复完成，继续主循环（ops_count=$ops_count）"
 ```
+
+---
+
+## 跑完后 AI 汇总分析
+
+主循环结束后执行以下步骤：
+
+### 1. 读取统计
+
+```bash
+END_TS=$(date +%s)
+DURATION=$((END_TS - START_TS))
+anomalies=$(python3 -c "import json; print(len(json.load(open('$anomaly_log'))))")
+echo "[Monkey] 完成 — ops=$ops_count, duration=${DURATION}s, anomalies=$anomalies"
+```
+
+### 2. AI 汇总每条异常
+
+读取 `anomaly_log.json`，对每条记录：
+- 从 `actions_log.json` 中取 `[step-3 .. step]` 的 3 步操作作为「触发路径」
+- 格式化为：`tap 课程列表 → swipe down → tap 播放按钮`
+
+### 3. 构建 cases JSON 并生成报告
+
+```bash
+python3 scripts/build_monkey_cases.py \
+  "$anomaly_log" "$actions_log" "$UDID" "$PLATFORM" \
+  > /tmp/monkey_cases_${UDID}.json
+
+total=$(python3 -c "import json; c=json.load(open('/tmp/monkey_cases_${UDID}.json')); print(len(c))")
+failed=$(python3 -c "import json; c=json.load(open('/tmp/monkey_cases_${UDID}.json')); print(sum(1 for x in c if not x['passed']))")
+passed=$((total - failed))
+rate=$(python3 -c "print(round($passed/$total*100))")
+
+python3 scripts/wiki_report.py \
+  --app "$APP_ID" \
+  --version "$VERSION" \
+  --platform "$PLATFORM" \
+  --account "$ACCOUNT" \
+  --time "$(date +%H:%M:%S)" \
+  --duration "${DURATION}s" \
+  --total "$total" \
+  --passed "$passed" \
+  --failed "$failed" \
+  --rate "$rate" \
+  --cases "$(cat /tmp/monkey_cases_${UDID}.json)"
+```
