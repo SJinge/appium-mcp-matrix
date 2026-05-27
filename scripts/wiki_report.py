@@ -224,6 +224,7 @@ def add_monkey_report_table(doc_token, cases, counter):
     }
 
     rows = []
+    shot_no = 0
     for c in cases:
         name  = c.get("name", "")
         seq   = c.get("seq", "")
@@ -247,7 +248,11 @@ def add_monkey_report_table(doc_token, cases, counter):
         trigger_path = note.replace("触发路径: ", "").replace("触发路径:", "").strip()
 
         shot_path  = c.get("screenshot", "")
-        shot_field = os.path.basename(shot_path) if shot_path else "无"
+        if shot_path:
+            shot_no += 1
+            shot_field = f"见下方 #截图{shot_no}"
+        else:
+            shot_field = "无"
 
         rows.append([
             str(seq),
@@ -394,15 +399,17 @@ def main():
     if cases:
         if is_monkey:
             add_monkey_report_table(doc_token, cases, counter)
-            # 有截图的异常：补充图片块
+            # 有截图的异常：补充图片详情块（与表格中的 #截图N 对应）
             has_images = any(c.get("screenshot") for c in cases)
             if has_images:
-                add_block(doc_token, heading_block(2, "异常截图"), counter)
+                add_block(doc_token, heading_block(2, "异常截图详情"), counter)
+                shot_no = 0
                 for c in cases:
                     shot = c.get("screenshot", "")
                     if not shot:
                         continue
-                    add_block(doc_token, text_block(f"【{c['name'][:40]}】"), counter)
+                    shot_no += 1
+                    add_block(doc_token, text_block(f"#截图{shot_no}  【{c['name'][:40]}】"), counter)
                     file_token = upload_doc_image(doc_token, shot)
                     if file_token:
                         add_block(doc_token, image_block(file_token), counter)
