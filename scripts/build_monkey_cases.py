@@ -15,6 +15,19 @@ def build_cases(anomaly_log_path, actions_log_path, device, platform):
     with open(actions_log_path) as f:
         actions = json.load(f)
 
+    # 去重：同 type + logcat/description 前缀视为同一问题
+    seen = {}
+    for anomaly in anomalies:
+        logcat_key = anomaly.get("logcat", "")[:200]
+        desc_key = anomaly.get("description", "")[:80]
+        key = f"{anomaly['type']}|{logcat_key if logcat_key else desc_key}"
+        if key not in seen:
+            seen[key] = dict(anomaly)
+            seen[key]["occurrences"] = 1
+        else:
+            seen[key]["occurrences"] += 1
+    anomalies = list(seen.values())
+
     if not anomalies:
         return [{
             "name": "Monkey Run — 无异常",
