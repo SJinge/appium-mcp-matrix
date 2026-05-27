@@ -148,6 +148,36 @@ def group_by_device(entries: list) -> dict:
     return groups
 
 
+def run_exploration(app_id: str, version: str, android_udid: str):
+    index_path = os.path.join(PROJECT_ROOT, "apps", app_id, version, "index.md")
+    if os.path.exists(index_path):
+        print(f"[INFO] App map exists at {index_path}, skipping exploration")
+        return
+
+    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+    prompt = (
+        f"探索 {app_id} App，版本 {version}，设备 {android_udid}（Android）。"
+        f"广度优先遍历各 Tab 和子页面（最大深度2），"
+        f"为每个页面截图并分析 UI 树，"
+        f"生成 apps/{app_id}/{version}/index.md 和 pages/*.md。"
+        f"见 common/device.md 了解设备就绪检查规范。"
+    )
+    skill_dir  = os.path.join(PROJECT_ROOT, ".claude", "skills", app_id)
+    common_dir = os.path.join(PROJECT_ROOT, "common")
+    cmd = ["claude", "--add-dir", skill_dir, "--add-dir", common_dir, "--print", prompt]
+    log_path = f"/tmp/explore_{app_id}_{version}.log"
+    print(f"[INFO] Starting exploration, log: {log_path}")
+    try:
+        with open(log_path, "w") as log:
+            r = subprocess.run(cmd, stdout=log, stderr=log, timeout=1800)
+        if r.returncode == 0 and os.path.exists(index_path):
+            print(f"[INFO] Exploration done, index.md generated")
+        else:
+            print(f"[WARN] Exploration failed or index.md missing, continuing (fallback to visual)")
+    except subprocess.TimeoutExpired:
+        print(f"[WARN] Exploration timeout (30min), continuing")
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--app",     required=True)
@@ -193,6 +223,10 @@ def _run(app_id, version, apk_url, ipa_url):
         return
 
     print(f"[INFO] Install done: Android {len(android_ok)}, iOS {len(ios_ok)}")
+
+    # 3. Explore (new version)
+    if android_ok:
+        run_exploration(app_id, version, android_ok[0]["udid"])
 
 
 def main():
