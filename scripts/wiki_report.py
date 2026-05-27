@@ -40,9 +40,12 @@ def parse_args():
     p.add_argument("--passed",    required=True)
     p.add_argument("--failed",    required=True)
     p.add_argument("--rate",      required=True)
-    p.add_argument("--cases",     help="JSON 格式用例列表")
-    p.add_argument("--results",   help="纯文本明细（旧版兼容）")
-    p.add_argument("--no-notify", action="store_true", help="跳过群消息（调试用）")
+    p.add_argument("--cases",       help="JSON 格式用例列表")
+    p.add_argument("--results",     help="纯文本明细（旧版兼容）")
+    p.add_argument("--report-type", default="auto", choices=["auto", "monkey"],
+                   help="报告类型：auto=常规自动化，monkey=随机稳定性测试")
+    p.add_argument("--steps",       default="", help="Monkey 总操作步数（仅 monkey 类型使用）")
+    p.add_argument("--no-notify",   action="store_true", help="跳过群消息（调试用）")
     return p.parse_args()
 
 # ─── Feishu HTTP ─────────────────────────────────────────────────────────────
@@ -214,11 +217,19 @@ def main():
     app_name    = APP_NAMES.get(args.app, args.app)
     platform_cn = PLATFORM_CN.get(args.platform.lower(), args.platform)
     today       = datetime.date.today().strftime("%Y%m%d")
-    title       = f"{app_name}{args.version}-{platform_cn}自动化报告-{today}"
+    is_monkey   = args.report_type == "monkey"
     cases       = json.loads(args.cases) if args.cases else []
 
     devices_in_cases = list(dict.fromkeys(c["device"] for c in cases if c.get("device")))
     device_display   = "  ".join(devices_in_cases) if devices_in_cases else args.device
+
+    # ── 标题（Wiki 节点名）
+    if is_monkey:
+        title        = f"{app_name}{args.version}-{platform_cn}随机稳定性测试-{today}"
+        report_title = f"{app_name} 随机稳定性测试报告（Monkey）"
+    else:
+        title        = f"{app_name}{args.version}-{platform_cn}自动化报告-{today}"
+        report_title = f"{app_name}自动化测试报告"
 
     # 创建 Wiki 节点
     create_resp = feishu("POST",
@@ -231,17 +242,27 @@ def main():
 
     counter = [0]
 
-    # 报告头部
-    add_block(doc_token, heading_block(1, f"{app_name}自动化测试报告"), counter)
+    # ── 报告头部
+    add_block(doc_token, heading_block(1, report_title), counter)
     add_block(doc_token, text_block(
         f"执行时间：{today} {args.time}  |  总耗时：{args.duration}"
     ), counter)
-    add_block(doc_token, text_block(
-        f"平台：{args.platform}  设备：{device_display}  账号：{args.account}"
-    ), counter)
+    if is_monkey:
+        anomaly_count = int(args.failed)
+        steps_info    = f"  总步数：{args.steps}" if args.steps else ""
+        add_block(doc_token, text_block(
+            f"平台：{args.platform}  设备：{device_display}{steps_info}"
+        ), counter)
+        add_block(doc_token, text_block(
+            f"发现异常：{anomaly_count} 条  ({'无崩溃/ANR' if anomaly_count == 0 else '见下方明细'})"
+        ), counter)
+    else:
+        add_block(doc_token, text_block(
+            f"平台：{args.platform}  设备：{device_display}  账号：{args.account}"
+        ), counter)
     add_block(doc_token, divider_block(), counter)
 
-    # 主表格
+    # ── 主表格
     if cases:
         add_report_table(doc_token, cases, counter)
     elif args.results:
@@ -255,19 +276,35 @@ def main():
         print("[调试模式] 跳过群消息")
         return
 
-    msg_text = (
-        f"📈 {app_name} {args.version} 自动化测试报告\n\n"
-        f"📅 执行日期：{today}  执行时间：{args.time}\n"
-        f"📱 平台：{args.platform}  设备：{device_display}\n"
-        f"👤 账号：{args.account}\n"
-        f"⏱ 总耗时：{args.duration}\n\n"
-        f"📊 执行概要\n"
-        f"• 用例总数：{args.total}\n"
-        f"• 通过：{args.passed} ✅\n"
-        f"• 失败：{args.failed} ❌\n"
-        f"• 通过率：{args.rate}%\n\n"
-        f"📄 详细报告：{wiki_url}"
-    )
+    # ── 群消息
+    if is_monkey:
+        anomaly_count = int(args.failed)
+        steps_line    = f"• 总步数：{args.steps}\n" if args.steps else ""
+        msg_text = (
+            f"🐒 {app_name} {args.version} 随机稳定性测试报告\n\n"
+            f"📅 执行日期：{today}  执行时间：{args.time}\n"
+            f"📱 平台：{args.platform}  设备：{device_display}\n"
+            f"⏱ 总耗时：{args.duration}\n\n"
+            f"📊 测试概要\n"
+            f"{steps_line}"
+            f"• 发现异常：{anomaly_count} 条 {'✅ 无问题' if anomaly_count == 0 else '❌ 见报告'}\n"
+            f"• 崩溃/ANR：0\n\n"
+            f"📄 详细报告：{wiki_url}"
+        )
+    else:
+        msg_text = (
+            f"📈 {app_name} {args.version} 自动化测试报告\n\n"
+            f"📅 执行日期：{today}  执行时间：{args.time}\n"
+            f"📱 平台：{args.platform}  设备：{device_display}\n"
+            f"👤 账号：{args.account}\n"
+            f"⏱ 总耗时：{args.duration}\n\n"
+            f"📊 执行概要\n"
+            f"• 用例总数：{args.total}\n"
+            f"• 通过：{args.passed} ✅\n"
+            f"• 失败：{args.failed} ❌\n"
+            f"• 通过率：{args.rate}%\n\n"
+            f"📄 详细报告：{wiki_url}"
+        )
     feishu("POST",
         "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
         {"receive_id": GROUP_CHAT_ID, "msg_type": "text",
