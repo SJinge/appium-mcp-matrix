@@ -1,0 +1,20 @@
+# 每个 app 可覆盖，留空则继承 default
+default:
+  android:
+    - udid: "ANDROID_UDID_1"
+      name: "Android设备1"
+    - udid: "ANDROID_UDID_2"
+      name: "Android设备2"
+    - udid: "ANDROID_UDID_3"
+      name: "Android设备3"
+    - udid: "ANDROID_UDID_4"
+      name: "Android设备4"
+  ios:
+    - udid: "IOS_UDID_1"
+      name: "iOS设备1"
+    - udid: "IOS_UDID_2"
+      name: "iOS设备2"
+    - udid: "IOS_UDID_3"
+      name: "iOS设备3"
+    - udid: "IOS_UDID_4"
+      name: "iOS设备4"
