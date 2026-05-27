@@ -65,6 +65,8 @@ def build_cases(anomaly_log_path, actions_log_path, device, platform):
             "seq": i,
             "passed": False,
             "duration": 0,
+            "screenshot": anomaly.get("screenshot", ""),
+            "timestamp": anomaly.get("timestamp", ""),
             "steps": [{
                 "type": "ANOMALY",
                 "text": anomaly["description"],

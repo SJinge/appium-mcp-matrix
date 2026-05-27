@@ -98,6 +98,35 @@ def heading_block(level, content):
 def divider_block():
     return {"block_type": 22, "divider": {}}
 
+def upload_doc_image(doc_token, image_path):
+    """上传图片到飞书文档，返回 file_token（失败返回空字符串）"""
+    import os
+    if not image_path or not os.path.exists(image_path):
+        return ""
+    size = os.path.getsize(image_path)
+    fname = os.path.basename(image_path)
+    url = "https://open.feishu.cn/open-apis/drive/v1/medias/upload_all"
+    import subprocess, json as _json
+    result = subprocess.run([
+        "curl", "-s", "-X", "POST", url,
+        "-H", f"Authorization: Bearer {TOKEN}",
+        "-F", f"file_name={fname}",
+        "-F", "parent_type=doc_image",
+        "-F", f"parent_node={doc_token}",
+        "-F", f"size={size}",
+        "-F", f"file=@{image_path}",
+    ], capture_output=True, text=True)
+    try:
+        d = _json.loads(result.stdout)
+        return d.get("data", {}).get("file_token", "") if d.get("code") == 0 else ""
+    except Exception:
+        return ""
+
+
+def image_block(file_token):
+    return {"block_type": 27, "image": {"token": file_token, "width": 300}}
+
+
 def add_block(doc_token, block, counter):
     """向文档追加一个 block，失败时不推进 counter。"""
     n = counter[0]
@@ -361,6 +390,20 @@ def main():
     if cases:
         if is_monkey:
             add_monkey_report_table(doc_token, cases, counter)
+            # 有截图的异常：补充图片块
+            has_images = any(c.get("screenshot") for c in cases)
+            if has_images:
+                add_block(doc_token, heading_block(2, "异常截图"), counter)
+                for c in cases:
+                    shot = c.get("screenshot", "")
+                    if not shot:
+                        continue
+                    add_block(doc_token, text_block(f"【{c['name'][:40]}】"), counter)
+                    file_token = upload_doc_image(doc_token, shot)
+                    if file_token:
+                        add_block(doc_token, image_block(file_token), counter)
+                    else:
+                        add_block(doc_token, text_block(f"（截图上传失败：{shot}）"), counter)
         else:
             add_report_table(doc_token, cases, counter)
     elif args.results:
