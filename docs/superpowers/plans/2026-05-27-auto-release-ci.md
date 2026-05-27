@@ -66,47 +66,10 @@ git commit -m "fix: make --account optional in wiki_report (batch execution has 
 
 ---
 
-### Task 2：Bitable —— 添加"执行自动化"字段
+### Task 2：~~Bitable 添加字段~~ —— 已跳过
 
-**Files:** 无代码文件，手动操作
-
-- [ ] **Step 1: 打开各 App 的 Bitable 用例表，添加 Checkbox 字段**
-
-字段配置：
-- 字段名：`执行自动化`
-- 类型：Checkbox（勾选框）
-- 默认值：false
-
-需在以下 App 的表格中各添加一次：
-`gaotu / tutu / jingpin / gongkao / xinli / ketang`
-
-- [ ] **Step 2: 为已有用例批量勾选"执行自动化"**
-
-在 Bitable 视图中筛选需要参与自动化的用例，批量勾选该字段。
-
-- [ ] **Step 3: 验证字段存在**
-
-```bash
-# 替换为实际 app_token 和 table_id
-python3 -c "
-import sys, json, urllib.request
-sys.path.insert(0, 'scripts')
-from feishu_config import APP_ID, APP_SECRET
-data = json.dumps({'app_id': APP_ID, 'app_secret': APP_SECRET}).encode()
-req = urllib.request.Request(
-    'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
-    data=data, headers={'Content-Type': 'application/json'}, method='POST')
-token = json.load(urllib.request.urlopen(req))['tenant_access_token']
-req2 = urllib.request.Request(
-    'https://open.feishu.cn/open-apis/bitable/v1/apps/<APP_TOKEN>/tables/<TABLE_ID>/fields',
-    headers={'Authorization': f'Bearer {token}'})
-resp = json.load(urllib.request.urlopen(req2))
-fields = [f['field_name'] for f in resp['data']['items']]
-print('执行自动化' in fields)
-"
-```
-
-预期输出：`True`
+> Bitable 用例表中已存在 **"是否是否执行自动化"** 列（Checkbox），无需新建。
+> Task 7 的过滤字段名统一使用 `是否是否执行自动化`。
 
 ---
 
@@ -673,7 +636,7 @@ def test_parse_bitable_record():
             "预置条件": [{"text": "当前在登录页", "type": "text"}],
             "Android设备": [{"text": "a1", "type": "text"}],
             "ios设备":    [{"text": "i1", "type": "text"}],
-            "执行自动化": True,
+            "是否执行自动化": True,
         }
     }
     entry = orchestrate.parse_record(record)
@@ -775,7 +738,7 @@ def fetch_cases(app_id: str) -> list[dict]:
     body  = json.dumps({
         "filter": {
             "conjunction": "and",
-            "conditions": [{"field_name": "执行自动化", "operator": "is",
+            "conditions": [{"field_name": "是否执行自动化", "operator": "is",
                             "value": ["true"]}]
         },
         "page_size": 500
@@ -1238,7 +1201,7 @@ git commit -m "docs: add Flask deployment env example"
 | 防重复执行 | Task 5（is_running） |
 | APK/IPA 安装 | Task 6 |
 | 探索新版本 | Task 8 |
-| Bitable 过滤"执行自动化" | Task 7 |
+| Bitable 过滤"是否执行自动化" | Task 7 |
 | 按设备字段分组 | Task 7 |
 | 8 台并行执行 | Task 9 |
 | 90min 超时保护 | Task 9 |
@@ -1246,4 +1209,4 @@ git commit -m "docs: add Flask deployment env example"
 | 飞书群最终通知 | Task 10 |
 | wiki_report.py --account 可选 | Task 1 |
 | devices.yaml 配置 | Task 3 |
-| Bitable "执行自动化"字段 | Task 2 |
+| Bitable "是否执行自动化"字段 | Task 2 |
