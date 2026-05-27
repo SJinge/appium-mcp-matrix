@@ -33,7 +33,7 @@ def parse_args():
     p.add_argument("--version",   required=True)
     p.add_argument("--platform",  required=True)
     p.add_argument("--device",    default="")
-    p.add_argument("--account",   required=True)
+    p.add_argument("--account",   default="多账号")
     p.add_argument("--time",      required=True)
     p.add_argument("--duration",  required=True)
     p.add_argument("--total",     required=True)
