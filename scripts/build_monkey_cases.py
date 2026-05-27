@@ -51,7 +51,7 @@ def build_cases(anomaly_log_path, actions_log_path, device, platform):
                 path_parts.append(f"{s['action']} {desc}")
             else:
                 path_parts.append(s["action"])
-        trigger_path = " → ".join(path_parts) if path_parts else "不明"
+        trigger_path = anomaly.get("repro_path") or (" → ".join(path_parts) if path_parts else "不明")
 
         occ = anomaly.get("occurrences", 1)
         occ_suffix = f" ×{occ}台设备" if occ > 1 else ""
