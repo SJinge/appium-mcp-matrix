@@ -241,3 +241,109 @@ python3 scripts/wiki_report.py \
   --rate "$rate" \
   --cases "$(cat /tmp/monkey_cases_${UDID}.json)"
 ```
+
+---
+
+## 多设备并行模式
+
+当用户提供多台设备时，主 agent 并行派发 subagent，每台设备独立跑完整 Monkey 循环。
+
+### 主 agent 职责
+
+```bash
+# 1. 确认设备列表 DEVICE_LIST=("udid_A" "udid_B" ...)
+# 2. 并行派发：每台设备一个 subagent，传入以下变量：
+#    APP_ID, PKG, PLATFORM, UDID, ACCOUNT, VERSION, max_ops, max_minutes
+# 3. 每个 subagent 完成后写结果文件
+# 4. 主 agent 轮询等待所有结果文件
+while true; do
+  all_done=true
+  for udid in "${DEVICE_LIST[@]}"; do
+    [ -f "/tmp/monkey_result_${udid}.json" ] || { all_done=false; break; }
+  done
+  $all_done && break
+  sleep 10
+done
+echo "[Monkey] 所有设备完成，开始合并"
+# 5. 合并所有 anomaly → 去重（见「崩溃堆栈去重」章节）→ 生成统一报告
+```
+
+### 子 agent 职责
+
+执行完整 Monkey 循环（初始化 → 主循环 → 跑完后汇总分析），最后写结果文件：
+
+```bash
+python3 -c "
+import json
+anomalies = json.load(open('$anomaly_log'))
+result = [{
+    'device': '$UDID',
+    'platform': '$PLATFORM',
+    'anomalies': anomalies,
+    'ops_count': $ops_count,
+    'duration': $DURATION
+}]
+json.dump(result, open('/tmp/monkey_result_$UDID.json', 'w'), ensure_ascii=False)
+"
+python3 -c "import json; json.load(open('/tmp/monkey_result_$UDID.json'))" \
+  && echo "[OK] 结果文件合法"
+```
+
+---
+
+## 崩溃堆栈去重
+
+在主 agent 合并多台设备结果时，或单设备汇总时，对全部异常执行去重。
+
+**去重 key**：`type + logcat 前 200 字符`（有 logcat 时）或 `type + description 前 80 字符`（无 logcat / iOS）
+
+```python
+seen = {}
+for anomaly in all_anomalies:
+    logcat_key = anomaly.get("logcat", "")[:200]
+    desc_key = anomaly.get("description", "")[:80]
+    key = f"{anomaly['type']}|{logcat_key if logcat_key else desc_key}"
+    if key not in seen:
+        seen[key] = dict(anomaly)
+        seen[key]["occurrences"] = 1
+    else:
+        seen[key]["occurrences"] += 1
+deduped = list(seen.values())
+```
+
+去重完成后，将 `deduped` 传入 `build_monkey_cases.py`（通过临时文件或管道）。报告中出现次数 > 1 的条目，case name 会自动追加 `×N台设备`（由 `build_monkey_cases.py` 处理）。
+
+---
+
+## Monkey 用例回放
+
+**触发条件**：用户提及「回放」+ step 编号，且 `$MONKEY_DIR/actions_log.json` 存在。
+
+### 回放步骤
+
+```bash
+TARGET_STEP=<从用户指令解析>
+REPLAY_FROM=$((TARGET_STEP - 3))
+
+# 1. 提取操作序列
+python3 -c "
+import json
+actions = json.load(open('$actions_log'))
+replay = [a for a in actions if $REPLAY_FROM <= a['step'] <= $TARGET_STEP]
+print(json.dumps(replay, ensure_ascii=False))
+" > /tmp/monkey_replay.json
+
+# 2. 逐步执行（使用原始坐标，不重新做元素定位）
+# 对每条 action：
+#   tap   → appium_tap x y
+#          （从 bounds "[x1,y1][x2,y2]" 解析中心：x=(x1+x2)/2, y=(y1+y2)/2）
+#   swipe → appium_swipe direction（up/down/left/right）
+#   back  → appium_back
+
+# 3. 到达 TARGET_STEP 后截图
+appium_screenshot → 保存 $MONKEY_DIR/replay_step_${TARGET_STEP}.png
+
+# 4. Claude 判断是否复现
+# 与原始异常类型一致 → 输出「已复现 — 截图: $MONKEY_DIR/replay_step_${TARGET_STEP}.png」
+# 否则 → 输出「未复现」
+```
