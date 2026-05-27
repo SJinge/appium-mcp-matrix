@@ -210,10 +210,10 @@ def add_table(doc_token, headers, rows, counter, col_widths=None):
 # ─── 报告主体 ─────────────────────────────────────────────────────────────────
 
 def add_monkey_report_table(doc_token, cases, counter):
-    """Monkey 专属表：序号|异常类型|触发步骤|异常描述|触发路径|发现时间"""
-    import re
-    headers    = ["序号", "异常类型", "触发步骤", "异常描述", "触发路径", "发现时间"]
-    col_widths = [45,     90,         80,          220,         220,         80]
+    """Monkey 专属表：序号|异常类型|触发步骤|异常描述|触发路径|异常截图|发现时间"""
+    import re, os
+    headers    = ["序号", "异常类型", "触发步骤", "异常描述", "触发路径", "异常截图", "发现时间"]
+    col_widths = [45,     90,         80,          180,         180,         120,       80]
 
     TYPE_LABEL = {
         "crash":             "崩溃",
@@ -246,12 +246,16 @@ def add_monkey_report_table(doc_token, cases, counter):
         note        = step0.get("note", "")
         trigger_path = note.replace("触发路径: ", "").replace("触发路径:", "").strip()
 
+        shot_path  = c.get("screenshot", "")
+        shot_field = os.path.basename(shot_path) if shot_path else "无"
+
         rows.append([
             str(seq),
             type_label,
             trigger_step,
             desc,
             trigger_path,
+            shot_field,
             c.get("timestamp", ""),
         ])
 
