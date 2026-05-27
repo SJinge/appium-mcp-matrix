@@ -86,8 +86,10 @@ def webhook():
 
     app_id, version = parsed["app_id"], parsed["version"]
 
-    if is_running(app_id, version):
-        return "ok"
-
-    ssh_trigger(app_id, version, parsed["apk_url"], parsed["ipa_url"])
+    try:
+        if is_running(app_id, version):
+            return "ok"
+        ssh_trigger(app_id, version, parsed["apk_url"], parsed["ipa_url"])
+    except Exception as e:
+        print(f"[WARN] SSH error for {app_id} {version}: {e}")
     return "ok"

@@ -263,8 +263,8 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
     return results
 
 
-def generate_reports(app_id: str, version: str, results: dict, duration: int):
-    start_time = datetime.datetime.now().strftime("%H:%M:%S")
+def generate_reports(app_id: str, version: str, results: dict, duration: int, start_time_str: str = None):
+    start_time = start_time_str or datetime.datetime.now().strftime("%H:%M:%S")
     script = os.path.join(PROJECT_ROOT, "scripts", "wiki_report.py")
 
     android_cases, ios_cases = [], []
@@ -293,7 +293,8 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int):
              "--time", start_time, "--duration", f"{duration}s",
              "--total", str(total), "--passed", str(passed),
              "--failed", str(failed), "--rate", str(rate),
-             "--cases", json.dumps(cases, ensure_ascii=False)],
+             "--cases", json.dumps(cases, ensure_ascii=False),
+             "--no-notify"],
             capture_output=True, text=True
         )
         for line in result.stdout.splitlines():
@@ -367,7 +368,11 @@ def _run(app_id, version, apk_url, ipa_url):
 
     # 4. Read Bitable
     print("[INFO] Fetching Bitable cases...")
-    entries = fetch_cases(app_id)
+    try:
+        entries = fetch_cases(app_id)
+    except Exception as e:
+        _notify(app_id, version, f"❌ Bitable 读取失败：{e}")
+        return
     groups  = group_by_device(entries)
     if not groups:
         _notify(app_id, version, f"⚠️ {app_id} {version} 无标记自动化用例")
@@ -378,6 +383,7 @@ def _run(app_id, version, apk_url, ipa_url):
     print(f"[INFO] {total} cases across {len(groups)} devices")
 
     # 5. Parallel execution
+    start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
     procs   = launch_claude_per_device(app_id, groups,
                                         cfg["app_token"], cfg["table_id"])
@@ -386,7 +392,7 @@ def _run(app_id, version, apk_url, ipa_url):
     print(f"[INFO] Execution done, total time {duration}s")
 
     # 6. Generate reports
-    generate_reports(app_id, version, results, duration)
+    generate_reports(app_id, version, results, duration, start_time_str=start_time_str)
 
     # 7. Cleanup temp files
     for udid in groups:
