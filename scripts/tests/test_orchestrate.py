@@ -74,3 +74,29 @@ def test_group_by_device():
     assert groups["i1"]["platform"] == "iOS"
     assert "a2" in groups
     assert "" not in groups  # empty device not grouped
+
+import tempfile
+import json as _json
+
+def test_collect_results_reads_json(tmp_path):
+    udid = "test_device"
+    result_file = tmp_path / f"result_{udid}.json"
+    cases = [{"name": "case1", "platform": "Android", "device": udid,
+               "module": "首页", "passed": True, "duration": 30, "steps": []}]
+    result_file.write_text(_json.dumps(cases))
+
+    results = orchestrate.collect_results(
+        {udid: None},
+        result_dir=str(tmp_path),
+        timeout=5
+    )
+    assert udid in results
+    assert results[udid][0]["passed"] is True
+
+def test_collect_results_timeout_marks_failure(tmp_path):
+    results = orchestrate.collect_results(
+        {"missing_device": None},
+        result_dir=str(tmp_path),
+        timeout=1
+    )
+    assert results["missing_device"] == "timeout"

@@ -178,6 +178,72 @@ def run_exploration(app_id: str, version: str, android_udid: str):
         print(f"[WARN] Exploration timeout (30min), continuing")
 
 
+def build_prompt(app_id: str, udid: str, platform: str,
+                 entries: list, bitable_token: str, table_id: str) -> str:
+    cases_json = json.dumps(
+        [{"record_id": e["record_id"], "name": e["name"],
+          "module": e["module"], "steps": e["steps"]} for e in entries],
+        ensure_ascii=False
+    )
+    return (
+        f"你是{app_id} App 自动化测试工程师。\n"
+        f"设备：{udid}（{platform}）\n"
+        f"Bitable app_token={bitable_token} table_id={table_id}\n\n"
+        f"请依次执行以下用例，每条完成后立即回写 Bitable 执行结果。\n"
+        f"全部执行完成后，将结果写入 /tmp/result_{udid}.json（格式参考 common/parallel.md）。\n\n"
+        f"用例列表：\n{cases_json}"
+    )
+
+
+def launch_claude_per_device(app_id: str, groups: dict,
+                              bitable_token: str, table_id: str) -> dict:
+    procs = {}
+    skill_dir  = os.path.join(PROJECT_ROOT, ".claude", "skills", app_id)
+    common_dir = os.path.join(PROJECT_ROOT, "common")
+
+    for udid, group in groups.items():
+        prompt   = build_prompt(app_id, udid, group["platform"],
+                                group["entries"], bitable_token, table_id)
+        log_path = f"/tmp/claude_{udid}.log"
+        cmd = ["claude", "--add-dir", skill_dir, "--add-dir", common_dir,
+               "--print", prompt]
+        with open(log_path, "w") as log:
+            proc = subprocess.Popen(cmd, stdout=log, stderr=log)
+        procs[udid] = proc
+        print(f"[INFO] Launched {group['platform']} {udid} (pid={proc.pid})")
+    return procs
+
+
+def collect_results(procs: dict, result_dir: str = "/tmp",
+                    timeout: int = 90 * 60) -> dict:
+    deadline = time.time() + timeout
+    pending  = set(procs.keys())
+    results  = {}
+
+    while pending and time.time() < deadline:
+        for udid in list(pending):
+            path = os.path.join(result_dir, f"result_{udid}.json")
+            if os.path.exists(path):
+                try:
+                    with open(path) as f:
+                        results[udid] = json.load(f)
+                    pending.discard(udid)
+                    print(f"[INFO] {udid} done, results read")
+                except json.JSONDecodeError:
+                    pass
+        if pending:
+            time.sleep(10)
+
+    for udid in pending:
+        print(f"[WARN] {udid} timeout, killing")
+        proc = procs.get(udid)
+        if proc and proc.poll() is None:
+            proc.kill()
+        results[udid] = "timeout"
+
+    return results
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--app",     required=True)
@@ -227,6 +293,26 @@ def _run(app_id, version, apk_url, ipa_url):
     # 3. Explore (new version)
     if android_ok:
         run_exploration(app_id, version, android_ok[0]["udid"])
+
+    # 4. Read Bitable
+    print("[INFO] Fetching Bitable cases...")
+    entries = fetch_cases(app_id)
+    groups  = group_by_device(entries)
+    if not groups:
+        _notify(app_id, version, f"⚠️ {app_id} {version} 无标记自动化用例")
+        return
+
+    cfg = BITABLE_CONFIGS[app_id]
+    total = sum(len(g["entries"]) for g in groups.values())
+    print(f"[INFO] {total} cases across {len(groups)} devices")
+
+    # 5. Parallel execution
+    start_time = time.time()
+    procs   = launch_claude_per_device(app_id, groups,
+                                        cfg["app_token"], cfg["table_id"])
+    results = collect_results(procs)
+    duration = int(time.time() - start_time)
+    print(f"[INFO] Execution done, total time {duration}s")
 
 
 def main():
