@@ -255,9 +255,84 @@ Monkey 测试报告 — 高途 5.91.x — Android
 
 ---
 
+## 多设备并行
+
+复用 `common/parallel.md` 的 subagent 模式：每台设备启动一个 subagent 独立跑 Monkey，完成后主 agent 合并 `anomaly_log.json`，去重后统一生成报告。
+
+**分工：**
+
+| 角色 | 职责 |
+|------|------|
+| 主 agent | 解析设备列表 → 并行派发 subagent → 等待结果文件 → 合并去重 → 生成报告 |
+| 子 agent | 独立跑 Monkey 循环 → 写 `/tmp/monkey_result_<udid>.json` |
+
+**结果文件格式**（与 `parallel.md` 一致）：
+
+```json
+[
+  { "device": "<udid>", "platform": "Android", "anomalies": [...], "ops_count": 500, "duration": 1680 }
+]
+```
+
+合并后，相同类型 + 相同触发路径的异常跨设备去重（见下节）。
+
+---
+
+## 崩溃堆栈去重
+
+目的：多台设备或多次触发同一崩溃只记录一条，避免报告冗余。
+
+**去重 key**：`type + logcat 前 3 行`（Android）或 `type + 截图语义描述`（iOS）
+
+**去重逻辑**（在主 agent 合并阶段执行）：
+
+```python
+seen = {}
+for anomaly in all_anomalies:
+    key = f"{anomaly['type']}|{anomaly['logcat'][:200] if anomaly.get('logcat') else anomaly['description'][:80]}"
+    if key not in seen:
+        seen[key] = anomaly
+        seen[key]['occurrences'] = 1
+    else:
+        seen[key]['occurrences'] += 1
+deduped = list(seen.values())
+```
+
+报告中标注重复次数：`[step 42] 崩溃 × 3台设备`。
+
+---
+
+## Monkey 用例回放
+
+**目的**：Monkey 跑出异常后，可单独重放触发该异常的操作序列，用于问题复现与确认。
+
+**操作序列记录**（主循环中持续写入）：
+
+```json
+// actions_log.json
+[
+  {"step": 40, "action": "tap", "bounds": "[100,200][300,400]", "element_desc": "课程列表第一项", "timestamp": "14:32:05"},
+  {"step": 41, "action": "swipe", "direction": "down", "timestamp": "14:32:06"},
+  {"step": 42, "action": "tap", "bounds": "[50,600][200,650]", "element_desc": "播放按钮", "timestamp": "14:32:07"}
+]
+```
+
+**回放触发**：
+
+用户在报告中看到异常后，可说：「回放 step 42 的崩溃」
+
+```
+common/monkey.md 回放模式：
+  读取 actions_log.json 中 [step-3 .. step] 的操作序列
+  → 逐步执行（tap/swipe 复原坐标）
+  → 到达目标步骤后截图确认是否复现
+  → 输出"已复现" / "未复现"
+```
+
+回放使用坐标直接执行（`appium_tap coordinates`），不重新做元素定位。
+
+---
+
 ## 不在本次范围内
 
-- 多设备并行 Monkey（后续可扩展，复用 `common/parallel.md`）
 - iOS logcat 检测（iOS 用视觉检测兜底，无 adb logcat）
-- 自动去重相同崩溃堆栈（后续可扩展）
-- Monkey 用例回放（记录操作序列后重新执行复现）
