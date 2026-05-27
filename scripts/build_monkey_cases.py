@@ -10,8 +10,10 @@ import sys
 
 
 def build_cases(anomaly_log_path, actions_log_path, device, platform):
-    anomalies = json.load(open(anomaly_log_path))
-    actions = json.load(open(actions_log_path))
+    with open(anomaly_log_path) as f:
+        anomalies = json.load(f)
+    with open(actions_log_path) as f:
+        actions = json.load(f)
 
     if not anomalies:
         return [{
@@ -31,8 +33,11 @@ def build_cases(anomaly_log_path, actions_log_path, device, platform):
         prev_steps = [s for s in actions if s["step"] <= step][-3:]
         path_parts = []
         for s in prev_steps:
-            desc = s.get("element_desc") or s.get("action", "")
-            path_parts.append(f"{s['action']} {desc}".strip())
+            desc = s.get("element_desc", "")
+            if desc:
+                path_parts.append(f"{s['action']} {desc}")
+            else:
+                path_parts.append(s["action"])
         trigger_path = " → ".join(path_parts) if path_parts else "不明"
 
         occ = anomaly.get("occurrences", 1)
