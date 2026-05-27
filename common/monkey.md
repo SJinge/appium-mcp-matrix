@@ -265,7 +265,18 @@ while true; do
   sleep 10
 done
 echo "[Monkey] 所有设备完成，开始合并"
-# 5. 合并所有 anomaly → 去重（见「崩溃堆栈去重」章节）→ 生成统一报告
+# 5. 合并所有设备的 anomaly → 去重 → 生成统一报告
+python3 -c "
+import json, glob
+all_anomalies = []
+for f in sorted(glob.glob('/tmp/monkey_result_*.json')):
+    data = json.load(open(f))
+    for device_result in data:
+        all_anomalies.extend(device_result.get('anomalies', []))
+print(json.dumps(all_anomalies, ensure_ascii=False))
+" > /tmp/monkey_all_anomalies.json
+# 再按「崩溃堆栈去重」章节对 /tmp/monkey_all_anomalies.json 执行去重
+# 最后调用 build_monkey_cases.py 生成报告
 ```
 
 ### 子 agent 职责
