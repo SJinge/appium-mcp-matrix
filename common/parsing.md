@@ -48,13 +48,13 @@
 | 预期结果 | Text | 整体预期（作为最终 ASSERT） |
 | 验证点 | Text | 具体验证点（作为 ASSERT，可选） |
 | Android设备 | Text | 执行用 Android 设备序列号（如 `ce67d979`） |
-| iOS设备 | Text | 执行用 iOS 设备 UDID |
+| ios设备 | Text | 执行用 iOS 设备 UDID |
 | 执行结果 | SingleSelect | 回写：`通过` / `失败` |
 | 备注/执行详情 | Text | 回写：失败原因或执行摘要 |
 | 截图 | Attachment | 回写：附件（当前暂不支持上传） |
 | 父记录 | SingleLink | 层级关系（忽略，不影响执行） |
 
-> 设备字段名以实际表格列名为准，常见变体：`Android设备ID`、`iOS设备ID`、`设备(Android)`、`设备(iOS)`。读取前调用 `bitable_v1_appTableField_list` 确认实际字段名。
+> 设备字段名以实际表格列名为准（已确认：`Android设备` / `ios设备`）。若不存在调用 `bitable_v1_appTableField_list` 确认。
 
 **文本字段格式**：值为数组 `[{text: "...", type: "text"}, …]`，解析时拼接所有 text 值。
 
@@ -80,8 +80,8 @@
 1. 调用 bitable_v1_appTableRecord_search(app_token, table_id, page_size=500)
    读取所有记录（每条记录 = 一个完整用例）
 
-2. 若有多条记录，展示用例列表（用例编号 + 用例名称）让用户选择要执行哪条
-   → 用户选择后只处理选中记录，其余忽略
+2. 若有多条记录，展示用例列表（用例编号 + 用例名称）让用户选择要执行哪些
+   → 支持多选（并行模式下通常全选）；用户确认后只处理选中记录，其余忽略
 
 3. 对选中记录解析步骤：
    ① 解析 测试步骤 字段：
@@ -98,13 +98,13 @@
       - 拼接所有 text 值，按 \n 分割，过滤空行
       - 每行作为一个前置检查/执行项
       - 常见映射：
-        | 预置条件文字 | 执行动作 |
-        |------------|---------|
-        | 进入 app 首页 / 首页 | ASSERT 当前在上课/首页 tab，不符则导航过去 |
-        | 进入 AI闪学 tab | ASSERT 在 AI闪学 tab，不符则点底部 tab 导航 |
-        | 重启 App：否 | 仅确认 app 在前台运行 |
-        | 重启 App：是 | 执行重启（等同于第三步） |
-        | 账号：1210xxxxx | ASSERT 登录账号匹配，不符则重新登录 |
+        | 预置条件文字 | 路径 C 执行动作 | 路径 A/B 执行动作 |
+        |------------|--------------|----------------|
+        | 进入 app 首页 / 首页 / 进入 XX tab | **忽略**（模块字段已处理 tab 导航） | ASSERT 当前在目标 tab，不符则导航过去 |
+        | 重启 App：否 | 仅确认 app 在前台运行 | 同左 |
+        | 重启 App：是 | 执行重启（等同于第三步） | 同左 |
+        | 账号：1210xxxxx | ASSERT 登录账号匹配，不符则重新登录 | 同左 |
+        | 账号有已购课程 / 其他数据条件 | 记录为前置说明，执行时截图确认 | 同左 |
 
 4. 构建最终步骤列表（顺序）：
    [PRECOND] 步骤P1: <预置条件行1>
@@ -116,22 +116,39 @@
    [ASSERT]  步骤N:  <验证点>
    [ASSERT]  步骤N+1: <预期结果>
 
-5. 提取候选设备列表：
-   ① 根据平台读取表格中的设备字段：
-      - Android → `Android设备` 字段；iOS → `iOS设备` 字段
+5. 提取设备字段，生成执行记录列表：
+
+   ① 读取每条记录的 `Android设备` 和 `ios设备` 字段值
       - 若字段名不存在 → 调用 bitable_v1_appTableField_list 确认实际字段名后重试
-   ② 将字段值按换行或逗号分割，得到候选设备列表
-   ③ 将候选列表记为 DEVICE_CANDIDATES（供 skill 执行层展示选项）
-   ④ 若字段为空，DEVICE_CANDIDATES = []
+
+   ② 按以下规则生成执行记录（EXECUTION_ENTRIES）：
+
+   | Android设备 | ios设备 | 处理方式 |
+   |------------|--------|---------|
+   | 有值 | 有值 | 拆成两条：Android 一条 + iOS 一条 |
+   | 有值 | 空 | 生成一条 Android 执行记录 |
+   | 空 | 有值 | 生成一条 iOS 执行记录 |
+   | 空 | 空 | 跳过，标注「无设备，未执行」 |
+
+   ③ 每条执行记录结构：
+   ```json
+   {
+     "record_id": "<bitable_record_id>",
+     "name": "<用例编号> <用例名称>",
+     "platform": "Android" 或 "iOS",
+     "device": "<设备序列号或UDID>",
+     "module": "<模块字段值>",
+     "steps": [...]
+   }
+   ```
 
 6. 记录上下文变量（供后续步骤使用）：
-   BITABLE_APP_TOKEN = <app_token>
-   BITABLE_TABLE_ID  = <table_id>
-   BITABLE_RECORD_ID = <选中记录的 record_id>
-   DEVICE_UDID       = <用户选择的设备 ID>
+   BITABLE_APP_TOKEN  = <app_token>
+   BITABLE_TABLE_ID   = <table_id>
+   BITABLE_RECORD_IDS = [<所有选中记录的 record_id>]
+   EXECUTION_ENTRIES  = [<生成的执行记录列表>]
 
 7. 将解析结果返回给 skill 执行层：
-   - 步骤列表（含类型标注）
-   - DEVICE_CANDIDATES（设备候选列表，空则表示无预设）
-   - BITABLE_APP_TOKEN / TABLE_ID / RECORD_ID
+   - EXECUTION_ENTRIES（执行记录列表，含平台/设备/步骤）
+   - BITABLE_APP_TOKEN / TABLE_ID / RECORD_IDS
 ```

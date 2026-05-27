@@ -7,6 +7,8 @@
       "Bash(date*)",
       "Bash(sips*)",
       "mcp__appium-mcp__list_sessions",
+      "mcp__appium-mcp__select_session",
+      "mcp__appium-mcp__appium_mobile_is_keyboard_shown",
       "mcp__appium-mcp__select_device",
       "mcp__appium-mcp__create_session",
       "mcp__appium-mcp__delete_session",
@@ -28,7 +30,9 @@
       "mcp__feishu__bitable_v1_appTableRecord_search",
       "mcp__feishu__bitable_v1_appTableField_list",
       "mcp__Banshan__testCaseDetail",
-      "mcp__Banshan__tagNode"
+      "mcp__Banshan__tagNode",
+      "Edit(/.claude/skills/gaotu/**)",
+      "mcp__appium-mcp__appium_perform_actions"
     ]
   }
 }

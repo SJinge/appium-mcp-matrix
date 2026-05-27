@@ -81,13 +81,16 @@ description: 高途矩阵6个App通用登录skill，支持验证码登录、密�
 ### 分支二：密码登录（method=password）
 
 ```
-1. 确认当前在验证码登录页
+1. 检查当前页面（postion_sign_in_tv 文字）：
+   - text="密码登录" → 已在密码页，直接跳至步骤4
+   - text="手机号登录" → 在验证码页，继续步骤2
 2. tap go_password_btn 切换到密码登录页
-3. 等待页面切换（postion_sign_in_tv text="密码登录"）
-4. 清空并输入手机号 → password_login_phone_et 下的 account_enter_et
-5. 清空并输入密码 → password_login_password_et 下的 account_enter_et
-6. tap account_sign_btn（text="登录"）
-7. 等待登录成功（见成功判断）
+3. 等待页面切换（postion_sign_in_tv text="密码登录"，超时 5s）
+4. 处理协议勾选（同分支一前置逻辑）
+5. 清空并输入手机号 → password_login_phone_et 下的 account_enter_et
+6. 清空并输入密码 → password_login_password_et 下的 account_enter_et
+7. tap account_sign_btn（text="登录"）
+8. 等待登录成功（见成功判断）
 ```
 
 ### 分支三：微信登录（method=wechat）

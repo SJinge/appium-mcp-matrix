@@ -8,9 +8,12 @@
 
 - **AI 视觉元素定位**：优先截图 + `ai_instruction` 自然语言描述定位，三级降级（AI → resource-id/xpath → 坐标兜底），无惧页面结构变化
 - **三路用例接入**：搬山 caseId 节点树解析 / 自然语言步骤 / 飞书 Bitable 表格，统一转为 `ACTION / ASSERT / PRECOND` 步骤列表
+- **多设备并行执行**：Bitable 路径按设备字段自动拆分执行条目，每台设备派发独立 subagent 并行跑，完成后按平台合并为 Android / iOS 两份报告
+- **执行计划优化（预扫描）**：多条用例自动按账号聚合排序，减少登录切换和 App 重启次数
+- **App 安装/卸载**：支持 Appium MCP 安装指定版本 APK，卸载重装后自动处理首次启动弹窗序列
 - **6 App 公共模块复用**：登录、弹窗处理、权限授权、截图等策略集中维护，各 App skill 只管差异
-- **结果闭环**：截图自动上传飞书 → Bitable 三字段回写（执行结果 / 备注 / 截图）→ Wiki 报告生成 → IM 群通知
-- **Android / iOS 双端支持**：capabilities 模板、权限预授权、WDA 启动均已抽象为公共规范
+- **结果闭环**：截图并行上传飞书 → 按平台写入独立结果表（iOS / Android 各一张，batch_create）→ Wiki 报告生成 → IM 群通知
+- **Android / iOS 双端支持**：capabilities 模板、权限预授权（含 Android 13+ 适配）、WDA 启动均已抽象为公共规范
 
 ---
 
@@ -24,7 +27,7 @@
 | appium-uiautomator2-driver | 最新版 | Android 驱动 |
 | appium-xcuitest-driver | 最新版 | iOS 驱动 |
 | Android SDK / adb | 已配置环境变量 | Android 设备通信 |
-| tidevice | ≥ 0.9 | iOS 设备管理（推荐） |
+| tidevice | ≥ 0.9 | iOS 真机管理 |
 | Python 3 | ≥ 3.8 | 报告脚本（仅用标准库） |
 | macOS sips | 系统内置 | 横屏截图旋转 |
 | 飞书应用机器人 | — | Bitable 回写、Wiki 报告、IM 通知（可选） |
@@ -49,7 +52,7 @@ npm install -g appium-mcp
 
 ### 3. 配置 Claude Code MCP
 
-在 Claude Code **全局**设置（`~/.claude/settings.json`）中同时注册两个 MCP Server：
+在 Claude Code **全局**设置（`~/.claude/settings.json`）中注册两个 MCP Server：
 
 ```json
 {
@@ -87,7 +90,7 @@ npm install -g appium-mcp
 | 字段 | 所属 | 说明 |
 |------|------|------|
 | `ANDROID_HOME` | appium-mcp | 本地 Android SDK 路径，如 `/Users/yourname/Library/Android/sdk` |
-| `AI_VISION_API_KEY` | appium-mcp | AI 视觉模型 API Key，不配则 AI 视觉定位不可用，退化为 xpath/resource-id |
+| `AI_VISION_API_KEY` | appium-mcp | AI 视觉模型 API Key，不配则 AI 视觉定位退化为 xpath/resource-id |
 | `AI_VISION_API_BASE_URL` | appium-mcp | 视觉模型接口地址 |
 | `AI_VISION_MODEL` | appium-mcp | 视觉模型名称，默认 `qwen3-vl-235b-a22b-instruct` |
 | `APP_ID` / `APP_SECRET` | feishu | 飞书机器人凭证，**与下方第 5 步中三处填写的是同一套值** |
@@ -147,33 +150,9 @@ tidevice list
 
 ## 使用教程 / 快速上手
 
-### 启动方式
+### 触发执行
 
-**方式一：`start.sh`（推荐）**
-
-```bash
-./start.sh gaotu
-```
-
-将 `skills/gaotu/` 和 `common/` 目录注入上下文，启动 Claude Code 交互对话。进入对话后直接输入用例指令即可触发执行。
-
-> 每次只能启动一个 App 的会话。同时测试多个 App 需开多个终端分别执行。
-
-**方式二：`/gaotu` slash command**
-
-将 `skills/gaotu/` 目录软链到 `~/.claude/skills/`：
-
-```bash
-ln -s "$(pwd)/skills/gaotu" ~/.claude/skills/gaotu
-```
-
-之后在任意 Claude Code 会话中输入 `/gaotu` 即可触发。
-
-> 注意：此方式下 `common/` 目录未注入，skill 中引用的公共文件（`parsing.md` 等）需要 Claude 从项目路径读取，建议在项目目录内启动 Claude Code 会话。
-
-### 执行测试用例
-
-在 Claude Code 对话中，支持以下触发方式：
+在 Claude Code 项目目录中，输入 `/gaotu` 触发 skill，再输入用例指令：
 
 **方式 A：搬山 caseId**
 
@@ -190,34 +169,52 @@ ln -s "$(pwd)/skills/gaotu" ~/.claude/skills/gaotu
 3. 预期：课程列表正常展示
 ```
 
-**方式 C：飞书 Bitable 链接**
+**方式 C：飞书 Bitable 链接（支持多设备并行）**
 
 ```
 执行飞书表格用例：https://xxx.feishu.cn/wiki/xxxxx?table=tblxxxxxxxx
 ```
 
+Bitable 表格中每条用例含 `Android设备` / `ios设备` 字段，自动按设备拆分执行条目，多台设备并行跑，最终生成 Android 和 iOS 两份独立报告。
+
 ### 执行流程概览
 
+**顺序执行（路径 A / B）：**
+
 ```
-第零步  解析用例 & 确认步骤列表
+第零步  解析用例 & 确认步骤列表（≥2条时执行预扫描排序）
   ↓
 设备就绪检查（adb devices / tidevice list）
   ↓
-第一步  adb 预授权麦克风/摄像头/存储权限
+第一步  adb 预授权权限（麦克风/摄像头，Android 13+ 适配存储权限）
   ↓
 第二步  创建 Appium Session
   ↓
-第三步  重启 App（force-stop → am start）
+第三步  重启 App（首次安装后处理协议/青少年守护弹窗）
   ↓
-第四步  检测登录状态 → 按需登录
+第四步  检测登录状态 → 按需登录（密码登录，自动检测当前页面）
   ↓
 第五步  批量关闭登录后弹窗（最多 5 轮）
   ↓
-第六步  导航至目标起始页（依据关键词自动判断）
+第六步  记录执行起点 & 创建截图目录
   ↓
 第七步  循环执行 PRECOND → ACTION → ASSERT 步骤
   ↓
 第八步  清理收尾 → 执行报告 → Bitable 回写 → Wiki 推送
+```
+
+**并行执行（路径 C Bitable）：**
+
+```
+第零步  解析 Bitable → 生成 EXECUTION_ENTRIES（按设备拆分）
+  ↓
+按 device 字段分组 → 每台设备派发一个 subagent（同时启动）
+  ↓
+各 subagent 独立完成第一~第八步 → 写 /tmp/result_<udid>.json（纯 JSON 数组格式）
+  ↓
+主 agent 轮询等待所有 subagent 完成
+  ↓
+按平台合并 → batch_create 到 iOS/Android 独立结果表 → Android 报告 + iOS 报告（wiki_report.py × 2）
 ```
 
 ### 常用参数默认值（高途 App）
@@ -229,7 +226,7 @@ ln -s "$(pwd)/skills/gaotu" ~/.claude/skills/gaotu
 | phone | `12100000000` |
 | password | `Gaotu@1234` |
 
-> 需要修改默认设备或账号时，编辑 `skills/gaotu/SKILL.md` 顶部的参数表格。
+> 需要修改默认值时，编辑 `.claude/skills/gaotu/SKILL.md` 顶部的参数表格。
 
 ---
 
@@ -237,38 +234,43 @@ ln -s "$(pwd)/skills/gaotu" ~/.claude/skills/gaotu
 
 ```
 appium-mcp-matrix/
-├── start.sh                       # 启动入口，注入指定 App skill 上下文
-├── CLAUDE.md                      # Claude Code 项目指令（上下文规则）
+├── CLAUDE.md                          # Claude Code 项目指令（上下文规则）
 │
-├── common/                        # 跨 App 公共模块
-│   ├── device.md                  # 设备就绪检查 & Session capabilities 模板
-│   ├── login.md                   # 通用登录 skill（验证码/密码/微信）
-│   ├── parsing.md                 # 用例解析规则（搬山/自然语言/Bitable）
-│   ├── permission.md              # Android adb 权限预授权
-│   ├── screenshot.md              # 截图规范、等待策略、弹窗处理循环
-│   └── elements/
-│       ├── login.md               # 登录页公共元素（{pkg} 占位符）
-│       └── dialog.md              # 通用弹窗元素
+├── common/                            # 跨 App 公共模块
+│   ├── elements/
+│   │   ├── login.md                   # 登录页公共元素（{pkg} 占位符）
+│   │   └── dialog.md                  # 通用弹窗元素
+│   ├── app.md                         # App 安装/卸载流程
+│   ├── device.md                      # 设备就绪检查 & Session capabilities 模板
+│   ├── login.md                       # 通用登录 skill（验证码/密码）
+│   ├── parallel.md                    # 多设备并行执行 & 报告合并
+│   ├── parsing.md                     # 用例解析规则（搬山/自然语言/Bitable）
+│   ├── permission.md                  # Android adb 权限预授权（含 Android 13+ 适配）
+│   ├── prescan.md                     # 多用例预扫描 & 执行计划优化
+│   ├── screenshot.md                  # 截图规范、等待策略、弹窗处理循环
+│   └── startup.md                     # 首次启动弹窗说明（各 App 见对应 skill 目录）
 │
-├── skills/
-│   └── gaotu/                     # 高途 App 专用 skill
-│       ├── SKILL.md               # 完整执行流程（第零~第八步）
-│       ├── elements.md            # 高途专属元素定位 & AI 视觉规范
-│       └── evals/
-│           └── evals.json         # skill 评估用例
+├── .claude/skills/
+│   ├── appium-expert/
+│   │   └── SKILL.md                   # Appium 通用排障（设备/Session/元素定位/MCP）
+│   └── gaotu/
+│       ├── SKILL.md                   # 高途完整执行流程（第零~第八步）
+│       ├── elements.md                # 高途专属元素定位 & AI 视觉规范
+│       └── startup.md                 # 高途首次启动弹窗序列（协议 → 青少年守护）
 │
 └── scripts/
-    ├── feishu_config.py           # 飞书应用凭证常量（APP_ID/APP_SECRET/SPACE_ID 等）
-    ├── upload_screenshots.sh      # 截图批量上传飞书 Bitable
-    └── wiki_report.py             # 生成 Wiki 报告 & 发送群通知
+    ├── feishu_config.py               # 飞书应用凭证常量（APP_ID/APP_SECRET/SPACE_ID 等）
+    ├── upload_screenshots.sh          # 截图并行上传飞书 Bitable
+    └── wiki_report.py                 # 生成 Wiki 报告 & 发送群通知（支持多设备汇总表）
 ```
 
 ### 新增 App 的扩展方式
 
-1. 在 `skills/` 下新建目录，如 `skills/tutu/`
-2. 复制 `skills/gaotu/SKILL.md` 并修改包名、默认参数
-3. 新建 `skills/tutu/elements.md` 补充该 App 专属元素
-4. 执行：`./start.sh tutu`
+1. 在 `.claude/skills/` 下新建目录，如 `.claude/skills/tutu/`
+2. 复制 `.claude/skills/gaotu/SKILL.md` 并修改包名、默认参数
+3. 新建 `.claude/skills/tutu/elements.md` 补充该 App 专属元素
+4. 如有首次启动弹窗，新建 `.claude/skills/tutu/startup.md`
+5. 在 Claude Code 中输入 `/tutu` 触发
 
 ---
 
@@ -307,7 +309,7 @@ adb -s <device> install -r $APK_DIR/appium-uiautomator2-server-debug-androidTest
 
 **Q: 登录页截图全黑，看不到任何内容？**
 
-Android 登录页启用了 `FLAG_SECURE`，截图强制黑屏。解决方法：跳过截图，改用 `appium_get_page_source` + `resource-id` 定位元素；切换到密码登录页后恢复正常截图。
+页面跳转过渡帧导致的时序问题（非 `FLAG_SECURE`）。解决方法：等待 1s 后重试截图，通常即可恢复；确实拍到黑帧时改用 `appium_get_page_source` + `resource-id` 定位元素。
 
 ---
 
@@ -345,6 +347,25 @@ Android/iOS 高分辨率设备原图超 2000px 会触发 Claude 多图限制。
 ```bash
 sips -r 90 /path/to/screenshot.png
 ```
+
+---
+
+**Q: 并行执行时，主 agent 如何知道所有设备跑完了？**
+
+每个设备 subagent 执行完后写入 `/tmp/result_<udid>.json`（格式必须为纯 JSON 数组 `[{...}]`），主 agent 轮询这些文件是否全部存在，全部出现后才合并报告并写入结果表。详见 `common/parallel.md`。
+
+---
+
+**Q: 执行结果写到哪里，如何与原用例表区分？**
+
+执行结果不回写原用例表，而是按平台写入两张独立结果表（batch_create，每次执行追加新记录）：
+
+| 平台 | 结果表 |
+|------|--------|
+| iOS | `tblryYA67UjkVGwx`（app_token: `C6X8wCdSLiAd9IkXtNFc6yO2nXg`） |
+| Android | `tblUEp8pt5W9Cic5`（同上 app_token） |
+
+每条记录写入：`用例名称` / `执行结果` / `执行详情` / `截图`。
 
 ---
 

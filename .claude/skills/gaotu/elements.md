@@ -47,7 +47,7 @@ Step 2: 根据确认的页面，用精确描述定位目标元素
 
 ### 规则三：截图分辨率统一 maxWidth=800
 
-**Android 登录页**：验证码页因 FLAG_SECURE 截图黑屏，只能用 page source + resource-id；切换到密码登录页后恢复正常。  
+**Android 登录页截图**：若截图黑屏，先等待 1s 再重试（可能是页面跳转中的过渡帧，而非 FLAG_SECURE）；单独测试可正常截图。  
 **iOS**：无 FLAG_SECURE，全程截图可用。
 
 ### 规则三-B：教室页（横屏）截图旋转 90°
@@ -103,6 +103,7 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 | AI闪学 tab | `'AI闪学' bottom navigation tab with icon above text` |
 | 关闭/知道了 | `'知道了' or '关闭' button at bottom of overlay popup` |
 | 同意按钮 | `red '同意' button on the right side of dialog bottom button row` |
+| 继续登录按钮 | Android: `xpath=//*[@text='继续登录']`（多设备登录冲突弹窗，非 AI 视觉） |
 | 我的课程区域 | `'我的课程' section header with arrow on right, below 今日学习推荐` |
 | 我的页-扫一扫 | `scan QR code icon button, square with rounded corners, second from right in top-right header of 我的 page` |
 | 我的页-设置 | `hexagon settings icon button, rightmost icon in top-right corner of 我的 page` |
@@ -147,6 +148,7 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 |--------|---------|---------|
 | 今日学习推荐 | xpath | `//*[@text='今日学习推荐']` |
 | 我的课程 | xpath | `//*[@text='我的课程']` |
+| 课程表入口 | xpath | `//*[@text='课程表']` |
 
 ### iOS
 
@@ -154,6 +156,32 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 |--------|---------|---------|
 | 今日学习推荐 | xpath | `//*[@name='今日学习推荐']` |
 | 我的课程 | xpath | `//*[@name='我的课程']` |
+| 课程表入口 | xpath | `//*[@name='课程表']` |
+| 今天按钮（课程表日历） | xpath | `//*[@name='今天']` |
+| 返回按钮（通用页面） | tap 坐标 | `x=28, y=57`（比 xpath 更可靠） |
+| 课程表-具体日期格子 | xpath | `//*[@name='YYYY年M月D日']`（如 `2026年5月26日`） |
+
+**课程表日历翻页（iOS）：**
+
+iOS 日历区域的左右 swipe 手势经常无效，改用以下方式：
+
+```
+# 方法一：直接 tap 目标日期格子（推荐）
+appium_find_element strategy=xpath selector=//*[@name='2026年5月28日']
+→ tap 该元素
+
+# 方法二：W3C 精确 swipe（在日历组件内）
+appium_perform_actions actions=[{
+  "type": "pointer", "id": "finger1", "parameters": {"pointerType": "touch"},
+  "actions": [
+    {"type": "pointerMove", "duration": 0, "x": 700, "y": 400},
+    {"type": "pointerDown", "button": 0},
+    {"type": "pointerMove", "duration": 400, "x": 100, "y": 400},
+    {"type": "pointerUp", "button": 0}
+  ]
+}]
+# x 从右向左（700→100）= 翻至下一周/月；从左向右（100→700）= 返回上一周/月
+```
 
 ---
 
@@ -165,13 +193,17 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 |--------|---------|---------|
 | 直播核心课标题 | xpath | `//*[@text='直播核心课']` |
 | 学习任务区域 | xpath | `//*[@text='学习任务']` |
+| 学习资料金刚位 | xpath | `//*[@text='学习资料']` |
+| 缓存课程金刚位 | xpath | `//*[@text='缓存课程']` |
 
 ### iOS
 
-| 元素名 | strategy | selector |
-|--------|---------|---------|
-| 直播核心课标题 | xpath | `//*[@name='直播核心课']` |
-| 学习任务区域 | xpath | `//*[@name='学习任务']` |
+| 元素名 | strategy | selector | 备注 |
+|--------|---------|---------|------|
+| 直播核心课标题 | xpath | `//*[@name='直播核心课']` | |
+| 学习任务区域 | xpath | `//*[@name='学习任务']` | |
+| 学习资料金刚位 | xpath | `//*[@name='学习资料']` | 返回 `undefined` 时改用坐标 `(55, 218)` |
+| 返回按钮 | tap 坐标 | `x=28, y=57` | xpath `//XCUIElementTypeButton[@name='返回']` 常返回 undefined，坐标更可靠 |
 
 **导航路径：**
 ```
@@ -182,6 +214,38 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 |---------|------------------|------|
 | 进入课程详情 | `//*[@text='直播核心课']` | 5s |
 | 进入课节详情 | `//*[@text='学习任务']` | 5s |
+
+---
+
+## 学习资料列表页
+
+### iOS / Android 通用（按文件名匹配）
+
+| 元素名 | strategy | selector |
+|--------|---------|---------|
+| mp4 文件 | xpath | `//*[contains(@name,'mp4') or contains(@name,'MP4')]` / `//*[contains(@text,'mp4')]` |
+| MP3 文件 | xpath | `//*[contains(@name,'MP3') or contains(@name,'mp3')]` / `//*[contains(@text,'MP3')]` |
+| PDF 文件 | xpath | `//*[contains(@name,'.pdf') or contains(@name,'.PDF')]` / `//*[contains(@text,'.pdf')]` |
+| JPG 文件 | xpath | `//*[contains(@name,'.jpg') or contains(@name,'.JPG')]` / `//*[contains(@text,'.jpg')]` |
+
+### 平台行为差异
+
+| 平台 | 点击 mp4 的预期行为 |
+|------|----------------|
+| Android | App 内视频播放器打开（与 iOS 一致）；若弹出「跳转至微信」确认框属异常，应标记 FAIL |
+| iOS | App 内全屏横屏视频播放器，需主动退出 |
+
+### iOS 视频播放器退出（mp4 全屏横屏）
+
+> 控制栏自动隐藏，`flow back` 按钮处于屏幕外（y=-48），需先唤出再立刻点击。
+
+```
+1. appium_gesture action=tap x=400 y=195   ← 唤出控制栏（横屏 844×390）
+2. appium_gesture action=tap x=45 y=30     ← 立刻点 flow back（不要截图、不要 find_element）
+```
+
+两步必须连续调用，不能插入截图或 find_element，否则控制栏再次隐藏。  
+xpath `//*[@name='flow back']` 可确认元素存在，但 visible=false 时无法直接 tap。
 
 ---
 

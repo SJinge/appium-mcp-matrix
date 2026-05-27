@@ -31,7 +31,7 @@
 
 | 元素名 | ai_instruction |
 |--------|---------------|
-| 已满18岁按钮 | `'已满18岁' button in teenager mode dialog` |
+| 已满14岁按钮 | `'已满14岁' button in teenager protection dialog` |
 
 ### 广告 Banner
 

@@ -2,28 +2,13 @@
 """
 创建矩阵 App 自动化测试 Wiki 报告并发送群通知。
 
-Usage (表格模式，推荐):
+Usage:
   python3 wiki_report.py \
-    --app gaotu --version 5.91.50 \
+    --app gaotu --version 5.91.51 \
     --platform Android --device 26KUT24202013751 \
-    --account 12100000000 --time "14:30:22" --duration "2m 35s" \
-    --total 3 --passed 3 --failed 0 --rate 100 \
-    --cases '[
-      {"name":"用例2 AI搜索-快问模式","passed":true,"duration":120,"steps":[
-        {"text":"进入 app 首页","type":"PRECOND","pass":true},
-        {"text":"点击顶部搜索框","type":"ACTION","pass":true},
-        {"text":"默认进入快问模式，有返回结果且正确","type":"ASSERT","pass":true,
-         "note":"AI响应内容：1+1=2"}
-      ]}
-    ]'
-
-Usage (纯文本模式，兼容旧版):
-  python3 wiki_report.py \
-    --app gaotu --version 5.91.50 --platform Android \
-    --device ce67d979 --account 12100000000 \
-    --time "14:30" --duration "2m 35s" \
-    --total 5 --passed 4 --failed 1 --rate 80 \
-    --results "• 用例1：AI搜索-快问模式 ✅ 通过（45s）\n• 用例2：上课tab展示 ❌ 失败（120s）"
+    --account 12100000000 --time "14:30:22" --duration "709s" \
+    --total 3 --passed 2 --failed 1 --rate 67 \
+    --cases '[{"name":"用例名","module":"模块","passed":true,"duration":120,"steps":[...]}]'
 """
 import json, urllib.request, urllib.error, datetime, argparse
 import sys, os
@@ -38,25 +23,29 @@ APP_NAMES = {
     "xinli":   "高途心理",
     "ketang":  "高途素养",
 }
-
 PLATFORM_CN = {"android": "安卓", "ios": "iOS"}
+
+# ─── 参数 ────────────────────────────────────────────────────────────────────
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--app",      default="gaotu",  help="app_id，如 gaotu / tutu / jingpin")
-    p.add_argument("--version",  required=True,    help="App 版本，如 5.91.50")
-    p.add_argument("--platform", required=True,    help="Android 或 iOS")
-    p.add_argument("--device",   required=True,    help="设备 UDID 或名称")
-    p.add_argument("--account",  required=True,    help="登录账号（手机号）")
-    p.add_argument("--time",     required=True,    help="执行开始时间，如 14:30:22")
-    p.add_argument("--duration", required=True,    help="总耗时，如 2m 35s")
-    p.add_argument("--total",    required=True,    help="用例总数")
-    p.add_argument("--passed",   required=True,    help="通过数")
-    p.add_argument("--failed",   required=True,    help="失败数")
-    p.add_argument("--rate",     required=True,    help="通过率（不含%）")
-    p.add_argument("--cases",    help="JSON 格式用例步骤详情（表格模式）")
-    p.add_argument("--results",  help="纯文本用例明细（兼容旧版，\\n 分隔）")
+    p.add_argument("--app",       default="gaotu")
+    p.add_argument("--version",   required=True)
+    p.add_argument("--platform",  required=True)
+    p.add_argument("--device",    default="")
+    p.add_argument("--account",   required=True)
+    p.add_argument("--time",      required=True)
+    p.add_argument("--duration",  required=True)
+    p.add_argument("--total",     required=True)
+    p.add_argument("--passed",    required=True)
+    p.add_argument("--failed",    required=True)
+    p.add_argument("--rate",      required=True)
+    p.add_argument("--cases",     help="JSON 格式用例列表")
+    p.add_argument("--results",   help="纯文本明细（旧版兼容）")
+    p.add_argument("--no-notify", action="store_true", help="跳过群消息（调试用）")
     return p.parse_args()
+
+# ─── Feishu HTTP ─────────────────────────────────────────────────────────────
 
 def get_token():
     data = json.dumps({"app_id": APP_ID, "app_secret": APP_SECRET}).encode()
@@ -70,9 +59,9 @@ TOKEN = get_token()
 
 def feishu(method, url, body=None):
     data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body else None
-    headers = {"Authorization": f"Bearer {TOKEN}",
-               "Content-Type": "application/json; charset=utf-8"}
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    hdrs = {"Authorization": f"Bearer {TOKEN}",
+            "Content-Type": "application/json; charset=utf-8"}
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
     try:
         with urllib.request.urlopen(req) as r:
             return json.load(r)
@@ -80,10 +69,7 @@ def feishu(method, url, body=None):
         print(f"[WARN] HTTP {e.code}: {e.read().decode()[:200]}")
         return None
 
-def get_child_count(doc_token):
-    r = feishu("GET",
-        f"https://open.feishu.cn/open-apis/docx/v1/documents/{doc_token}/blocks")
-    return len(r["data"]["items"]) - 1
+# ─── 基础 block 工具 ──────────────────────────────────────────────────────────
 
 def text_elem(content, bold=False):
     return {"text_run": {"content": content, "text_element_style": {
@@ -107,85 +93,132 @@ def heading_block(level, content):
 def divider_block():
     return {"block_type": 22, "divider": {}}
 
-def cell_block(content, bold=False):
-    return {"block_type": 34, "children": [text_block(content, bold)]}
+def add_block(doc_token, block, counter):
+    """向文档追加一个 block，失败时不推进 counter。"""
+    n = counter[0]
+    url = (f"https://open.feishu.cn/open-apis/docx/v1/documents"
+           f"/{doc_token}/blocks/{doc_token}/children")
+    resp = feishu("POST", url, {"children": [block], "index": n})
+    if resp is not None and resp.get("code") == 0:
+        counter[0] += 1
 
-def row_block(cells, bold=False):
-    return {"block_type": 33, "children": [cell_block(c, bold) for c in cells]}
+# ─── 表格工具 ─────────────────────────────────────────────────────────────────
 
-def table_block(headers, rows, col_widths=None):
+def _get_children_ids(doc_token, block_id):
+    url = (f"https://open.feishu.cn/open-apis/docx/v1/documents"
+           f"/{doc_token}/blocks/{block_id}/children?page_size=500")
+    resp = feishu("GET", url)
+    if resp and resp.get("code") == 0:
+        return [item["block_id"] for item in resp["data"].get("items", [])]
+    return []
+
+def _add_text_to_cell(doc_token, cell_id, content, bold=False):
+    if not content:
+        return
+    url = (f"https://open.feishu.cn/open-apis/docx/v1/documents"
+           f"/{doc_token}/blocks/{cell_id}/children")
+    feishu("POST", url, {"children": [text_block(str(content), bold)], "index": 0})
+
+def add_table(doc_token, headers, rows, counter, col_widths=None):
+    """
+    两阶段建表：
+      1. POST 表格容器（无 children）→ 取 table_block_id
+      2. 逐 row → cell 写入文字
+    """
+    n_cols = len(headers)
+    n_rows = 1 + len(rows)
     if col_widths is None:
-        col_widths = [int(400 / len(headers))] * len(headers)
-    all_rows = [row_block(headers, bold=True)] + [row_block(r) for r in rows]
-    return {
+        col_widths = [int(520 / n_cols)] * n_cols
+
+    table_def = {
         "block_type": 31,
         "table": {
             "property": {
-                "column_size": len(headers),
-                "row_size": len(all_rows),
-                "column_width": col_widths,
-                "header_row": True,
-                "merge_info": []
-            },
-            "cells": []
-        },
-        "children": all_rows
+                "column_size": n_cols,
+                "row_size":    n_rows,
+            }
+        }
     }
 
-def add_block(doc_token, block):
-    n = get_child_count(doc_token)
-    url = f"https://open.feishu.cn/open-apis/docx/v1/documents/{doc_token}/blocks/{doc_token}/children"
-    feishu("POST", url, {"children": [block], "index": n})
+    n = counter[0]
+    url = (f"https://open.feishu.cn/open-apis/docx/v1/documents"
+           f"/{doc_token}/blocks/{doc_token}/children")
+    resp = feishu("POST", url, {"children": [table_def], "index": n})
 
-def add_case_section(doc_token, case_data):
-    status   = "✅ 通过" if case_data.get("passed", True) else "❌ 失败"
-    duration = case_data.get("duration", "")
-    dur_str  = f"   ⏱ {duration}s" if duration else ""
-    add_block(doc_token, heading_block(2, f"{case_data['name']}   {status}{dur_str}"))
+    if resp is None or resp.get("code") != 0:
+        # 降级：文本行
+        for row in [headers] + rows:
+            add_block(doc_token, text_block("  |  ".join(str(c) for c in row)), counter)
+        return
 
-    steps = case_data.get("steps", [])
-    rows  = [[s.get("text",""), s.get("type",""),
-              "✅ PASS" if s.get("pass", True) else "❌ FAIL"] for s in steps]
-    add_block(doc_token, table_block(["步骤", "类型", "结果"], rows, col_widths=[280, 120, 120]))
+    counter[0] += 1
 
-    notes = [(s["text"], s["note"]) for s in steps
-             if s.get("type") == "ASSERT" and s.get("note")]
-    if notes:
-        add_block(doc_token, text_block(
-            "ASSERT 验证说明：  " + "  |  ".join(f"{t}：{n}" for t, n in notes)
-        ))
-    add_block(doc_token, divider_block())
+    created = resp.get("data", {}).get("children", [])
+    if not created:
+        return
+    first = created[0]
+    table_id = first if isinstance(first, str) else first.get("block_id", "")
+    if not table_id:
+        return
 
-def add_summary_table(doc_token, cases):
+    # Feishu table (31) children are cells (34) laid out flat: row0_col0, row0_col1, ..., row1_col0, ...
+    all_cells = _get_children_ids(doc_token, table_id)
+    all_rows  = [headers] + rows
+
+    for r_idx, row in enumerate(all_rows):
+        is_hdr = (r_idx == 0)
+        for c_idx, val in enumerate(row):
+            flat_idx = r_idx * n_cols + c_idx
+            if flat_idx >= len(all_cells):
+                break
+            _add_text_to_cell(doc_token, all_cells[flat_idx], val, bold=is_hdr)
+
+# ─── 报告主体 ─────────────────────────────────────────────────────────────────
+
+def add_report_table(doc_token, cases, counter):
+    """主汇总表：序号|模块|用例名称|结果|失败步骤详情|截图|耗时"""
+    headers    = ["序号", "模块", "用例名称", "结果", "失败步骤详情", "截图", "耗时"]
+    col_widths = [45,     75,     160,        75,     230,            75,     55]
+
     rows = []
-    total_pass = total_fail = 0
-    for c in cases:
-        steps = c.get("steps", [])
-        p = sum(1 for s in steps if s.get("pass", True))
-        f = sum(1 for s in steps if not s.get("pass", True))
-        total_pass += p
-        total_fail += f
-        rows.append([c["name"],
-                     "✅ 通过" if c.get("passed", True) else "❌ 失败",
-                     f"{p} / {len(steps)}", str(f)])
-    passed_cases = sum(1 for c in cases if c.get("passed", True))
-    rows.append(["合计",
-                 f"{passed_cases} / {len(cases)} 通过",
-                 f"{total_pass} / {total_pass + total_fail}",
-                 str(total_fail)])
-    add_block(doc_token, heading_block(2, "汇总"))
-    add_block(doc_token, table_block(
-        ["用例", "结果", "通过步骤", "失败步骤"], rows,
-        col_widths=[240, 100, 120, 100]
-    ))
+    for fallback_seq, c in enumerate(cases, 1):
+        steps  = c.get("steps", [])
+        failed = [s for s in steps if not s.get("pass", True)]
+
+        fail_lines = []
+        for i, s in enumerate(failed, 1):
+            line = f"{i}、步骤 [{s.get('type','')}]：{s.get('text','')} ❌"
+            if s.get("note"):
+                line += f"\n    原因：{s['note']}"
+            fail_lines.append(line)
+        fail_detail = "\n".join(fail_lines)
+
+        dur = c.get("duration", "")
+        seq = c.get("seq", fallback_seq)
+        rows.append([
+            str(seq),
+            c.get("module", ""),
+            c.get("name", ""),
+            "✅ 通过" if c.get("passed", True) else "❌ 失败",
+            fail_detail,
+            "",
+            f"{dur}s" if dur else ""
+        ])
+
+    add_table(doc_token, headers, rows, counter, col_widths=col_widths)
+
+# ─── main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    args     = parse_args()
-    app_name = APP_NAMES.get(args.app, args.app)
+    args        = parse_args()
+    app_name    = APP_NAMES.get(args.app, args.app)
     platform_cn = PLATFORM_CN.get(args.platform.lower(), args.platform)
-    today    = datetime.date.today().strftime("%Y%m%d")
-    title    = f"{app_name}{args.version}-{platform_cn}自动化报告-{today}"
-    cases    = json.loads(args.cases) if args.cases else []
+    today       = datetime.date.today().strftime("%Y%m%d")
+    title       = f"{app_name}{args.version}-{platform_cn}自动化报告-{today}"
+    cases       = json.loads(args.cases) if args.cases else []
+
+    devices_in_cases = list(dict.fromkeys(c["device"] for c in cases if c.get("device")))
+    device_display   = "  ".join(devices_in_cases) if devices_in_cases else args.device
 
     # 创建 Wiki 节点
     create_resp = feishu("POST",
@@ -196,37 +229,36 @@ def main():
     node_token = create_resp["data"]["node"]["node_token"]
     doc_token  = create_resp["data"]["node"]["obj_token"]
 
+    counter = [0]
+
     # 报告头部
-    add_block(doc_token, heading_block(1, f"{app_name}自动化测试报告"))
-    add_block(doc_token, text_block(f"执行时间：  {today} {args.time}  |  总耗时：{args.duration}"))
+    add_block(doc_token, heading_block(1, f"{app_name}自动化测试报告"), counter)
     add_block(doc_token, text_block(
-        f"平台：  {args.platform}　设备：  {args.device}　账号：  {args.account}"
-    ))
-    add_block(doc_token, divider_block())
+        f"执行时间：{today} {args.time}  |  总耗时：{args.duration}"
+    ), counter)
+    add_block(doc_token, text_block(
+        f"平台：{args.platform}  设备：{device_display}  账号：{args.account}"
+    ), counter)
+    add_block(doc_token, divider_block(), counter)
 
-    # 用例详情
+    # 主表格
     if cases:
-        for case in cases:
-            add_case_section(doc_token, case)
-        add_summary_table(doc_token, cases)
+        add_report_table(doc_token, cases, counter)
     elif args.results:
-        add_block(doc_token, heading_block(2, "用例明细"))
-        add_block(doc_token, text_block(args.results.replace("\\n", "\n")))
-        add_block(doc_token, divider_block())
+        add_block(doc_token, heading_block(2, "用例明细"), counter)
+        add_block(doc_token, text_block(args.results.replace("\\n", "\n")), counter)
 
-    # 群消息
     wiki_url = f"https://gaotuedu.feishu.cn/wiki/{node_token}"
-    results_summary = (
-        "\n".join(
-            f"• {c['name']} {'✅ 通过' if c.get('passed') else '❌ 失败'}"
-            + (f"（{c['duration']}s）" if c.get("duration") else "")
-            for c in cases
-        ) if cases else (args.results or "").replace("\\n", "\n")
-    )
+    print(f"✓ Wiki 报告已创建：{wiki_url}")
+
+    if getattr(args, "no_notify", False):
+        print("[调试模式] 跳过群消息")
+        return
+
     msg_text = (
         f"📈 {app_name} {args.version} 自动化测试报告\n\n"
         f"📅 执行日期：{today}  执行时间：{args.time}\n"
-        f"📱 平台：{args.platform}  设备：{args.device}\n"
+        f"📱 平台：{args.platform}  设备：{device_display}\n"
         f"👤 账号：{args.account}\n"
         f"⏱ 总耗时：{args.duration}\n\n"
         f"📊 执行概要\n"
@@ -234,7 +266,6 @@ def main():
         f"• 通过：{args.passed} ✅\n"
         f"• 失败：{args.failed} ❌\n"
         f"• 通过率：{args.rate}%\n\n"
-        f"📝 用例明细\n{results_summary}\n\n"
         f"📄 详细报告：{wiki_url}"
     )
     feishu("POST",
@@ -242,8 +273,6 @@ def main():
         {"receive_id": GROUP_CHAT_ID, "msg_type": "text",
          "content": json.dumps({"text": msg_text})}
     )
-
-    print(f"✓ Wiki 报告已创建：{wiki_url}")
     print(f"✓ 群消息已发送至 {app_name}自动化实践")
 
 if __name__ == "__main__":

@@ -20,12 +20,17 @@ common/
 ├── elements/        # 跨App公共元素（{pkg}占位）
 │   ├── login.md     # 登录页元素
 │   └── dialog.md    # 通用弹窗元素
+├── app.md           # App 安装/卸载流程
 ├── device.md        # 设备就绪检查 & Session capabilities
 ├── login.md         # 登录 skill 执行逻辑
-├── parsing.md       # 用例解析规则
+├── parallel.md      # 多设备并行执行 & 结果文件格式规范 & 报告合并
+├── parsing.md       # 用例解析规则（含 Bitable 路径C）
 ├── permission.md    # 系统权限预授权
-└── screenshot.md    # 截图/等待/弹窗规范
+├── prescan.md       # 多用例预扫描 & 执行计划优化
+├── screenshot.md    # 截图/等待/弹窗规范
+└── startup.md       # 首次启动弹窗（各App独立，见各skill目录）
 scripts/
+├── feishu_config.py # 飞书常量（APP_ID/SECRET/SPACE_ID等）
 ├── upload_screenshots.sh
 └── wiki_report.py
 .claude/skills/
@@ -33,7 +38,8 @@ scripts/
 │   └── SKILL.md     # Appium 通用排障（设备/Session/元素定位/MCP）
 └── gaotu/
     ├── SKILL.md     # 高途执行全流程
-    └── elements.md  # 高途专属元素 & AI视觉定位规范
+    ├── elements.md  # 高途专属元素 & AI视觉定位规范
+    └── startup.md   # 高途首次启动弹窗序列
 ```
 
 ## 上下文管理规则
@@ -54,6 +60,12 @@ scripts/
 3. 截图同时保存到本地 `$SHOT_DIR`，上传飞书和 Wiki 报告均读取磁盘文件，不通过上下文传递图片数据。
 4. 非必要不截图：ACTION 执行后若下一步是 ASSERT，交给 ASSERT 统一截图，不重复截同一页面。
 5. 单次对话截图不超过 10 张；超出后新开对话，将当前步骤上下文带入继续。
+
+---
+
+## 飞书 MCP 调用规则
+
+飞书 MCP 工具调用一律不传 `useUAT`（或显式传 `useUAT: false`），始终使用 tenant_access_token（应用权限）。
 
 ---
 
