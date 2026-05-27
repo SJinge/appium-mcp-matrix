@@ -210,8 +210,10 @@ def add_table(doc_token, headers, rows, counter, col_widths=None):
 # ─── 报告主体 ─────────────────────────────────────────────────────────────────
 
 def add_monkey_report_table(doc_token, cases, counter):
-    """Monkey 专属表：序号|异常类型|触发步骤|异常描述|触发路径|异常截图|发现时间"""
-    import re, os
+    """Monkey 专属表：序号|异常类型|触发步骤|异常描述|触发路径|异常截图|发现时间。
+    返回成功上传的截图列表，用于下方详情展示。
+    """
+    import re
     headers    = ["序号", "异常类型", "触发步骤", "异常描述", "触发路径", "异常截图", "发现时间"]
     col_widths = [45,     90,         80,          180,         180,         120,       80]
 
@@ -224,7 +226,9 @@ def add_monkey_report_table(doc_token, cases, counter):
     }
 
     rows = []
+    image_items = []
     shot_no = 0
+
     for c in cases:
         name  = c.get("name", "")
         seq   = c.get("seq", "")
@@ -233,7 +237,7 @@ def add_monkey_report_table(doc_token, cases, counter):
 
         # 从 name 提取触发步骤，如 "[step 440]" → "step 440"
         m = re.search(r"\[step\s*(\d+)\]", name)
-        trigger_step = f"step {m.group(1)}" if m else ("手动发现" if not m else "")
+        trigger_step = f"step {m.group(1)}" if m else "手动发现"
 
         # 异常类型：从 name 或 type 字段
         raw_type = ""
@@ -243,14 +247,24 @@ def add_monkey_report_table(doc_token, cases, counter):
                 break
         type_label = TYPE_LABEL.get(raw_type, raw_type or "其他")
 
-        desc        = step0.get("text", name)[:80]
-        note        = step0.get("note", "")
+        desc         = step0.get("text", name)[:80]
+        note         = step0.get("note", "")
         trigger_path = note.replace("触发路径: ", "").replace("触发路径:", "").strip()
 
-        shot_path  = c.get("screenshot", "")
+        shot_path = c.get("screenshot", "")
         if shot_path:
-            shot_no += 1
-            shot_field = f"见下方 #截图{shot_no}"
+            file_token = upload_doc_image(doc_token, shot_path)
+            if file_token:
+                shot_no += 1
+                shot_field = f"见下方 #截图{shot_no}"
+                image_items.append({
+                    "index": shot_no,
+                    "name": c.get("name", "")[:40],
+                    "token": file_token,
+                    "path": shot_path,
+                })
+            else:
+                shot_field = f"截图上传失败：{shot_path}"
         else:
             shot_field = "无"
 
@@ -265,6 +279,7 @@ def add_monkey_report_table(doc_token, cases, counter):
         ])
 
     add_table(doc_token, headers, rows, counter, col_widths=col_widths)
+    return image_items
 
 
 def add_report_table(doc_token, cases, counter):
@@ -398,23 +413,13 @@ def main():
     # ── 主表格
     if cases:
         if is_monkey:
-            add_monkey_report_table(doc_token, cases, counter)
-            # 有截图的异常：补充图片详情块（与表格中的 #截图N 对应）
-            has_images = any(c.get("screenshot") for c in cases)
-            if has_images:
+            image_items = add_monkey_report_table(doc_token, cases, counter)
+            # 仅展示成功上传的截图详情；失败信息已在表格字段中体现
+            if image_items:
                 add_block(doc_token, heading_block(2, "异常截图详情"), counter)
-                shot_no = 0
-                for c in cases:
-                    shot = c.get("screenshot", "")
-                    if not shot:
-                        continue
-                    shot_no += 1
-                    add_block(doc_token, text_block(f"#截图{shot_no}  【{c['name'][:40]}】"), counter)
-                    file_token = upload_doc_image(doc_token, shot)
-                    if file_token:
-                        add_block(doc_token, image_block(file_token), counter)
-                    else:
-                        add_block(doc_token, text_block(f"（截图上传失败：{shot}）"), counter)
+                for item in image_items:
+                    add_block(doc_token, text_block(f"#截图{item['index']}  【{item['name']}】"), counter)
+                    add_block(doc_token, image_block(item["token"]), counter)
         else:
             add_report_table(doc_token, cases, counter)
     elif args.results:
