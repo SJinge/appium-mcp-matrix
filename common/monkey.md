@@ -45,6 +45,12 @@ echo "[Monkey] 目标: max_ops=$max_ops, max_minutes=$max_minutes"
 
 ### 每步操作流程
 
+每步开始时记录当前时间戳（用于终止条件判断）：
+```bash
+now=$(date +%s)
+```
+若 `$((now - START_TS))` 超过 `$((max_minutes * 60))` 秒，退出循环。
+
 **Step A — 获取可交互元素**
 
 调用 `appium_get_page_source`，从返回的 XML/JSON 中提取满足以下条件的元素：
@@ -72,14 +78,26 @@ else:
     appium_back
 ```
 
+执行完成后设置变量，供 Step D 记录：
+- tap 操作：action="tap"，bounds 取元素的 bounds 值，element_desc 取元素的 content-desc 或 text 属性（若为空则用 resource-id）
+- swipe 操作：action="swipe"，bounds=""，element_desc="swipe_${direction}"
+- back 操作：action="back"，bounds=""，element_desc=""
+
 **Step D — 记录操作到 actions_log**
 
 ```bash
+ACTION="$action" BOUNDS="$bounds" ELEM="$element_desc" STEP="$ops_count" \
 python3 -c "
-import json, sys
+import json, os
 log = json.load(open('$actions_log'))
-log.append({'step': $ops_count, 'action': '$action', 'bounds': '$bounds', 'element_desc': '$element_desc', 'timestamp': '$(date +%H:%M:%S)'})
-json.dump(log, open('$actions_log','w'), ensure_ascii=False)
+log.append({
+    'step': int(os.environ['STEP']),
+    'action': os.environ['ACTION'],
+    'bounds': os.environ['BOUNDS'],
+    'element_desc': os.environ['ELEM'],
+    'timestamp': '$(date +%H:%M:%S)'
+})
+json.dump(log, open('$actions_log', 'w'), ensure_ascii=False)
 "
 ```
 
