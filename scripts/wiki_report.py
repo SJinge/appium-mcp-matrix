@@ -42,10 +42,12 @@ def parse_args():
     p.add_argument("--rate",      required=True)
     p.add_argument("--cases",       help="JSON 格式用例列表")
     p.add_argument("--results",     help="纯文本明细（旧版兼容）")
-    p.add_argument("--report-type", default="auto", choices=["auto", "monkey"],
+    p.add_argument("--report-type",  default="auto", choices=["auto", "monkey"],
                    help="报告类型：auto=常规自动化，monkey=随机稳定性测试")
-    p.add_argument("--steps",       default="", help="Monkey 总操作步数（仅 monkey 类型使用）")
-    p.add_argument("--no-notify",   action="store_true", help="跳过群消息（调试用）")
+    p.add_argument("--steps",        default="", help="Monkey 总操作步数")
+    p.add_argument("--no-notify",    action="store_true", help="只建文档，不发群消息")
+    p.add_argument("--notify-only",  default="", metavar="WIKI_URL",
+                   help="只发群消息（传入已有 wiki URL），不建新文档")
     return p.parse_args()
 
 # ─── Feishu HTTP ─────────────────────────────────────────────────────────────
@@ -178,6 +180,55 @@ def add_table(doc_token, headers, rows, counter, col_widths=None):
 
 # ─── 报告主体 ─────────────────────────────────────────────────────────────────
 
+def add_monkey_report_table(doc_token, cases, counter):
+    """Monkey 专属表：序号|异常类型|触发步骤|异常描述|触发路径|发现时间"""
+    import re
+    headers    = ["序号", "异常类型", "触发步骤", "异常描述", "触发路径", "发现时间"]
+    col_widths = [45,     90,         80,          220,         220,         80]
+
+    TYPE_LABEL = {
+        "crash":             "崩溃",
+        "anr":               "ANR",
+        "blank_screen":      "白屏/空白",
+        "error_content":     "页面异常",
+        "unexpected_dialog": "意外弹窗",
+    }
+
+    rows = []
+    for c in cases:
+        name  = c.get("name", "")
+        seq   = c.get("seq", "")
+        steps = c.get("steps", [])
+        step0 = steps[0] if steps else {}
+
+        # 从 name 提取触发步骤，如 "[step 440]" → "step 440"
+        m = re.search(r"\[step\s*(\d+)\]", name)
+        trigger_step = f"step {m.group(1)}" if m else ("手动发现" if not m else "")
+
+        # 异常类型：从 name 或 type 字段
+        raw_type = ""
+        for k in TYPE_LABEL:
+            if k in name.lower() or k in step0.get("type", "").lower():
+                raw_type = k
+                break
+        type_label = TYPE_LABEL.get(raw_type, raw_type or "其他")
+
+        desc        = step0.get("text", name)[:80]
+        note        = step0.get("note", "")
+        trigger_path = note.replace("触发路径: ", "").replace("触发路径:", "").strip()
+
+        rows.append([
+            str(seq),
+            type_label,
+            trigger_step,
+            desc,
+            trigger_path,
+            c.get("timestamp", ""),
+        ])
+
+    add_table(doc_token, headers, rows, counter, col_widths=col_widths)
+
+
 def add_report_table(doc_token, cases, counter):
     """主汇总表：序号|模块|用例名称|结果|失败步骤详情|截图|耗时"""
     headers    = ["序号", "模块", "用例名称", "结果", "失败步骤详情", "截图", "耗时"]
@@ -212,6 +263,38 @@ def add_report_table(doc_token, cases, counter):
 
 # ─── main ─────────────────────────────────────────────────────────────────────
 
+def _build_notify_text(args, app_name, platform_cn, device_display, wiki_url, is_monkey):
+    today = datetime.date.today().strftime("%Y%m%d")
+    if is_monkey:
+        anomaly_count = int(args.failed)
+        steps_line    = f"• 总操作步数：{args.steps} 步\n" if args.steps else ""
+        return (
+            f"🐒 {app_name} {args.version} 随机稳定性测试（Monkey）\n\n"
+            f"📅 执行日期：{today}  执行时间：{args.time}\n"
+            f"📱 平台：{args.platform}  设备：{device_display}\n"
+            f"⏱ 总耗时：{args.duration}\n\n"
+            f"📊 测试概要\n"
+            f"{steps_line}"
+            f"• 崩溃 / ANR：0 ✅\n"
+            f"• 发现异常：{anomaly_count} 条 {'✅ 无问题' if anomaly_count == 0 else '❌ 见报告明细'}\n\n"
+            f"📄 详细报告：{wiki_url}"
+        )
+    else:
+        return (
+            f"📈 {app_name} {args.version} 自动化测试报告\n\n"
+            f"📅 执行日期：{today}  执行时间：{args.time}\n"
+            f"📱 平台：{args.platform}  设备：{device_display}\n"
+            f"👤 账号：{args.account}\n"
+            f"⏱ 总耗时：{args.duration}\n\n"
+            f"📊 执行概要\n"
+            f"• 用例总数：{args.total}\n"
+            f"• 通过：{args.passed} ✅\n"
+            f"• 失败：{args.failed} ❌\n"
+            f"• 通过率：{args.rate}%\n\n"
+            f"📄 详细报告：{wiki_url}"
+        )
+
+
 def main():
     args        = parse_args()
     app_name    = APP_NAMES.get(args.app, args.app)
@@ -222,6 +305,18 @@ def main():
 
     devices_in_cases = list(dict.fromkeys(c["device"] for c in cases if c.get("device")))
     device_display   = "  ".join(devices_in_cases) if devices_in_cases else args.device
+
+    # ── 仅发通知模式（文档已存在，跳过建文档）
+    if args.notify_only:
+        wiki_url = args.notify_only
+        msg_text = _build_notify_text(args, app_name, platform_cn, device_display, wiki_url, is_monkey)
+        feishu("POST",
+            "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
+            {"receive_id": GROUP_CHAT_ID, "msg_type": "text",
+             "content": json.dumps({"text": msg_text})}
+        )
+        print(f"✓ 群消息已发送至 {app_name}自动化实践")
+        return
 
     # ── 标题（Wiki 节点名）
     if is_monkey:
@@ -239,8 +334,7 @@ def main():
     )
     node_token = create_resp["data"]["node"]["node_token"]
     doc_token  = create_resp["data"]["node"]["obj_token"]
-
-    counter = [0]
+    counter    = [0]
 
     # ── 报告头部
     add_block(doc_token, heading_block(1, report_title), counter)
@@ -249,12 +343,13 @@ def main():
     ), counter)
     if is_monkey:
         anomaly_count = int(args.failed)
-        steps_info    = f"  总步数：{args.steps}" if args.steps else ""
+        steps_info    = f"  |  总步数：{args.steps} 步" if args.steps else ""
         add_block(doc_token, text_block(
-            f"平台：{args.platform}  设备：{device_display}{steps_info}"
+            f"平台：{args.platform}  |  设备：{device_display}{steps_info}"
         ), counter)
         add_block(doc_token, text_block(
-            f"发现异常：{anomaly_count} 条  ({'无崩溃/ANR' if anomaly_count == 0 else '见下方明细'})"
+            f"崩溃 / ANR：0 ✅  |  发现异常：{anomaly_count} 条"
+            + ("  ✅ 无问题" if anomaly_count == 0 else "  ❌ 见下方明细")
         ), counter)
     else:
         add_block(doc_token, text_block(
@@ -264,7 +359,10 @@ def main():
 
     # ── 主表格
     if cases:
-        add_report_table(doc_token, cases, counter)
+        if is_monkey:
+            add_monkey_report_table(doc_token, cases, counter)
+        else:
+            add_report_table(doc_token, cases, counter)
     elif args.results:
         add_block(doc_token, heading_block(2, "用例明细"), counter)
         add_block(doc_token, text_block(args.results.replace("\\n", "\n")), counter)
@@ -272,39 +370,16 @@ def main():
     wiki_url = f"https://gaotuedu.feishu.cn/wiki/{node_token}"
     print(f"✓ Wiki 报告已创建：{wiki_url}")
 
-    if getattr(args, "no_notify", False):
-        print("[调试模式] 跳过群消息")
+    if args.no_notify:
+        print("📋 已跳过群消息，确认内容后用以下命令发送通知：")
+        print(f'   python3 scripts/wiki_report.py --app {args.app} --version {args.version} '
+              f'--platform {args.platform} --account {args.account} --time {args.time} '
+              f'--duration "{args.duration}" --total {args.total} --passed {args.passed} '
+              f'--failed {args.failed} --rate {args.rate} --steps "{args.steps}" '
+              f'--report-type {args.report_type} --notify-only "{wiki_url}"')
         return
 
-    # ── 群消息
-    if is_monkey:
-        anomaly_count = int(args.failed)
-        steps_line    = f"• 总步数：{args.steps}\n" if args.steps else ""
-        msg_text = (
-            f"🐒 {app_name} {args.version} 随机稳定性测试报告\n\n"
-            f"📅 执行日期：{today}  执行时间：{args.time}\n"
-            f"📱 平台：{args.platform}  设备：{device_display}\n"
-            f"⏱ 总耗时：{args.duration}\n\n"
-            f"📊 测试概要\n"
-            f"{steps_line}"
-            f"• 发现异常：{anomaly_count} 条 {'✅ 无问题' if anomaly_count == 0 else '❌ 见报告'}\n"
-            f"• 崩溃/ANR：0\n\n"
-            f"📄 详细报告：{wiki_url}"
-        )
-    else:
-        msg_text = (
-            f"📈 {app_name} {args.version} 自动化测试报告\n\n"
-            f"📅 执行日期：{today}  执行时间：{args.time}\n"
-            f"📱 平台：{args.platform}  设备：{device_display}\n"
-            f"👤 账号：{args.account}\n"
-            f"⏱ 总耗时：{args.duration}\n\n"
-            f"📊 执行概要\n"
-            f"• 用例总数：{args.total}\n"
-            f"• 通过：{args.passed} ✅\n"
-            f"• 失败：{args.failed} ❌\n"
-            f"• 通过率：{args.rate}%\n\n"
-            f"📄 详细报告：{wiki_url}"
-        )
+    msg_text = _build_notify_text(args, app_name, platform_cn, device_display, wiki_url, is_monkey)
     feishu("POST",
         "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
         {"receive_id": GROUP_CHAT_ID, "msg_type": "text",
