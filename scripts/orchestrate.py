@@ -57,8 +57,27 @@ def download_file(url: str, dest: str) -> bool:
     return r.returncode == 0 and os.path.getsize(dest) > 1_000_000
 
 
+def _feishu_post(body: dict):
+    token = _get_token()
+    req = urllib.request.Request(
+        "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
+        data=json.dumps(body, ensure_ascii=False).encode(),
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        urllib.request.urlopen(req)
+    except Exception as e:
+        print(f"[WARN] Feishu notify failed: {e}")
+
+
 def _notify(app_id: str, version: str, message: str):
-    pass  # implemented in Task 10
+    _feishu_post({
+        "receive_id": GROUP_CHAT_ID,
+        "msg_type": "text",
+        "content": json.dumps({"text": f"[{app_id} {version}] {message}"})
+    })
 
 
 def _get_token() -> str:
@@ -244,6 +263,58 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
     return results
 
 
+def generate_reports(app_id: str, version: str, results: dict, duration: int):
+    start_time = datetime.datetime.now().strftime("%H:%M:%S")
+    script = os.path.join(PROJECT_ROOT, "scripts", "wiki_report.py")
+
+    android_cases, ios_cases = [], []
+    for udid, data in results.items():
+        if data == "timeout":
+            continue
+        for case in (data if isinstance(data, list) else []):
+            platform = case.get("platform", "").lower()
+            if platform == "android":
+                android_cases.append(case)
+            elif platform == "ios":
+                ios_cases.append(case)
+
+    wiki_urls = {}
+    for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
+        if not cases:
+            continue
+        total  = len(cases)
+        passed = sum(1 for c in cases if c.get("passed"))
+        failed = total - passed
+        rate   = int(passed / total * 100) if total else 0
+        result = subprocess.run(
+            ["python3", script,
+             "--app", app_id, "--version", version,
+             "--platform", platform,
+             "--time", start_time, "--duration", f"{duration}s",
+             "--total", str(total), "--passed", str(passed),
+             "--failed", str(failed), "--rate", str(rate),
+             "--cases", json.dumps(cases, ensure_ascii=False)],
+            capture_output=True, text=True
+        )
+        for line in result.stdout.splitlines():
+            if "Wiki 报告已创建" in line:
+                url = line.split("：")[-1].strip()
+                wiki_urls[platform] = url
+                print(line)
+
+    lines = [f"📱 {app_id} {version} 自动化测试完成\n"]
+    for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
+        if not cases:
+            continue
+        total  = len(cases)
+        passed = sum(1 for c in cases if c.get("passed"))
+        rate   = int(passed / total * 100) if total else 0
+        url    = wiki_urls.get(platform, "")
+        lines.append(f"{platform}：{passed}/{total} 通过 ({rate}%)  📄 {url}")
+    lines.append(f"\n总耗时：{duration // 60}分{duration % 60}秒")
+    _notify(app_id, version, "\n".join(lines))
+
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--app",     required=True)
@@ -313,6 +384,16 @@ def _run(app_id, version, apk_url, ipa_url):
     results = collect_results(procs)
     duration = int(time.time() - start_time)
     print(f"[INFO] Execution done, total time {duration}s")
+
+    # 6. Generate reports
+    generate_reports(app_id, version, results, duration)
+
+    # 7. Cleanup temp files
+    for udid in groups:
+        path = f"/tmp/result_{udid}.json"
+        if os.path.exists(path):
+            os.remove(path)
+    print("[INFO] Done")
 
 
 def main():
