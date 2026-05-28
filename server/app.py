@@ -76,8 +76,6 @@ def webhook():
 
     if msg.get("message_type") != "text":
         return "ok"
-    if sender.get("sender_type") == "app":
-        return "ok"
 
     text   = json.loads(msg.get("content", "{}")).get("text", "")
     parsed = parse_message(text)

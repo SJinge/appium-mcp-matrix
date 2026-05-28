@@ -46,13 +46,19 @@ def test_non_text_message_ignored(client):
     resp = client.post("/webhook/feishu", json=payload)
     assert resp.status_code == 200
 
-def test_bot_message_ignored(client):
+@patch("app.ssh_trigger")
+@patch("app.is_running", return_value=False)
+def test_bot_message_triggers_ssh(mock_running, mock_ssh, client):
+    """Bot B sends the trigger message — should be processed, not ignored."""
+    mock_ssh.return_value = True
     payload = {"event": {
-        "message": {"message_type": "text", "content": '{"text":"gaotu 1.0 android:https://a.apk ios:https://b.ipa"}'},
+        "message": {"message_type": "text",
+                    "content": '{"text":"gaotu 1.0 android:https://a.apk ios:https://b.ipa"}'},
         "sender": {"sender_type": "app"}
     }}
     resp = client.post("/webhook/feishu", json=payload)
     assert resp.status_code == 200
+    mock_ssh.assert_called_once()
 
 @patch("app.ssh_trigger")
 @patch("app.is_running", return_value=False)
