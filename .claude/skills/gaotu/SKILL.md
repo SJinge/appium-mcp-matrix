@@ -153,15 +153,16 @@ elif MODULE == "启动登录":
 ```bash
 adb -s <device> shell am start -n com.gaotu100.superclass/.ui.activity.SplashActivity
 ```
-轮询等待底部 tab 出现（最多 10s）：`xpath=//*[@resource-id='com.gaotu100.superclass:id/tab_title']`
+轮询等待底部 tab 出现（最多 10s）：`xpath=//*[@resource-id='com.gaotu100.superclass:id/tab_title']`  
+若显示登录页（底部 tab 未出现），点关闭按钮：`id=com.gaotu100.superclass:id/login_view_close_iv`
 
 **iOS：**
 ```
 appium_app_lifecycle action=activate id=<bundleId>
 ```
-轮询等待底部 tab 出现（最多 10s）：`xpath=//*[@name='上课']`
+轮询等待底部 tab 出现（最多 10s）：`xpath=//*[@name='上课']`  
+若显示登录页（底部 tab 未出现），AI 视觉点关闭：`'×' or close button at top of login page`
 
-> **前提**：设备在执行前已手动登录好账号。若 App 仍显示登录页，说明设备未登录，需先手动登录后再执行。
 
 ---
 
@@ -191,7 +192,7 @@ echo "setup 耗时：$((GAOTU_SETUP_END - GAOTU_START))s"
 ```bash
 EXEC_START_TIME=$(date +%H:%M:%S)
 GAOTU_CASE_START=$(date +%s)
-SHOT_DIR="$HOME/mcp_shots/gaotu/$(date +%Y%m%d_%H%M)_${CASE_ID:-manual}"
+SHOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/shots/gaotu/$(date +%Y%m%d_%H%M)_${CASE_ID:-manual}"
 mkdir -p "$SHOT_DIR"
 ```
 

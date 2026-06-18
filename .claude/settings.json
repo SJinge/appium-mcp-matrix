@@ -32,7 +32,11 @@
       "mcp__Banshan__testCaseDetail",
       "mcp__Banshan__tagNode",
       "Edit(/.claude/skills/gaotu/**)",
-      "mcp__appium-mcp__appium_perform_actions"
+      "mcp__appium-mcp__appium_perform_actions",
+      "Skill(agent-browser)",
+      "Skill(agent-browser:*)",
+      "mcp__feishu__docx_v1_document_rawContent",
+      "WebFetch(domain:gh-fe.gsxcdn.com)"
     ]
   }
 }

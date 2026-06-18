@@ -9,13 +9,13 @@
 ## Prompt 正文
 
 ```
-将搬山用例 caseId=21390 同步到飞书多维表格。
+将搬山用例 caseId=23375 同步到飞书多维表格。
 
 目标表格：https://gaotuedu.feishu.cn/base/TAWMbIPtXaZgdjsbi8AcBr1mnNc?table=tblOS1e5pWoC7QC1&view=vew8U8Ocwy
 
 固定字段（所有用例相同）：
-- 小组: 商业化
-- 模块: 留空
+- 小组: 社区
+- 模块: 首页
 - Android设备 / ios设备: 留空
 - 是否自动化执行: 默认 false，见 Step 5 规则
 

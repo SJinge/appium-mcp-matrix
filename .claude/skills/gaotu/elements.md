@@ -237,15 +237,19 @@ appium_perform_actions actions=[{
 
 ### iOS 视频播放器退出（mp4 全屏横屏）
 
-> 控制栏自动隐藏，`flow back` 按钮处于屏幕外（y=-48），需先唤出再立刻点击。
+> 视频播放器有两层覆盖：controls overlay（含 `flow back`，y=-48 屏幕外）和始终可见的导航 overlay（含 `nav back white`）。
+
+**推荐方式（稳定）：**
 
 ```
-1. appium_gesture action=tap x=400 y=195   ← 唤出控制栏（横屏 844×390）
-2. appium_gesture action=tap x=45 y=30     ← 立刻点 flow back（不要截图、不要 find_element）
+appium_find_element strategy=xpath selector=//*[@name='nav back white']
+→ appium_gesture action=tap elementUUID=<uuid>
 ```
 
-两步必须连续调用，不能插入截图或 find_element，否则控制栏再次隐藏。  
-xpath `//*[@name='flow back']` 可确认元素存在，但 visible=false 时无法直接 tap。
+- `nav back white`：始终可见，位于横屏坐标 x=57, y=20，size 36×36
+- `flow back`（旧文档描述）在 controls overlay 层，y=-48 屏幕外，**不可用**
+
+**⚠️ 不要使用坐标 (45, 30) 或唤出控制栏的方案，nav back white 直接 tap 更可靠。**
 
 ---
 
