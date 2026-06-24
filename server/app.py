@@ -1,4 +1,4 @@
-import re, json, os, subprocess, threading
+import re, json, os, subprocess
 from typing import Optional
 from flask import Flask, request, jsonify
 
@@ -21,9 +21,7 @@ _CARD_TITLE_RE = re.compile(
     re.IGNORECASE
 )
 
-# 等待 Android + iOS 卡片配对
-_pending_pairs: dict = {}
-_pending_lock = threading.Lock()
+# Android / iOS 各自到达即独立触发，不再配对等待
 
 
 def parse_message(text: str) -> Optional[dict]:
@@ -86,34 +84,38 @@ def parse_card(content: str) -> Optional[dict]:
     return {"app_id": app_id, "platform": platform, "version": version, "url": url_m.group(0)}
 
 
-def receive_card(content: str) -> Optional[tuple]:
+def parse_template(data: dict) -> Optional[dict]:
     """
-    暂存卡片信息；Android + iOS 都到齐后返回 (app_id, version, apk_url, ipa_url)，否则返回 None。
+    解析轻舟打包系统的 template 格式 webhook。
+    payload: {"type": "template", "data": {"template_variable": {...}}}
+    template_variable 关键字段：appProduct(如 gaotu-android)、appVersion、downloadUrl。
     """
-    parsed = parse_card(content)
-    if not parsed:
+    tv = (data.get("data") or {}).get("template_variable") or {}
+    product = (tv.get("appProduct") or "").lower()
+    version = tv.get("appVersion") or ""
+    url     = tv.get("downloadUrl") or ""
+
+    if "-" not in product:
+        print(f"[DEBUG] template appProduct unexpected: {product!r}")
+        return None
+    app_id, platform = product.split("-", 1)
+
+    if app_id not in APP_IDS or platform not in ("android", "ios") or not version or not url:
+        print(f"[DEBUG] template fields invalid: app_id={app_id!r} platform={platform!r} "
+              f"version={version!r} url={url!r}")
         return None
 
-    app_id   = parsed["app_id"]
-    version  = parsed["version"]
-    platform = parsed["platform"]
-    url      = parsed["url"]
-    key      = f"{app_id}_{version}"
+    return {"app_id": app_id, "platform": platform, "version": version, "url": url}
 
-    with _pending_lock:
-        if key not in _pending_pairs:
-            _pending_pairs[key] = {}
-        _pending_pairs[key][platform] = url
-        pair = _pending_pairs[key]
-        print(f"[INFO] Card received: {app_id} {version} {platform} — waiting: {set(pair.keys())}")
 
-        if "android" in pair and "ios" in pair:
-            apk_url = pair.pop("android")
-            ipa_url = pair.pop("ios")
-            del _pending_pairs[key]
-            return app_id, version, apk_url, ipa_url
+def receive_card(content: str) -> Optional[dict]:
+    """飞书卡片格式（人工备用）。返回单端 {app_id, platform, version, url}。"""
+    return parse_card(content)
 
-    return None
+
+def receive_template(data: dict) -> Optional[dict]:
+    """轻舟 template 格式（构建系统主路径）。返回单端 {app_id, platform, version, url}。"""
+    return parse_template(data)
 
 
 MAC_HOST         = os.environ.get("MAC_HOST", "")
@@ -125,8 +127,8 @@ ORCHESTRATE_PATH = os.environ.get(
 )
 
 
-def is_running(app_id: str, version: str) -> bool:
-    pid_file = f"/tmp/orchestrate_{app_id}_{version}.pid"
+def is_running(app_id: str, version: str, platform: str) -> bool:
+    pid_file = f"/tmp/orchestrate_{app_id}_{version}_{platform}.pid"
     result = subprocess.run(
         ["ssh", "-i", MAC_KEY, "-o", "ConnectTimeout=5",
          f"{MAC_USER}@{MAC_HOST}",
@@ -137,13 +139,14 @@ def is_running(app_id: str, version: str) -> bool:
     return "running" in result.stdout
 
 
-def ssh_trigger(app_id: str, version: str, apk_url: str, ipa_url: str) -> bool:
-    log      = f"/tmp/orchestrate_{app_id}_{version}.log"
-    pid_file = f"/tmp/orchestrate_{app_id}_{version}.pid"
+def ssh_trigger(app_id: str, version: str, platform: str, url: str) -> bool:
+    log      = f"/tmp/orchestrate_{app_id}_{version}_{platform}.log"
+    pid_file = f"/tmp/orchestrate_{app_id}_{version}_{platform}.pid"
+    url_flag = "--apk-url" if platform == "android" else "--ipa-url"
     cmd = (
         f"nohup python3 {ORCHESTRATE_PATH} "
         f"--app {app_id} --version '{version}' "
-        f"--apk-url '{apk_url}' --ipa-url '{ipa_url}' "
+        f"--platform {platform} {url_flag} '{url}' "
         f"> {log} 2>&1 & echo $! | tee {pid_file}"
     )
     result = subprocess.run(
@@ -154,17 +157,18 @@ def ssh_trigger(app_id: str, version: str, apk_url: str, ipa_url: str) -> bool:
     return result.returncode == 0
 
 
-def _do_trigger(app_id: str, version: str, apk_url: str, ipa_url: str):
+def _do_trigger(app_id: str, version: str, platform: str, url: str):
     try:
-        if is_running(app_id, version):
-            print(f"[INFO] {app_id} {version} already running, skip")
+        if is_running(app_id, version, platform):
+            print(f"[INFO] {app_id} {version} {platform} already running, skip")
             return
-        ssh_trigger(app_id, version, apk_url, ipa_url)
-        print(f"[INFO] Triggered {app_id} {version}")
+        ssh_trigger(app_id, version, platform, url)
+        print(f"[INFO] Triggered {app_id} {version} {platform}")
     except Exception as e:
-        print(f"[WARN] SSH error for {app_id} {version}: {e}")
+        print(f"[WARN] SSH error for {app_id} {version} {platform}: {e}")
 
 
+@app.route("/webhook", methods=["POST"])
 @app.route("/webhook/feishu", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
@@ -172,23 +176,38 @@ def webhook():
     if data.get("type") == "url_verification":
         return jsonify({"challenge": data["challenge"]})
 
+    # 轻舟打包系统：template 格式（构建系统主路径），单端到达即触发
+    if data.get("type") == "template":
+        p = receive_template(data)
+        if p:
+            _do_trigger(p["app_id"], p["version"], p["platform"], p["url"])
+        return "ok"
+
     event = data.get("event", {})
     msg   = event.get("message", {})
     msg_type = msg.get("message_type", "")
 
-    # 卡片消息：Bot B 发的构建通知
+    content_preview = (msg.get("content", "") or "")[:300]
+    print(f"[DEBUG] Webhook received: event_type={data.get('header', {}).get('event_type') or data.get('type')!r} "
+          f"msg_type={msg_type!r} content={content_preview!r}")
+
+    # 卡片消息：Bot B 发的构建通知，单端到达即触发
     if msg_type == "interactive":
-        result = receive_card(msg.get("content", "{}"))
-        if result:
-            _do_trigger(*result)
+        p = receive_card(msg.get("content", "{}"))
+        if p:
+            _do_trigger(p["app_id"], p["version"], p["platform"], p["url"])
         return "ok"
 
-    # 文本消息：人工备用触发
+    # 文本消息：人工备用触发（一条含双端 url，分别独立触发）
     if msg_type == "text":
         text   = json.loads(msg.get("content", "{}")).get("text", "")
         parsed = parse_message(text)
         if parsed:
-            _do_trigger(parsed["app_id"], parsed["version"],
-                        parsed["apk_url"], parsed["ipa_url"])
+            _do_trigger(parsed["app_id"], parsed["version"], "android", parsed["apk_url"])
+            _do_trigger(parsed["app_id"], parsed["version"], "ios",     parsed["ipa_url"])
+        else:
+            print(f"[DEBUG] Text message did not match trigger format: {text!r}")
+        return "ok"
 
+    print(f"[DEBUG] Unhandled msg_type={msg_type!r}, ignored")
     return "ok"

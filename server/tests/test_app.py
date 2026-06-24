@@ -71,38 +71,46 @@ def test_parse_card_no_title_returns_none():
     import json
     assert parse_card(json.dumps({"body": {}})) is None
 
-# ── receive_card 配对逻辑 ─────────────────────────────────────────────────────
+# ── receive_card：单端即返回（不再配对等待） ──────────────────────────────────
 
-def test_receive_card_waits_for_both_platforms():
-    # 重置状态
-    app_module._pending_pairs.clear()
-
+def test_receive_card_returns_single_platform():
     android_content = _make_card("gaotu", "android", "5.91.60", "https://cdn.example.com/a")
-    ios_content     = _make_card("gaotu", "ios",     "5.91.60", "https://cdn.example.com/b")
+    result = receive_card(android_content)
+    assert result == {
+        "app_id": "gaotu", "platform": "android",
+        "version": "5.91.60", "url": "https://cdn.example.com/a.apk"
+    }
 
-    assert receive_card(android_content) is None   # 只有 Android，还不触发
-    result = receive_card(ios_content)             # iOS 到齐，触发
-    assert result is not None
-    app_id, version, apk_url, ipa_url = result
-    assert app_id == "gaotu"
-    assert version == "5.91.60"
-    assert apk_url.endswith(".apk")
-    assert ipa_url.endswith(".ipa")
+# ── parse_template（轻舟格式） ────────────────────────────────────────────────
 
-def test_receive_card_clears_after_trigger():
-    app_module._pending_pairs.clear()
-    android_content = _make_card("gaotu", "android", "5.91.60", "https://cdn.example.com/a")
-    ios_content     = _make_card("gaotu", "ios",     "5.91.60", "https://cdn.example.com/b")
-    receive_card(android_content)
-    receive_card(ios_content)
-    assert "gaotu_5.91.60" not in app_module._pending_pairs
+def _make_template(app_product, version, url):
+    return {
+        "type": "template",
+        "data": {"template_variable": {
+            "appProduct": app_product, "appVersion": version, "downloadUrl": url
+        }},
+    }
+
+def test_parse_template_android():
+    data = _make_template("gaotu-android", "5.91.80", "https://x/app1-gaotu-release.apk")
+    assert app_module.parse_template(data) == {
+        "app_id": "gaotu", "platform": "android",
+        "version": "5.91.80", "url": "https://x/app1-gaotu-release.apk"
+    }
+
+def test_parse_template_ios():
+    data = _make_template("gaotu-ios", "5.91.80", "https://x/gaotu-release.ipa")
+    assert app_module.parse_template(data)["platform"] == "ios"
+
+def test_parse_template_unknown_app_returns_none():
+    data = _make_template("unknown-android", "1.0", "https://x/a.apk")
+    assert app_module.parse_template(data) is None
 
 # ── Flask 路由 ────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def client():
     flask_app.config["TESTING"] = True
-    app_module._pending_pairs.clear()
     return flask_app.test_client()
 
 def test_url_verification(client):
@@ -117,36 +125,33 @@ def test_non_text_non_card_ignored(client):
     assert resp.status_code == 200
 
 @patch("app._do_trigger")
-def test_card_android_alone_no_trigger(mock_trigger, client):
+def test_card_android_alone_triggers(mock_trigger, client):
     android_content = _make_card("gaotu", "android", "5.91.60", "https://cdn.example.com/a")
     payload = {"event": {"message": {"message_type": "interactive",
                                       "content": android_content}}}
     client.post("/webhook/feishu", json=payload)
-    mock_trigger.assert_not_called()
+    mock_trigger.assert_called_once_with(
+        "gaotu", "5.91.60", "android", "https://cdn.example.com/a.apk")
 
 @patch("app._do_trigger")
-def test_card_both_platforms_trigger(mock_trigger, client):
-    android_content = _make_card("gaotu", "android", "5.91.60", "https://cdn.example.com/a")
-    ios_content     = _make_card("gaotu", "ios",     "5.91.60", "https://cdn.example.com/b")
-    client.post("/webhook/feishu",
-                json={"event": {"message": {"message_type": "interactive",
-                                             "content": android_content}}})
-    client.post("/webhook/feishu",
-                json={"event": {"message": {"message_type": "interactive",
-                                             "content": ios_content}}})
-    mock_trigger.assert_called_once_with(
-        "gaotu", "5.91.60",
-        "https://cdn.example.com/a.apk",
-        "https://cdn.example.com/b.ipa"
-    )
+def test_template_triggers_per_platform(mock_trigger, client):
+    client.post("/webhook",
+                json=_make_template("gaotu-android", "5.91.80", "https://x/a.apk"))
+    client.post("/webhook",
+                json=_make_template("gaotu-ios", "5.91.80", "https://x/b.ipa"))
+    assert mock_trigger.call_count == 2
+    mock_trigger.assert_any_call("gaotu", "5.91.80", "android", "https://x/a.apk")
+    mock_trigger.assert_any_call("gaotu", "5.91.80", "ios", "https://x/b.ipa")
 
 @patch("app.ssh_trigger")
 @patch("app.is_running", return_value=False)
-def test_text_message_triggers_ssh(mock_running, mock_ssh, client):
+def test_text_message_triggers_ssh_both(mock_running, mock_ssh, client):
     mock_ssh.return_value = True
     payload = {"event": {"message": {
         "message_type": "text",
         "content": '{"text":"gaotu 5.91 android:https://a.apk ios:https://b.ipa"}'
     }}}
     client.post("/webhook/feishu", json=payload)
-    mock_ssh.assert_called_once_with("gaotu", "5.91", "https://a.apk", "https://b.ipa")
+    assert mock_ssh.call_count == 2
+    mock_ssh.assert_any_call("gaotu", "5.91", "android", "https://a.apk")
+    mock_ssh.assert_any_call("gaotu", "5.91", "ios", "https://b.ipa")

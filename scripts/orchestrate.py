@@ -320,41 +320,58 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--app",     required=True)
     p.add_argument("--version", required=True)
-    p.add_argument("--apk-url", required=True, dest="apk_url")
-    p.add_argument("--ipa-url", required=True, dest="ipa_url")
+    p.add_argument("--apk-url", dest="apk_url", default="")
+    p.add_argument("--ipa-url", dest="ipa_url", default="")
+    p.add_argument("--platform", choices=["android", "ios"], default=None,
+                   help="只跑指定单端；不传则按提供的 url 跑双端")
     return p.parse_args()
 
 
-def _run(app_id, version, apk_url, ipa_url):
+def _run(app_id, version, apk_url, ipa_url, platforms=None):
+    # platforms: 要执行的平台集合，默认按传入的 url 决定
+    if platforms is None:
+        platforms = set()
+        if apk_url:
+            platforms.add("android")
+        if ipa_url:
+            platforms.add("ios")
+    if not platforms:
+        _notify(app_id, version, "❌ 未提供任何平台的下载地址，终止")
+        return
+
     devices = load_devices(app_id)
 
-    # 1. Download
+    # 1. Download（仅下载要执行的平台）
     apk_path = f"/tmp/{app_id}_{version}.apk"
     ipa_path = f"/tmp/{app_id}_{version}.ipa"
-    print(f"[INFO] Downloading APK: {apk_url}")
-    if not download_file(apk_url, apk_path):
-        _notify(app_id, version, "❌ APK 下载失败，终止")
-        return
-    print(f"[INFO] Downloading IPA: {ipa_url}")
-    if not download_file(ipa_url, ipa_path):
-        _notify(app_id, version, "❌ IPA 下载失败，终止")
-        return
+    if "android" in platforms:
+        print(f"[INFO] Downloading APK: {apk_url}")
+        if not download_file(apk_url, apk_path):
+            _notify(app_id, version, "❌ APK 下载失败，终止")
+            return
+    if "ios" in platforms:
+        print(f"[INFO] Downloading IPA: {ipa_url}")
+        if not download_file(ipa_url, ipa_path):
+            _notify(app_id, version, "❌ IPA 下载失败，终止")
+            return
 
-    # 2. Install
+    # 2. Install（仅安装要执行的平台）
     android_ok, ios_ok = [], []
-    for d in devices["android"]:
-        if install_android(apk_path, d["udid"]):
-            android_ok.append(d)
-            print(f"[INFO] Android {d['udid']} installed")
-        else:
-            print(f"[WARN] Android {d['udid']} install failed, skipping")
+    if "android" in platforms:
+        for d in devices["android"]:
+            if install_android(apk_path, d["udid"]):
+                android_ok.append(d)
+                print(f"[INFO] Android {d['udid']} installed")
+            else:
+                print(f"[WARN] Android {d['udid']} install failed, skipping")
 
-    for d in devices["ios"]:
-        if install_ios(ipa_path, d["udid"]):
-            ios_ok.append(d)
-            print(f"[INFO] iOS {d['udid']} installed")
-        else:
-            print(f"[WARN] iOS {d['udid']} install failed, skipping")
+    if "ios" in platforms:
+        for d in devices["ios"]:
+            if install_ios(ipa_path, d["udid"]):
+                ios_ok.append(d)
+                print(f"[INFO] iOS {d['udid']} installed")
+            else:
+                print(f"[WARN] iOS {d['udid']} install failed, skipping")
 
     if not android_ok and not ios_ok:
         _notify(app_id, version, "❌ 所有设备安装失败，终止")
@@ -362,7 +379,7 @@ def _run(app_id, version, apk_url, ipa_url):
 
     print(f"[INFO] Install done: Android {len(android_ok)}, iOS {len(ios_ok)}")
 
-    # 3. Explore (new version)
+    # 3. Explore (new version) —— 仅 Android 端触发
     if android_ok:
         run_exploration(app_id, version, android_ok[0]["udid"])
 
@@ -374,8 +391,11 @@ def _run(app_id, version, apk_url, ipa_url):
         _notify(app_id, version, f"❌ Bitable 读取失败：{e}")
         return
     groups  = group_by_device(entries)
+    # 仅保留本次执行平台的设备组
+    groups  = {u: g for u, g in groups.items()
+               if g["platform"].lower() in platforms}
     if not groups:
-        _notify(app_id, version, f"⚠️ {app_id} {version} 无标记自动化用例")
+        _notify(app_id, version, f"⚠️ {app_id} {version} 无标记自动化用例（{'/'.join(sorted(platforms))}）")
         return
 
     cfg = BITABLE_CONFIGS[app_id]
@@ -406,13 +426,16 @@ def main():
     args    = parse_args()
     app_id  = args.app
     version = args.version
+    platforms = {args.platform} if args.platform else None
 
-    pid_file = f"/tmp/orchestrate_{app_id}_{version}.pid"
+    # pid 文件带平台后缀，允许 Android / iOS 同一版本并行独立执行
+    suffix   = f"_{args.platform}" if args.platform else ""
+    pid_file = f"/tmp/orchestrate_{app_id}_{version}{suffix}.pid"
     with open(pid_file, "w") as f:
         f.write(str(os.getpid()))
 
     try:
-        _run(app_id, version, args.apk_url, args.ipa_url)
+        _run(app_id, version, args.apk_url, args.ipa_url, platforms)
     finally:
         if os.path.exists(pid_file):
             os.remove(pid_file)
