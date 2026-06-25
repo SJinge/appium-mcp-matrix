@@ -6,8 +6,8 @@ GROUP_CHAT_ID = "oc_aad4f334d463251e56c2f5495f60027e"
 
 BITABLE_CONFIGS = {
     "gaotu": {
-        "app_token": "",
-        "table_id":  "",
+        "app_token": "RLDEbjYG7aiKwBsu9gOcadmlnvc",
+        "table_id":  "tblvXqsSu7xShRJH",
     },
     "tutu": {
         "app_token": "",

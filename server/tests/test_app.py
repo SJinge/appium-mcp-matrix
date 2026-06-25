@@ -143,15 +143,15 @@ def test_template_triggers_per_platform(mock_trigger, client):
     mock_trigger.assert_any_call("gaotu", "5.91.80", "android", "https://x/a.apk")
     mock_trigger.assert_any_call("gaotu", "5.91.80", "ios", "https://x/b.ipa")
 
-@patch("app.ssh_trigger")
+@patch("app.local_trigger")
 @patch("app.is_running", return_value=False)
-def test_text_message_triggers_ssh_both(mock_running, mock_ssh, client):
-    mock_ssh.return_value = True
+def test_text_message_triggers_both(mock_running, mock_trigger, client):
+    mock_trigger.return_value = True
     payload = {"event": {"message": {
         "message_type": "text",
         "content": '{"text":"gaotu 5.91 android:https://a.apk ios:https://b.ipa"}'
     }}}
     client.post("/webhook/feishu", json=payload)
-    assert mock_ssh.call_count == 2
-    mock_ssh.assert_any_call("gaotu", "5.91", "android", "https://a.apk")
-    mock_ssh.assert_any_call("gaotu", "5.91", "ios", "https://b.ipa")
+    assert mock_trigger.call_count == 2
+    mock_trigger.assert_any_call("gaotu", "5.91", "android", "https://a.apk")
+    mock_trigger.assert_any_call("gaotu", "5.91", "ios", "https://b.ipa")

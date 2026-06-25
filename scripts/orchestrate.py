@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse, json, os, subprocess, sys, time
-import urllib.request, urllib.error, datetime
+import urllib.request, urllib.error, urllib.parse, datetime
+import plistlib
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,9 +53,34 @@ def install_ios(ipa_path: str, udid: str) -> bool:
     return "Complete" in r.stdout
 
 
+def resolve_ios_ipa_url(url: str) -> str:
+    """
+    iOS 的 downloadUrl 通常是 itms-services 安装清单（指向 .plist），
+    需解析出 manifest 里 kind=software-package 的真实 .ipa 直链。
+    非 itms-services 链接原样返回。
+    """
+    if not url.startswith("itms-services"):
+        return url
+    qs = urllib.parse.urlparse(url).query
+    plist_url = urllib.parse.parse_qs(qs).get("url", [""])[0]
+    if not plist_url:
+        print(f"[WARN] itms-services 链接无 url 参数：{url}")
+        return url
+    try:
+        with urllib.request.urlopen(plist_url, timeout=30) as resp:
+            manifest = plistlib.loads(resp.read())
+        for item in manifest.get("items", []):
+            for asset in item.get("assets", []):
+                if asset.get("kind") == "software-package" and asset.get("url"):
+                    return asset["url"]
+    except Exception as e:
+        print(f"[WARN] 解析 iOS manifest 失败：{e}")
+    return url
+
+
 def download_file(url: str, dest: str) -> bool:
     r = subprocess.run(["curl", "-L", "-o", dest, url], capture_output=True)
-    return r.returncode == 0 and os.path.getsize(dest) > 1_000_000
+    return r.returncode == 0 and os.path.exists(dest) and os.path.getsize(dest) > 1_000_000
 
 
 def _feishu_post(body: dict):
@@ -95,6 +121,17 @@ def _text_field(value) -> str:
     return str(value) if value else ""
 
 
+def _extract_udid(label: str) -> str:
+    """
+    设备字段是单选，选项名形如 '华为nova12pro：26KUT24202013751' 或
+    'iphone12:00008101-001E28D436E0001E'，取冒号（全/半角）后的真实 UDID。
+    """
+    if not label:
+        return ""
+    s = label.replace("：", ":")
+    return s.rsplit(":", 1)[-1].strip() if ":" in s else label.strip()
+
+
 def parse_record(record: dict) -> dict:
     fields = record["fields"]
     num    = fields.get("用例编号", "")
@@ -124,8 +161,8 @@ def parse_record(record: dict) -> dict:
         "record_id":      record["record_id"],
         "name":           f"{num} {name}".strip(),
         "steps":          steps,
-        "android_device": _text_field(fields.get("Android设备", "")),
-        "ios_device":     _text_field(fields.get("ios设备", "")),
+        "android_device": _extract_udid(_text_field(fields.get("android执行设备", ""))),
+        "ios_device":     _extract_udid(_text_field(fields.get("ios执行设备", ""))),
         "module":         _text_field(fields.get("模块", "")),
     }
 
@@ -138,7 +175,7 @@ def fetch_cases(app_id: str) -> list:
     body  = json.dumps({
         "filter": {
             "conjunction": "and",
-            "conditions": [{"field_name": "是否执行自动化", "operator": "is",
+            "conditions": [{"field_name": "是否自动化执行", "operator": "is",
                             "value": ["true"]}]
         },
         "page_size": 500
@@ -233,6 +270,14 @@ def launch_claude_per_device(app_id: str, groups: dict,
     return procs
 
 
+def _tail_file(path: str, n: int = 200) -> str:
+    try:
+        with open(path) as f:
+            return f.read()[-n:].strip().replace("\n", " ")
+    except OSError:
+        return ""
+
+
 def collect_results(procs: dict, result_dir: str = "/tmp",
                     timeout: int = 90 * 60) -> dict:
     deadline = time.time() + timeout
@@ -249,7 +294,15 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
                     pending.discard(udid)
                     print(f"[INFO] {udid} done, results read")
                 except json.JSONDecodeError:
-                    pass
+                    pass  # 文件还在写，下轮再读
+                continue
+            # 无结果文件且进程已退出 → 它没写结果就挂了（如 429 日限额），立即判失败，不空等
+            proc = procs.get(udid)
+            if proc and proc.poll() is not None:
+                tail = _tail_file(f"/tmp/claude_{udid}.log")
+                print(f"[WARN] {udid} 进程已退出(code={proc.returncode})却无结果，判失败。日志末尾：{tail}")
+                results[udid] = "failed"
+                pending.discard(udid)
         if pending:
             time.sleep(10)
 
@@ -269,7 +322,7 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
 
     android_cases, ios_cases = [], []
     for udid, data in results.items():
-        if data == "timeout":
+        if data in ("timeout", "failed"):
             continue
         for case in (data if isinstance(data, list) else []):
             platform = case.get("platform", "").lower()
@@ -350,8 +403,9 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None):
             _notify(app_id, version, "❌ APK 下载失败，终止")
             return
     if "ios" in platforms:
-        print(f"[INFO] Downloading IPA: {ipa_url}")
-        if not download_file(ipa_url, ipa_path):
+        ipa_dl = resolve_ios_ipa_url(ipa_url)
+        print(f"[INFO] Downloading IPA: {ipa_dl}")
+        if not download_file(ipa_dl, ipa_path):
             _notify(app_id, version, "❌ IPA 下载失败，终止")
             return
 
@@ -391,11 +445,16 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None):
         _notify(app_id, version, f"❌ Bitable 读取失败：{e}")
         return
     groups  = group_by_device(entries)
-    # 仅保留本次执行平台的设备组
+    # 仅保留本次执行平台、且安装成功（已连接）的设备组，避免等待离线设备超时
+    installed = {d["udid"] for d in android_ok} | {d["udid"] for d in ios_ok}
+    skipped   = {u: g for u, g in groups.items()
+                 if g["platform"].lower() in platforms and u not in installed}
+    for udid, g in skipped.items():
+        print(f"[WARN] 跳过 {g['platform']} 设备 {udid}（未连接/未安装），{len(g['entries'])} 条用例不执行")
     groups  = {u: g for u, g in groups.items()
-               if g["platform"].lower() in platforms}
+               if g["platform"].lower() in platforms and u in installed}
     if not groups:
-        _notify(app_id, version, f"⚠️ {app_id} {version} 无标记自动化用例（{'/'.join(sorted(platforms))}）")
+        _notify(app_id, version, f"⚠️ {app_id} {version} 无可执行用例（{'/'.join(sorted(platforms))}，已连接设备上无标记用例）")
         return
 
     cfg = BITABLE_CONFIGS[app_id]

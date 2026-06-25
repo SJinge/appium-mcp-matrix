@@ -1,20 +1,12 @@
 # 每个 app 可覆盖，留空则继承 default
 default:
   android:
-    - udid: "ANDROID_UDID_1"
-      name: "Android设备1"
-    - udid: "ANDROID_UDID_2"
-      name: "Android设备2"
-    - udid: "ANDROID_UDID_3"
-      name: "Android设备3"
-    - udid: "ANDROID_UDID_4"
-      name: "Android设备4"
+    - udid: "26KUT24202013751"
+      name: "华为 ADA-AL00"
+    - udid: "cd5c614a"
+      name: "小米 23127PN0CC (houji)"
   ios:
-    - udid: "IOS_UDID_1"
-      name: "iOS设备1"
-    - udid: "IOS_UDID_2"
-      name: "iOS设备2"
-    - udid: "IOS_UDID_3"
-      name: "iOS设备3"
-    - udid: "IOS_UDID_4"
-      name: "iOS设备4"
+    - udid: "00008101-001E28D436E0001E"
+      name: "111的iPhone12 (iOS 18.7.8)"
+    - udid: "00008110-00180CD9348B801E"
+      name: "iPhone (iOS 18.7.8)"

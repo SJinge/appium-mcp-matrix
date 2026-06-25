@@ -118,43 +118,41 @@ def receive_template(data: dict) -> Optional[dict]:
     return parse_template(data)
 
 
-MAC_HOST         = os.environ.get("MAC_HOST", "")
-MAC_USER         = os.environ.get("MAC_USER", "")
-MAC_KEY          = os.environ.get("MAC_KEY", os.path.expanduser("~/.ssh/id_rsa"))
 ORCHESTRATE_PATH = os.environ.get(
     "ORCHESTRATE_PATH",
     "/Users/mac/Documents/projects/appium-mcp-matrix/scripts/orchestrate.py"
 )
 
 
+def _pid_file(app_id: str, version: str, platform: str) -> str:
+    return f"/tmp/orchestrate_{app_id}_{version}_{platform}.pid"
+
+
 def is_running(app_id: str, version: str, platform: str) -> bool:
-    pid_file = f"/tmp/orchestrate_{app_id}_{version}_{platform}.pid"
-    result = subprocess.run(
-        ["ssh", "-i", MAC_KEY, "-o", "ConnectTimeout=5",
-         f"{MAC_USER}@{MAC_HOST}",
-         f"[ -f {pid_file} ] && ps -p $(cat {pid_file}) > /dev/null 2>&1 "
-         f"&& echo running || echo idle"],
-        capture_output=True, text=True, timeout=10
-    )
-    return "running" in result.stdout
+    pid_file = _pid_file(app_id, version, platform)
+    if not os.path.exists(pid_file):
+        return False
+    try:
+        with open(pid_file) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)          # 不发信号，仅探测进程是否存在
+        return True
+    except (ValueError, ProcessLookupError, FileNotFoundError):
+        return False
+    except PermissionError:
+        return True              # 进程存在但非本用户，视为运行中
 
 
-def ssh_trigger(app_id: str, version: str, platform: str, url: str) -> bool:
+def local_trigger(app_id: str, version: str, platform: str, url: str) -> bool:
+    """本机后台启动 orchestrate（单端）。orchestrate 自身负责写/删 pid 文件。"""
     log      = f"/tmp/orchestrate_{app_id}_{version}_{platform}.log"
-    pid_file = f"/tmp/orchestrate_{app_id}_{version}_{platform}.pid"
     url_flag = "--apk-url" if platform == "android" else "--ipa-url"
-    cmd = (
-        f"nohup python3 {ORCHESTRATE_PATH} "
-        f"--app {app_id} --version '{version}' "
-        f"--platform {platform} {url_flag} '{url}' "
-        f"> {log} 2>&1 & echo $! | tee {pid_file}"
-    )
-    result = subprocess.run(
-        ["ssh", "-i", MAC_KEY, "-o", "ConnectTimeout=5",
-         f"{MAC_USER}@{MAC_HOST}", cmd],
-        capture_output=True, text=True, timeout=15
-    )
-    return result.returncode == 0
+    cmd = ["python3", ORCHESTRATE_PATH,
+           "--app", app_id, "--version", version,
+           "--platform", platform, url_flag, url]
+    with open(log, "w") as f:
+        subprocess.Popen(cmd, stdout=f, stderr=f, start_new_session=True)
+    return True
 
 
 def _do_trigger(app_id: str, version: str, platform: str, url: str):
@@ -162,10 +160,12 @@ def _do_trigger(app_id: str, version: str, platform: str, url: str):
         if is_running(app_id, version, platform):
             print(f"[INFO] {app_id} {version} {platform} already running, skip")
             return
-        ssh_trigger(app_id, version, platform, url)
-        print(f"[INFO] Triggered {app_id} {version} {platform}")
+        if local_trigger(app_id, version, platform, url):
+            print(f"[INFO] Triggered {app_id} {version} {platform}")
+        else:
+            print(f"[WARN] Trigger failed for {app_id} {version} {platform}")
     except Exception as e:
-        print(f"[WARN] SSH error for {app_id} {version} {platform}: {e}")
+        print(f"[WARN] Trigger error for {app_id} {version} {platform}: {e}")
 
 
 @app.route("/webhook", methods=["POST"])

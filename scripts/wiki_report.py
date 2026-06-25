@@ -119,23 +119,30 @@ def _add_text_to_cell(doc_token, cell_id, content, bold=False):
            f"/{doc_token}/blocks/{cell_id}/children")
     feishu("POST", url, {"children": [text_block(str(content), bold)], "index": 0})
 
+# 飞书单次建表的单元格上限约 63（实测 9 行×7 列 OK，10 行 FAIL）。
+# 大表先建小表，再用 insert_table_row 逐行扩，避免一次性超限。
+_MAX_TABLE_CELLS = 63
+
+
 def add_table(doc_token, headers, rows, counter, col_widths=None):
     """
-    两阶段建表：
-      1. POST 表格容器（无 children）→ 取 table_block_id
-      2. 逐 row → cell 写入文字
+    建表：
+      1. POST 表格容器（行数受单次单元格上限约束，先建初始行）
+      2. insert_table_row 逐行扩到目标行数（绕过上限，保持单张连续表格）
+      3. 逐 cell 写入文字
     """
     n_cols = len(headers)
     n_rows = 1 + len(rows)
     if col_widths is None:
         col_widths = [int(520 / n_cols)] * n_cols
 
+    init_rows = max(1, min(n_rows, _MAX_TABLE_CELLS // n_cols))
     table_def = {
         "block_type": 31,
         "table": {
             "property": {
                 "column_size": n_cols,
-                "row_size":    n_rows,
+                "row_size":    init_rows,
             }
         }
     }
@@ -160,6 +167,12 @@ def add_table(doc_token, headers, rows, counter, col_widths=None):
     table_id = first if isinstance(first, str) else first.get("block_id", "")
     if not table_id:
         return
+
+    # 逐行扩到目标行数
+    patch_url = (f"https://open.feishu.cn/open-apis/docx/v1/documents"
+                 f"/{doc_token}/blocks/{table_id}")
+    for _ in range(n_rows - init_rows):
+        feishu("PATCH", patch_url, {"insert_table_row": {"row_index": -1}})
 
     # Feishu table (31) children are cells (34) laid out flat: row0_col0, row0_col1, ..., row1_col0, ...
     all_cells = _get_children_ids(doc_token, table_id)
