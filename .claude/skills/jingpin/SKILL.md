@@ -32,7 +32,7 @@ description: |
 **在做任何设备操作之前**，先确认以下信息：
 
 ```
-1. 用例来源？A. 搬山 caseId  B. 自然语言  C. 飞书 Bitable 链接
+1. 用例来源？A. 搬山 caseId  B. 自然语言  C. 飞书 Bitable 链接  D. Monkey 测试
 2. 目标平台？Android / iOS
 3. 使用哪台设备？（默认见上表）
 4. 登录账号？（默认见上表）
@@ -45,6 +45,28 @@ description: |
 - **路径 A（搬山 caseId）**：`testCaseDetail(caseId)` → 解析节点树，含"预期结果"的节点为 ASSERT，其余为 ACTION
 - **路径 B（自然语言）**：按换行/序号切分，以"预期："/"验证："开头的行为 ASSERT
 - **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件，提取 `DEVICE_CANDIDATES`；记录 `BITABLE_APP_TOKEN / TABLE_ID / RECORD_ID` 供第八步回写
+- **路径 D（Monkey 测试）**：询问以下参数后，按 `common/monkey.md` 执行：
+
+  ```
+  询问（有默认值的可直接回车跳过）：
+  - 目标平台？Android / iOS  （默认 Android）
+  - 使用哪台设备？           （默认 ce67d979）
+  - 最大操作步数？           （默认 500）
+  - 最大运行时长（分钟）？    （默认 30）
+  ```
+
+  确认参数后，设置以下变量并调用 `common/monkey.md`：
+  - `APP_ID=jingpin`
+  - `PKG=com.gaotu100.jingpin`（Android）或 `PKG=<bundleId>`（iOS，首次使用请确认）
+  - `ACCOUNT=12100000000`
+  - `VERSION`：从以下命令提取：
+    ```bash
+    adb shell dumpsys package com.gaotu100.jingpin | grep versionName | head -1
+    ```
+  - `UDID`：使用用户指定值或默认 `ce67d979`
+  - `max_ops`、`max_minutes`：使用用户输入或默认值
+
+  路径 D 不进行 TARGET_PAGE 分析，直接进入 `common/monkey.md` 初始化章节。
 
 解析完成后，根据步骤关键词分析 `TARGET_PAGE`（规则见 [../../common/parsing.md](../../common/parsing.md)），然后展示步骤列表等用户确认。
 

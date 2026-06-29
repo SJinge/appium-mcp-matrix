@@ -32,7 +32,7 @@ description: |
 **在做任何设备操作之前**，先确认以下信息：
 
 ```
-1. 用例来源？A. 搬山 caseId  B. 自然语言  C. 飞书 Bitable 链接
+1. 用例来源？A. 搬山 caseId  B. 自然语言  C. 飞书 Bitable 链接  D. Monkey 测试
 2. 目标平台？Android / iOS        ← 仅路径 A/B 需要询问
 3. 使用哪台设备？（默认见上表）   ← 仅路径 A/B 需要询问
 ```
@@ -44,9 +44,32 @@ description: |
 
 - **路径 A（搬山 caseId）**：`testCaseDetail(caseId)` → 解析节点树，含"预期结果"的节点为 ASSERT，其余为 ACTION
 - **路径 B（自然语言）**：按换行/序号切分，以"预期："/"验证："开头的行为 ASSERT
-- **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件；**同时捕获每条记录的 `ID` 字段值（自增编号）作为 `case_id`**；按 `android执行设备` / `ios执行设备` 字段拆分为 `EXECUTION_ENTRIES`（每条记录最多产出 Android + iOS 两条，两字段均空则跳过）；按设备分组后参考 [../../common/parallel.md](../../common/parallel.md) 并行派发
+- **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件；**同时捕获每条记录的 `ID` 字段值（自增编号）作为 `case_id`，以及 `record_id`（Bitable内部标识符，格式如 `recXXXXXX`）用于执行后回写来源表**；按 `android执行设备` / `ios执行设备` 字段拆分为 `EXECUTION_ENTRIES`（每条记录最多产出 Android + iOS 两条，两字段均空则跳过）；按设备分组后参考 [../../common/parallel.md](../../common/parallel.md) 并行派发
   > ⚠️ **取记录必须按指定执行视图顺序**：search 传 `data.view_id`（gaotu = `vewJViMvTW`，见 [../../scripts/feishu_config.py](../../scripts/feishu_config.py)），**禁止传自定义 sort**。用户说的「第 N 条」= 该视图返回 `items[N-1]`。完整规则见 [../../common/parsing.md](../../common/parsing.md) 路径 C。
   > 预置条件中"进入 XX tab / 进入 app 首页"类条目**直接忽略**，不生成 PRECOND 步骤——tab 导航由模块字段统一处理（见下方 TARGET_PAGE 分析）
+
+- **路径 D（Monkey 测试）**：询问以下参数后，按 `common/monkey.md` 执行：
+
+  ```
+  询问（有默认值的可直接回车跳过）：
+  - 目标平台？Android / iOS  （默认 Android）
+  - 使用哪台设备？           （默认 ce67d979）
+  - 最大操作步数？           （默认 500）
+  - 最大运行时长（分钟）？    （默认 30）
+  ```
+
+  确认参数后，设置以下变量并调用 `common/monkey.md`：
+  - `APP_ID=gaotu`
+  - `PKG=com.gaotu100.superclass`（Android）或 `PKG=<bundleId>`（iOS，首次使用请确认）
+  - `ACCOUNT=12100000000`
+  - `VERSION`：从以下命令提取：
+    ```bash
+    adb shell dumpsys package com.gaotu100.superclass | grep versionName | head -1
+    ```
+  - `UDID`：使用用户指定值或默认 `ce67d979`
+  - `max_ops`、`max_minutes`：使用用户输入或默认值
+
+  路径 D 不进行 TARGET_PAGE 分析，直接进入 `common/monkey.md` 初始化章节。
 
 解析完成后分析 `TARGET_PAGE`，展示步骤列表等用户确认。
 
@@ -336,6 +359,7 @@ CASES_JSON.append({
     "name": "<用例名称>",
     "module": "<模块名>",              # 路径C：从 Bitable 模块字段读取；路径A/B：从 TARGET_PAGE 推断（见映射表）
     "case_id": <原表ID字段值>,         # 路径C：Bitable 记录的 ID 自增编号；路径A/B：留空或填0
+    "source_record_id": "<record_id>", # 路径C：Bitable 内部标识符（recXXXXXX），用于回写来源表；路径A/B：留空
     "passed": CASE_PASSED,
     "duration": CASE_END_TS - CASE_START_TS,
     "steps": CASE_STEPS
@@ -423,12 +447,13 @@ ASSERT 验证截图：
 
 ### Bitable 回写（仅路径 C）
 
-**平台执行结果表（固定常量，无需从 URL 解析）：**
+**固定常量：**
 
-| 平台 | app_token | table_id |
+| 用途 | app_token | table_id |
 |------|-----------|----------|
-| iOS | `C6X8wCdSLiAd9IkXtNFc6yO2nXg` | `tblryYA67UjkVGwx` |
-| Android | `C6X8wCdSLiAd9IkXtNFc6yO2nXg` | `tblUEp8pt5W9Cic5` |
+| 来源用例表（更新最新执行时间） | `C6X8wCdSLiAd9IkXtNFc6yO2nXg` | `tblvXqsSu7xShRJH` |
+| 执行结果表 - iOS | `C6X8wCdSLiAd9IkXtNFc6yO2nXg` | `tblryYA67UjkVGwx` |
+| 执行结果表 - Android | `C6X8wCdSLiAd9IkXtNFc6yO2nXg` | `tblUEp8pt5W9Cic5` |
 
 **步骤一：上传截图**
 
@@ -493,6 +518,32 @@ for case in CASES_JSON:
     })
 # POST /bitable/v1/apps/{RESULT_APP_TOKEN}/tables/{RESULT_TABLE_ID}/records/batch_create
 # body: {"records": records}
+```
+
+**步骤四：更新来源表"case最新执行时间"（仅执行通过的用例）**
+
+```python
+SOURCE_APP_TOKEN = "C6X8wCdSLiAd9IkXtNFc6yO2nXg"
+SOURCE_TABLE_ID  = "tblvXqsSu7xShRJH"
+
+import time
+now_ms = int(time.time() * 1000)   # 飞书 DateTime 字段接受毫秒级 Unix 时间戳
+
+passed_updates = [
+    {
+        "record_id": case["source_record_id"],
+        "fields": {"case最新执行时间": now_ms}
+    }
+    for case in CASES_JSON
+    if case.get("passed") and case.get("source_record_id")
+]
+
+if passed_updates:
+    # 每批最多 500 条
+    for i in range(0, len(passed_updates), 500):
+        batch = passed_updates[i:i+500]
+        # PUT /bitable/v1/apps/{SOURCE_APP_TOKEN}/tables/{SOURCE_TABLE_ID}/records/batch_update
+        # body: {"records": batch}
 ```
 
 ### 飞书 Wiki 报告 & 群通知
