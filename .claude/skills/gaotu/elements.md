@@ -58,17 +58,22 @@ sips -r 90 /path/to/screenshot.png   # macOS 内置，无需安装
 
 判断依据：截图中视频区域出现在竖向图侧面（内容横躺）时旋转。适用于进入教室后所有截图。
 
-### 规则四：三级降级策略
+### 规则四：定位优先级链（真相源/缓存优先）
+
+> ⚠️ 完整链路见 [../../common/locator.md](../../common/locator.md)。定位任何元素**先走前两档**，本规则的三级降级是其后续 fallback。
 
 ```
-第一级：截图 + AI 视觉定位（ai_instruction）
+第 0 档：locator_cache.py get 命中 → strategy=id          (0 AI/0截图/0 page_source)
+第 1 档：真相源解析（page_source ∩ elements.truth.json）→ strategy=id → 写回缓存
+    ↓ 真相源抽不到（RN/Compose/WebView/动态页）
+第 2 档：截图 + AI 视觉定位（ai_instruction）             ← 原第一级
     目标文字可见时优先，无需 page source
     ↓ 截图失败（FLAG_SECURE）或 AI 视觉失败
-第二级：page source + 属性定位
+第 3 档：page source + 属性定位                            ← 原第二级
     Android：resource-id 优先，xpath //*[@text='目标'] 次之
     iOS：accessibility id 优先，xpath //*[@name='目标'] 次之
     ↓ 仍找不到
-第三级：坐标硬点击（兜底）
+第 4 档：坐标硬点击（兜底）                                 ← 原第三级
     仅用于已知固定布局（如底部 tab），记录日志说明
 ```
 
@@ -356,35 +361,18 @@ adb -s <UDID> shell "input tap $((W/2)) $((H*43/100)); input tap $((W*94/100)) $
 
 ---
 
-## Android resource-id 汇总
+## Android resource-id 索引
 
-> 登录页元素见 [../../common/elements/login.md](../../common/elements/login.md)
-
-| 元素 | resource-id |
-|------|-------------|
-| 底部 tab 标题 | `com.gaotu100.superclass:id/tab_title` |
-| 广告关闭按钮 | `com.gaotu100.superclass:id/ad_close` |
-| 协议确认按钮 | `com.gaotu100.superclass:id/customer_dialog_ok` |
-| 首页年级阶段选择 | `com.gaotu100.superclass:id/ll_label` |
-| 首页客服入口 | `com.gaotu100.superclass:id/consult_icon` |
-| 首页AI搜索入口 | `com.gaotu100.superclass:id/gtui_search_bar` |
-| 首页子tab栏容器 | `com.gaotu100.superclass:id/home_tabbar` |
-| 首页今日推荐标题 | `com.gaotu100.superclass:id/section_title` |
-| 首页换一换按钮 | `com.gaotu100.superclass:id/section_more_title` |
-| 首页内容列表 | `com.gaotu100.superclass:id/list_view` |
-| 首页帖子标题 | `com.gaotu100.superclass:id/tv_title` |
-| 首页作者名 | `com.gaotu100.superclass:id/tv_user_name` |
-| 首页点赞数 | `com.gaotu100.superclass:id/tv_like_count` |
-| 首页内容封面图 | `com.gaotu100.superclass:id/cover_iv` |
-| 消息页顶部标题 | `com.gaotu100.superclass:id/headbar_left_text` |
-| 消息页快捷入口容器 | `com.gaotu100.superclass:id/top_message_list` |
-| 消息列表容器 | `com.gaotu100.superclass:id/mymessageactivity_message_listview` |
-| 消息项标题 | `com.gaotu100.superclass:id/messageitemview_message_title` |
-| 消息项描述 | `com.gaotu100.superclass:id/messageitemview_message_des` |
-| 消息项时间 | `com.gaotu100.superclass:id/messageitemview_message_time` |
-| 消息项头像 | `com.gaotu100.superclass:id/messageitemview_message_avatar` |
-| 消息未读角标 | `com.gaotu100.superclass:id/messageitemview_message_count` |
-| 消息快捷入口标题 | `com.gaotu100.superclass:id/message_title` |
+> **不再在此平铺 id 全集**——各页面元素 id 已随语义名+上下文写在上文分节表(首页 / 消息 Tab / 底部导航 / 课程详情等);登录页见 [../../common/elements/login.md](../../common/elements/login.md),通用弹窗(`ad_close` / `customer_dialog_ok`)见 [../../common/elements/dialog.md](../../common/elements/dialog.md)。
+>
+> 平铺 id 会与真相源重复、版本升级时漂移。需要 id 时按下列来源取(见 [../../common/locator.md](../../common/locator.md)):
+>
+> | 需要什么 | 去哪取 |
+> |---------|--------|
+> | id 是否存在 / 全集校验 | `apps/gaotu/{版本}/elements.truth.json`(id 全集) |
+> | 步骤意图 → selector 映射 | `locator_cache.py`(按版本校验+继承) |
+> | id 的 module / layout 归属 | `apps/gaotu/{版本}/elements.enriched.json` |
+> | 业务语义名 / ai_instruction / iOS / 导航 | 本文件上文各分节表 |
 
 ---
 
