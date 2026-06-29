@@ -108,6 +108,12 @@ def test_parse_template_unknown_app_returns_none():
 
 # ── Flask 路由 ────────────────────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True)
+def _isolate_markers(tmp_path):
+    """每个测试用独立临时目录存「已触发」标记，避免污染 /tmp 且保证可重复运行。"""
+    app_module.MARKER_DIR = str(tmp_path)
+    yield
+
 @pytest.fixture
 def client():
     flask_app.config["TESTING"] = True
@@ -143,9 +149,28 @@ def test_template_triggers_per_platform(mock_trigger, client):
     mock_trigger.assert_any_call("gaotu", "5.91.80", "android", "https://x/a.apk")
     mock_trigger.assert_any_call("gaotu", "5.91.80", "ios", "https://x/b.ipa")
 
+# ── 执行白名单：仅 gaotu 触发 ─────────────────────────────────────────────────
+
 @patch("app.local_trigger")
-@patch("app.is_running", return_value=False)
-def test_text_message_triggers_both(mock_running, mock_trigger, client):
+def test_enabled_apps_whitelist(mock_trigger):
+    mock_trigger.return_value = True
+    app_module.ENABLED_APPS = {"gaotu"}
+    app_module._do_trigger("jingpin", "5.91.80", "android", "https://x/a.apk")
+    mock_trigger.assert_not_called()           # 非白名单不触发
+    app_module._do_trigger("gaotu", "5.91.80", "android", "https://x/a.apk")
+    mock_trigger.assert_called_once_with("gaotu", "5.91.80", "android", "https://x/a.apk")
+
+def test_version_triggers_only_once(client):
+    """同一 app+version+platform 重复消息只触发一次。"""
+    with patch("app.local_trigger", return_value=True) as mock_trigger:
+        tpl = _make_template("gaotu-android", "5.99.0", "https://x/a.apk")
+        client.post("/webhook", json=tpl)
+        client.post("/webhook", json=tpl)   # 同版本再来一次
+        client.post("/webhook", json=tpl)
+        mock_trigger.assert_called_once_with("gaotu", "5.99.0", "android", "https://x/a.apk")
+
+@patch("app.local_trigger")
+def test_text_message_triggers_both(mock_trigger, client):
     mock_trigger.return_value = True
     payload = {"event": {"message": {
         "message_type": "text",

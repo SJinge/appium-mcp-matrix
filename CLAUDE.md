@@ -31,8 +31,16 @@ common/
 └── startup.md       # 首次启动弹窗（各App独立，见各skill目录）
 scripts/
 ├── feishu_config.py # 飞书常量（APP_ID/SECRET/SPACE_ID等）
-├── upload_screenshots.sh
-└── wiki_report.py
+├── orchestrate.py   # 执行编排：下载→安装→探索→读用例→并行→报告（被 webhook 后台拉起）
+├── run_status.py    # run 运行状态读写（runs/{run_id}.json + history.jsonl）
+├── logging_setup.py # 统一结构化日志（控制台 + logs/*.log 滚动）
+├── wiki_report.py   # 生成 Wiki 报告 & 群通知
+└── upload_screenshots.sh
+server/
+└── app.py           # Flask webhook：监听打包消息→解析→白名单+幂等→后台触发；含 /status /health
+config/
+└── devices.yaml     # 各 App 设备清单（default 可被各 App 覆盖）
+deploy/launchd/      # webhook 守护（launchd plist + 部署说明）
 .claude/skills/
 ├── appium-expert/
 │   └── SKILL.md     # Appium 通用排障（设备/Session/元素定位/MCP）
@@ -41,6 +49,32 @@ scripts/
     ├── elements.md  # 高途专属元素 & AI视觉定位规范
     └── startup.md   # 高途首次启动弹窗序列
 ```
+
+## CI 监听与执行
+
+链路：轻舟打包系统 webhook → [server/app.py](server/app.py) 解析（template/卡片/文本三种入口）→ 执行白名单（`ENABLED_APPS`，默认仅 gaotu）+ 幂等标记 → 后台拉起 [scripts/orchestrate.py](scripts/orchestrate.py) 单端执行（下载→安装→探索建图→读 Bitable 用例→按设备并行→写结果表+Wiki 报告+群通知）。
+
+### 启动（launchd 守护，勿再手动 flask run）
+
+server 由 launchd 托管：开机自启、崩溃自动拉起。安装/重启/卸载见 [deploy/launchd/README.md](deploy/launchd/README.md)。
+
+```bash
+ln -sf $PWD/deploy/launchd/com.gaotu.appium-matrix.webhook.plist ~/Library/LaunchAgents/
+launchctl load -w ~/Library/LaunchAgents/com.gaotu.appium-matrix.webhook.plist
+```
+
+固定约定：端口 **5001**、`PYTHONUNBUFFERED=1`、`ENABLED_APPS=gaotu`、`/usr/bin/python3`（已装 flask+yaml）。
+
+### 观测
+
+- 存活：`curl localhost:5001/health` → status/enabled_apps/active_runs
+- 进度：`curl localhost:5001/status`（可加 `?run_id=gaotu_<版本>_android`）→ 阶段 + 每设备通过/失败
+- 日志：`logs/webhook.log`（监听）、`logs/orchestrate.log`（执行），按 `run_id` 串联；run 历史在 `runs/history.jsonl`
+- 单设备执行进程崩溃/超时会**即时**飞书报警，不必等全部结束
+
+> `runs/`、`logs/` 为运行产物，已 gitignore。
+
+---
 
 ## 上下文管理规则
 
@@ -77,6 +111,7 @@ Read these files before doing anything else:
 - common/elements/dialog.md
 - common/screenshot.md
 - common/device.md
+- common/locator.md
 </common-files>
 
 执行具体 App 的测试时，额外读取对应 skill 的 elements.md：

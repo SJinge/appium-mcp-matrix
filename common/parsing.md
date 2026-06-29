@@ -76,12 +76,29 @@
 
 **读取并解析记录**：
 
-```
-1. 调用 bitable_v1_appTableRecord_search(app_token, table_id, page_size=500)
-   读取所有记录（每条记录 = 一个完整用例）
+> ⚠️ **用例执行顺序 = 指定视图顺序（强制规则）**
+>
+> 用户所说的「第 N 条用例」一律指**该 app 指定执行视图返回顺序的第 N 条**（从 1 开始），
+> 不是默认搜索顺序、不是 ID 顺序、不是表格物理行号。各 app 的执行视图 `view_id` 见
+> [../scripts/feishu_config.py](../scripts/feishu_config.py) `BITABLE_CONFIGS["<app>"]["view_id"]`
+> （如 gaotu = `vewJViMvTW`，已筛选并按 ID 升序）。
+>
+> 取记录时**必须**：
+> 1. `bitable_v1_appTableRecord_search` 的 `data` 里**传 `view_id`** —— 视图自带筛选+排序，
+>    只有带 view_id 返回的顺序才与用户在飞书里看到的视图顺序一致。
+> 2. **禁止再传 `data.sort` 或任何自定义排序** —— 自定义 sort 会覆盖视图排序、并可能拉回视图筛选外的记录，
+>    导致「第 N 条」对不上（曾因此把 82 条视图拉成 232 条全表、顺序全乱）。
+> 3. 按返回的 `items` **原始数组下标**定位第 N 条（`items[N-1]`），不要本地再排序。
 
-2. 若有多条记录，展示用例列表（用例编号 + 用例名称）让用户选择要执行哪些
-   → 支持多选（并行模式下通常全选）；用户确认后只处理选中记录，其余忽略
+```
+1. 调用 bitable_v1_appTableRecord_search(app_token, table_id, page_size=500,
+       data={"view_id": "<该 app 的执行视图 view_id>"})   # 不传 sort
+   按视图顺序读取记录（每条记录 = 一个完整用例；返回 items 顺序即视图顺序）
+
+2. 定位用户要执行的用例：
+   - 用户说「第 N 条」「第 N、M 条」→ 取 items[N-1]、items[M-1]（数组下标即视图顺序）
+   - 用户未指定 → 展示用例列表（ID + 用例名称，按视图顺序编号）让用户选择，支持多选
+   → 只处理选中记录，其余忽略
 
 3. 对选中记录解析步骤：
    ① 解析 测试步骤 字段：

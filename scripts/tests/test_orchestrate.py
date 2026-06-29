@@ -46,8 +46,9 @@ def test_parse_bitable_record():
             "预期结果": [{"text": "进入首页", "type": "text"}],
             "验证点":   [{"text": "显示用户头像", "type": "text"}],
             "预置条件": [{"text": "当前在登录页", "type": "text"}],
-            "Android设备": [{"text": "a1", "type": "text"}],
-            "ios设备":    [{"text": "i1", "type": "text"}],
+            # 真实 Bitable 列名 + 选项格式「名称：UDID」，_extract_udid 取冒号后 UDID
+            "android执行设备": [{"text": "华为nova12pro：26KUT24202013751", "type": "text"}],
+            "ios执行设备":    [{"text": "iphone12:00008101-001E28D436E0001E", "type": "text"}],
             "是否执行自动化": True,
         }
     }
@@ -57,8 +58,8 @@ def test_parse_bitable_record():
     assert any(s["type"] == "PRECOND" for s in entry["steps"])
     assert any(s["type"] == "ACTION"  for s in entry["steps"])
     assert any(s["type"] == "ASSERT"  for s in entry["steps"])
-    assert entry["android_device"] == "a1"
-    assert entry["ios_device"] == "i1"
+    assert entry["android_device"] == "26KUT24202013751"
+    assert entry["ios_device"] == "00008101-001E28D436E0001E"
 
 def test_group_by_device():
     entries = [

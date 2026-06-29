@@ -27,6 +27,38 @@ print(json.load(urllib.request.urlopen(req))['tenant_access_token'])
 EOF
 )
 
+# 解析 parent_node：若传入的是知识库 wiki 节点 token，需换成真实 bitable obj_token。
+# bitable 记录 API 兼容 wiki token，但 medias/upload_all 的 parent_node 只认 obj_token，
+# 否则报 1061044 parent node not exist。
+# 优先从 feishu_config.RESULT_TABLES 读已配置的 obj_token（零 API 调用）；
+# 未配置则回退到 wiki get_node 动态解析；非 wiki 节点（已是 obj_token）原样返回。
+REAL_PARENT_NODE=$(python3 - <<EOF
+import sys, json, urllib.request
+sys.path.insert(0, '$_SCRIPT_DIR')
+node = "$BITABLE_APP_TOKEN"
+# 1) 配置优先：RESULT_TABLES 中 app_token 命中则直接用其 obj_token
+try:
+    from feishu_config import RESULT_TABLES
+    for cfg in RESULT_TABLES.values():
+        if cfg.get("app_token") == node and cfg.get("obj_token"):
+            print(cfg["obj_token"]); sys.exit(0)
+except Exception:
+    pass
+# 2) 回退：wiki get_node 动态解析
+tok = "$FS_TOKEN"
+url = f'https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node?token={node}&obj_type=wiki'
+try:
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {tok}'})
+    d = json.load(urllib.request.urlopen(req))
+    obj = d.get('data', {}).get('node', {}).get('obj_token') if d.get('code') == 0 else None
+    print(obj or node)
+except Exception:
+    print(node)
+EOF
+)
+[ "$REAL_PARENT_NODE" != "$BITABLE_APP_TOKEN" ] && \
+  echo "[INFO] wiki 节点 token 已解析为 bitable obj_token: $REAL_PARENT_NODE" >&2
+
 TMPDIR_TOKENS=$(mktemp -d)
 
 _upload_one() {
@@ -38,7 +70,7 @@ _upload_one() {
     -H "Authorization: Bearer $FS_TOKEN" \
     -F "file_name=$FNAME" \
     -F "parent_type=bitable_file" \
-    -F "parent_node=$BITABLE_APP_TOKEN" \
+    -F "parent_node=$REAL_PARENT_NODE" \
     -F "size=$FSIZE" \
     -F "file=@$F" \
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['file_token']) if d.get('code')==0 else print('')")

@@ -188,15 +188,24 @@ def add_table(doc_token, headers, rows, counter, col_widths=None):
 
 # ─── 报告主体 ─────────────────────────────────────────────────────────────────
 
+def _lowconf_review(steps):
+    """靠视觉低可信判定为通过的 ASSERT 步，需人工复核（见 common/locator.md「ASSERT 取证链」）。"""
+    return [s for s in steps if s.get("type") == "ASSERT"
+            and s.get("verify_method") == "vision"
+            and s.get("confidence") == "low"
+            and s.get("pass", True)]
+
+
 def add_report_table(doc_token, cases, counter):
-    """主汇总表：序号|模块|用例名称|结果|失败步骤详情|截图|耗时"""
-    headers    = ["序号", "模块", "用例名称", "结果", "失败步骤详情", "截图", "耗时"]
-    col_widths = [45,     75,     160,        75,     230,            75,     55]
+    """主汇总表：序号|模块|用例名称|结果|失败/待复核详情|截图|耗时"""
+    headers    = ["序号", "模块", "用例名称", "结果", "失败/待复核详情", "截图", "耗时"]
+    col_widths = [45,     75,     160,        75,     230,              75,     55]
 
     rows = []
     for fallback_seq, c in enumerate(cases, 1):
         steps  = c.get("steps", [])
         failed = [s for s in steps if not s.get("pass", True)]
+        review = _lowconf_review(steps)
 
         fail_lines = []
         for i, s in enumerate(failed, 1):
@@ -204,7 +213,19 @@ def add_report_table(doc_token, cases, counter):
             if s.get("note"):
                 line += f"\n    原因：{s['note']}"
             fail_lines.append(line)
+        if review:
+            fail_lines.append("⚠️ 视觉判定待复核：")
+            for s in review:
+                fail_lines.append(f"・[{s.get('type','')}]：{s.get('text','')}")
         fail_detail = "\n".join(fail_lines)
+
+        passed = c.get("passed", True)
+        if not passed:
+            result_cell = "❌ 失败"
+        elif review:
+            result_cell = "⚠️ 通过(待复核)"
+        else:
+            result_cell = "✅ 通过"
 
         dur = c.get("duration", "")
         seq = c.get("seq", fallback_seq)
@@ -212,7 +233,7 @@ def add_report_table(doc_token, cases, counter):
             str(seq),
             c.get("module", ""),
             c.get("name", ""),
-            "✅ 通过" if c.get("passed", True) else "❌ 失败",
+            result_cell,
             fail_detail,
             "",
             f"{dur}s" if dur else ""

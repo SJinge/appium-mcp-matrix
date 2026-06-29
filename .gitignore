@@ -1,3 +1,6 @@
 shots/
 .DS_Store
 auth.json
+runs/
+logs/
+.claude/worktrees/

@@ -51,13 +51,29 @@ echo '$CASES_JSON' > /tmp/result_<udid>.json
     "seq": 1,
     "passed": true,
     "duration": 90,
-    "steps": [...]
+    "steps": [
+      {"type": "ACTION", "text": "点击登录按钮", "pass": true},
+      {"type": "ASSERT", "text": "进入课程详情页", "pass": true,
+       "verify_method": "id", "evidence": "com.gaotu100.superclass:id/course_detail_title",
+       "confidence": "high"},
+      {"type": "ASSERT", "text": "显示购买成功", "pass": false,
+       "verify_method": "text", "evidence": "实际文案：网络异常", "confidence": "high",
+       "note": "未出现成功文案"}
+    ],
+    "screenshots": ["/Users/.../mcp_shots/gaotu/xxx/case1_assert.png"]
   }
 ]
 ```
 
 - 文件内容必须是 **JSON 数组**（`[{...}]`），不得包裹在对象中（禁止 `{"cases":[...]}` 格式）
 - 每条用例必须包含 `device` 和 `platform` 字段，供主 agent 合并时区分
+- 每个 `step` 含 `type`(PRECOND/ACTION/ASSERT) / `text` / `pass`(bool)；失败步另填 `note`(原因)
+- **ASSERT 步必须额外含**（取证契约，见 [locator.md](locator.md)「ASSERT 取证链」）：
+  - `verify_method`：`id`(元素取证) / `text`(文本属性取证) / `vision`(视觉兜底)
+  - `evidence`：判定依据——`id`/`text` 填命中的 selector 或真实文本，`vision` 填截图本地路径
+  - `confidence`：`high`(id/text 取证) / `low`(vision 主观判定，报告中标注需人工复核)
+- `verify_method=vision` 且引用元素 id 不在真相源 `elements.truth.json` 的，视为未验证，不得记 `pass: true`
+- `screenshots`：该用例所有截图的本地**绝对路径**数组（主流程会上传到结果表附件字段）；无截图填 `[]`
 - 写文件后立即用 `python3 -c "import json,sys; json.load(open('/tmp/result_<udid>.json'))"` 验证 JSON 合法性
 
 ### 4. 等待所有 subagent 完成

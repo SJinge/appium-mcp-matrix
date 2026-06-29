@@ -18,9 +18,9 @@ description: |
 | device | `ce67d979` | 用户提供 UDID |
 | packageName | `com.gaotu100.superclass` | — |
 | bundleId | — | 首次使用请确认 |
-| phone | `12100000000` | 同左 |
-| password | `Gaotu@1234` | 同左 |
 
+> **账号策略**：不使用硬编码默认账号。登录所需手机号/密码/验证码一律**从用例中解析**——优先取用例「测试步骤」文本中明确写出的账号（如 `输入手机号12345679000`、`密码Gaotu@123`、`验证码1000`），其次取预置条件中指定的账号。用例未提供时向用户询问，**不得套用其它账号**。
+>
 > 元素定位规范见 [elements.md](elements.md)
 
 ---
@@ -45,6 +45,7 @@ description: |
 - **路径 A（搬山 caseId）**：`testCaseDetail(caseId)` → 解析节点树，含"预期结果"的节点为 ASSERT，其余为 ACTION
 - **路径 B（自然语言）**：按换行/序号切分，以"预期："/"验证："开头的行为 ASSERT
 - **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件；**同时捕获每条记录的 `ID` 字段值（自增编号）作为 `case_id`**；按 `android执行设备` / `ios执行设备` 字段拆分为 `EXECUTION_ENTRIES`（每条记录最多产出 Android + iOS 两条，两字段均空则跳过）；按设备分组后参考 [../../common/parallel.md](../../common/parallel.md) 并行派发
+  > ⚠️ **取记录必须按指定执行视图顺序**：search 传 `data.view_id`（gaotu = `vewJViMvTW`，见 [../../scripts/feishu_config.py](../../scripts/feishu_config.py)），**禁止传自定义 sort**。用户说的「第 N 条」= 该视图返回 `items[N-1]`。完整规则见 [../../common/parsing.md](../../common/parsing.md) 路径 C。
   > 预置条件中"进入 XX tab / 进入 app 首页"类条目**直接忽略**，不生成 PRECOND 步骤——tab 导航由模块字段统一处理（见下方 TARGET_PAGE 分析）
 
 解析完成后分析 `TARGET_PAGE`，展示步骤列表等用户确认。

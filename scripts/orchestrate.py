@@ -6,7 +6,11 @@ import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts"))
-from feishu_config import APP_ID, APP_SECRET, GROUP_CHAT_ID, BITABLE_CONFIGS
+from feishu_config import APP_ID, APP_SECRET, GROUP_CHAT_ID, BITABLE_CONFIGS, RESULT_TABLES
+import run_status
+import logging_setup
+
+log = logging_setup.get_logger("orchestrate", logfile="orchestrate.log")
 
 PKG_NAMES = {
     "gaotu":   "com.gaotu100.superclass",
@@ -46,11 +50,13 @@ def install_android(apk_path: str, udid: str) -> bool:
 
 
 def install_ios(ipa_path: str, udid: str) -> bool:
+    # tidevice CLI 常不在 PATH，用同解释器的 -m 调用更稳
     r = subprocess.run(
-        ["tidevice", "-u", udid, "install", ipa_path],
+        [sys.executable, "-m", "tidevice", "-u", udid, "install", ipa_path],
         capture_output=True, text=True
     )
-    return "Complete" in r.stdout
+    out = (r.stdout or "") + (r.stderr or "")
+    return r.returncode == 0 or "Complete" in out
 
 
 def resolve_ios_ipa_url(url: str) -> str:
@@ -64,7 +70,7 @@ def resolve_ios_ipa_url(url: str) -> str:
     qs = urllib.parse.urlparse(url).query
     plist_url = urllib.parse.parse_qs(qs).get("url", [""])[0]
     if not plist_url:
-        print(f"[WARN] itms-services 链接无 url 参数：{url}")
+        log.warning(f"itms-services 链接无 url 参数：{url}")
         return url
     try:
         with urllib.request.urlopen(plist_url, timeout=30) as resp:
@@ -74,7 +80,7 @@ def resolve_ios_ipa_url(url: str) -> str:
                 if asset.get("kind") == "software-package" and asset.get("url"):
                     return asset["url"]
     except Exception as e:
-        print(f"[WARN] 解析 iOS manifest 失败：{e}")
+        log.warning(f"解析 iOS manifest 失败：{e}")
     return url
 
 
@@ -95,7 +101,7 @@ def _feishu_post(body: dict):
     try:
         urllib.request.urlopen(req)
     except Exception as e:
-        print(f"[WARN] Feishu notify failed: {e}")
+        log.warning(f"Feishu notify failed: {e}")
 
 
 def _notify(app_id: str, version: str, message: str):
@@ -172,14 +178,17 @@ def fetch_cases(app_id: str) -> list:
     token = _get_token()
     url   = (f"https://open.feishu.cn/open-apis/bitable/v1/apps"
              f"/{cfg['app_token']}/tables/{cfg['table_id']}/records/search")
-    body  = json.dumps({
+    body_obj = {
         "filter": {
             "conjunction": "and",
             "conditions": [{"field_name": "是否自动化执行", "operator": "is",
                             "value": ["true"]}]
         },
         "page_size": 500
-    }).encode()
+    }
+    if cfg.get("view_id"):
+        body_obj["view_id"] = cfg["view_id"]  # 按用户指定视图顺序返回
+    body  = json.dumps(body_obj).encode()
     req = urllib.request.Request(
         url, data=body,
         headers={"Authorization": f"Bearer {token}",
@@ -207,7 +216,7 @@ def group_by_device(entries: list) -> dict:
 def run_exploration(app_id: str, version: str, android_udid: str):
     index_path = os.path.join(PROJECT_ROOT, "apps", app_id, version, "index.md")
     if os.path.exists(index_path):
-        print(f"[INFO] App map exists at {index_path}, skipping exploration")
+        log.info(f"App map exists at {index_path}, skipping exploration")
         return
 
     os.makedirs(os.path.dirname(index_path), exist_ok=True)
@@ -222,20 +231,19 @@ def run_exploration(app_id: str, version: str, android_udid: str):
     common_dir = os.path.join(PROJECT_ROOT, "common")
     cmd = ["claude", "--add-dir", skill_dir, "--add-dir", common_dir, "--print", prompt]
     log_path = f"/tmp/explore_{app_id}_{version}.log"
-    print(f"[INFO] Starting exploration, log: {log_path}")
+    log.info(f"Starting exploration, log: {log_path}")
     try:
-        with open(log_path, "w") as log:
-            r = subprocess.run(cmd, stdout=log, stderr=log, timeout=1800)
+        with open(log_path, "w") as logf:
+            r = subprocess.run(cmd, stdout=logf, stderr=logf, timeout=1800)
         if r.returncode == 0 and os.path.exists(index_path):
-            print(f"[INFO] Exploration done, index.md generated")
+            log.info(f"Exploration done, index.md generated")
         else:
-            print(f"[WARN] Exploration failed or index.md missing, continuing (fallback to visual)")
+            log.warning(f"Exploration failed or index.md missing, continuing (fallback to visual)")
     except subprocess.TimeoutExpired:
-        print(f"[WARN] Exploration timeout (30min), continuing")
+        log.warning(f"Exploration timeout (30min), continuing")
 
 
-def build_prompt(app_id: str, udid: str, platform: str,
-                 entries: list, bitable_token: str, table_id: str) -> str:
+def build_prompt(app_id: str, udid: str, platform: str, entries: list) -> str:
     cases_json = json.dumps(
         [{"record_id": e["record_id"], "name": e["name"],
           "module": e["module"], "steps": e["steps"]} for e in entries],
@@ -243,31 +251,166 @@ def build_prompt(app_id: str, udid: str, platform: str,
     )
     return (
         f"你是{app_id} App 自动化测试工程师。\n"
-        f"设备：{udid}（{platform}）\n"
-        f"Bitable app_token={bitable_token} table_id={table_id}\n\n"
-        f"请依次执行以下用例，每条完成后立即回写 Bitable 执行结果。\n"
-        f"全部执行完成后，将结果写入 /tmp/result_{udid}.json（格式参考 common/parallel.md）。\n\n"
+        f"设备：{udid}（{platform}）\n\n"
+        f"⚠️ 跑的是【线上生产环境】：严禁重放 ACTION（点击/提交/下单）做重试，会重复写线上数据。\n\n"
+        f"【ASSERT 判定契约（务必遵守，见 common/locator.md「ASSERT 取证链」）】\n"
+        f"1. 每个 ASSERT 默认判失败，只有取到可验证证据才能判通过。禁止「看起来像/应该是/大概对了」式判定。\n"
+        f"2. 取证优先级：① id 取证（appium_find_element，命中 elements.truth.json）"
+        f"② 文本/属性取证（appium_get_text / get_element_attribute 比对）"
+        f"③ 实在无 id 无文本时才用 appium_screenshot 视觉判定（标低可信）。\n"
+        f"3. 反幻觉：声称看到的元素 id 必须存在于真相源 elements.truth.json，否则该 ASSERT 判可疑（不得记 pass）。\n"
+        f"4. 断言轮询（只读、生产安全）：判失败前在同页 appium_get_page_source 短轮询 3 次×2s 等页面稳定再终判；这是重查页面，不是重试动作。\n"
+        f"5. 每个 ASSERT 步在 steps 里额外记三字段：verify_method（id/text/vision）、evidence（命中的 selector 或截图路径）、confidence（high/low，仅 vision 为 low）。\n\n"
+        f"请依次执行以下用例，记录每条的执行结果（通过/失败、失败步骤与原因）。\n"
+        f"全部执行完成后，将结果写入 /tmp/result_{udid}.json"
+        f"（JSON 数组，每条含 name/platform/device/module/passed/duration/steps，"
+        f"以及 screenshots（该用例截图的本地绝对路径数组，见 $SHOT_DIR），"
+        f"格式参考 common/parallel.md）。结果由主流程统一写入飞书结果表，无需回写 Bitable。\n\n"
         f"用例列表：\n{cases_json}"
     )
 
 
-def launch_claude_per_device(app_id: str, groups: dict,
-                              bitable_token: str, table_id: str) -> dict:
+def launch_claude_per_device(app_id: str, groups: dict) -> dict:
     procs = {}
     skill_dir  = os.path.join(PROJECT_ROOT, ".claude", "skills", app_id)
     common_dir = os.path.join(PROJECT_ROOT, "common")
 
     for udid, group in groups.items():
-        prompt   = build_prompt(app_id, udid, group["platform"],
-                                group["entries"], bitable_token, table_id)
+        prompt   = build_prompt(app_id, udid, group["platform"], group["entries"])
         log_path = f"/tmp/claude_{udid}.log"
         cmd = ["claude", "--add-dir", skill_dir, "--add-dir", common_dir,
                "--print", prompt]
-        with open(log_path, "w") as log:
-            proc = subprocess.Popen(cmd, stdout=log, stderr=log)
+        with open(log_path, "w") as logf:
+            proc = subprocess.Popen(cmd, stdout=logf, stderr=logf)
         procs[udid] = proc
-        print(f"[INFO] Launched {group['platform']} {udid} (pid={proc.pid})")
+        log.info(f"Launched {group['platform']} {udid} (pid={proc.pid})")
     return procs
+
+
+def _resolve_obj_token(app_token: str) -> str:
+    """结果表可能挂在知识库（wiki）下，drive 媒体上传需真实 obj_token；普通 base 原样返回。"""
+    url = (f"https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node"
+           f"?token={app_token}&obj_type=wiki")
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {_get_token()}"})
+        node = json.load(urllib.request.urlopen(req)).get("data", {}).get("node", {})
+        return node.get("obj_token") or app_token
+    except Exception:
+        return app_token
+
+
+def _upload_bitable_image(parent_obj: str, file_path: str, token: str):
+    """上传图片到 bitable，返回 file_token；失败返回 None。"""
+    if not file_path or not os.path.exists(file_path):
+        return None
+    with open(file_path, "rb") as f:
+        data = f.read()
+    fname = os.path.basename(file_path)
+    b = "----orchestrateBoundary7MA4YWxkTrZu0gW"
+
+    def fld(name, value):
+        return (f"--{b}\r\nContent-Disposition: form-data; "
+                f'name="{name}"\r\n\r\n{value}\r\n').encode()
+
+    body = (fld("file_name", fname) + fld("parent_type", "bitable_image")
+            + fld("parent_node", parent_obj) + fld("size", str(len(data)))
+            + (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; "
+               f"filename=\"{fname}\"\r\nContent-Type: application/octet-stream\r\n\r\n").encode()
+            + data + b"\r\n" + f"--{b}--\r\n".encode())
+    req = urllib.request.Request(
+        "https://open.feishu.cn/open-apis/drive/v1/medias/upload_all",
+        data=body,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": f"multipart/form-data; boundary={b}"},
+        method="POST")
+    try:
+        resp = json.load(urllib.request.urlopen(req))
+        if resp.get("code") == 0:
+            return resp["data"]["file_token"]
+        log.warning(f"截图上传失败 {fname}: {resp.get('msg')}")
+    except Exception as e:
+        log.warning(f"截图上传异常 {fname}: {e}")
+    return None
+
+
+def _lowconf_review_steps(case: dict) -> list:
+    """靠视觉低可信判定为通过的 ASSERT 步——隐性失败风险，需人工复核。
+    取证契约见 common/locator.md「ASSERT 取证链」：id/text 取证为 high，vision 为 low。"""
+    return [s for s in case.get("steps", [])
+            if s.get("type") == "ASSERT"
+            and s.get("verify_method") == "vision"
+            and s.get("confidence") == "low"
+            and s.get("pass", True)]
+
+
+def write_results_to_table(app_id: str, platform: str, cases: list):
+    """把某平台的执行结果 batch_create 写入对应结果表，含截图上传。"""
+    cfg = RESULT_TABLES.get(app_id)
+    table_id = cfg.get(platform.lower()) if cfg else None
+    if not cfg or not table_id:
+        log.warning(f"{app_id} 无 {platform} 结果表配置，跳过写入结果表")
+        return
+
+    token = _get_token()
+    obj_token = _resolve_obj_token(cfg["app_token"])  # 截图上传用
+
+    records = []
+    for c in cases:
+        failed = [s for s in c.get("steps", []) if not s.get("pass", True)]
+        detail = "\n".join(
+            f"{i}、[{s.get('type','')}] {s.get('text','')} ❌"
+            + (f" 原因：{s['note']}" if s.get("note") else "")
+            for i, s in enumerate(failed, 1)
+        )
+        passed = c.get("passed", True)
+
+        # 视觉低可信通过 → 标注待人工复核
+        review = _lowconf_review_steps(c)
+        review_note = ""
+        if review:
+            review_note = "⚠️ 视觉判定待复核：\n" + "\n".join(
+                f"・[{s.get('type','')}] {s.get('text','')}" for s in review)
+        full_detail = "\n".join(x for x in (detail, review_note) if x) \
+            or ("全部通过" if passed else "")
+
+        fields = {
+            "模块":     c.get("module", ""),
+            "执行设备": c.get("device", ""),
+            "用例名称": c.get("name", ""),
+            "执行结果": "通过" if passed else "失败",
+            "执行详情": full_detail,
+        }
+        fields = {k: v for k, v in fields.items() if v != ""}
+
+        # 上传截图（最多 20 张/条）
+        shots = (c.get("screenshots") or [])[:20]
+        tokens = [{"file_token": t} for t in
+                  (_upload_bitable_image(obj_token, p, token) for p in shots) if t]
+        if tokens:
+            fields["截图"] = tokens
+
+        records.append({"fields": fields})
+
+    url = (f"https://open.feishu.cn/open-apis/bitable/v1/apps"
+           f"/{cfg['app_token']}/tables/{table_id}/records/batch_create")
+    written = 0
+    for i in range(0, len(records), 100):
+        chunk = records[i:i + 100]
+        body  = json.dumps({"records": chunk}, ensure_ascii=False).encode("utf-8")
+        req   = urllib.request.Request(
+            url, data=body,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json; charset=utf-8"},
+            method="POST")
+        try:
+            resp = json.load(urllib.request.urlopen(req))
+            if resp.get("code") == 0:
+                written += len(chunk)
+            else:
+                log.warning(f"结果表写入失败 code={resp.get('code')} msg={resp.get('msg')}")
+        except Exception as e:
+            log.warning(f"结果表写入异常：{e}")
+    log.info(f"{platform} {written}/{len(records)} 条结果已写入结果表")
 
 
 def _tail_file(path: str, n: int = 200) -> str:
@@ -279,7 +422,9 @@ def _tail_file(path: str, n: int = 200) -> str:
 
 
 def collect_results(procs: dict, result_dir: str = "/tmp",
-                    timeout: int = 90 * 60) -> dict:
+                    timeout: int = 90 * 60,
+                    app_id: str = None, version: str = None,
+                    run_id: str = None) -> dict:
     deadline = time.time() + timeout
     pending  = set(procs.keys())
     results  = {}
@@ -292,7 +437,13 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
                     with open(path) as f:
                         results[udid] = json.load(f)
                     pending.discard(udid)
-                    print(f"[INFO] {udid} done, results read")
+                    log.info(f"{udid} done, results read")
+                    if run_id:
+                        cs = results[udid] if isinstance(results[udid], list) else []
+                        run_status.update_device(run_id, udid, **{
+                            "state": "done", "done": len(cs), "total": len(cs),
+                            "pass":  sum(1 for c in cs if c.get("passed")),
+                            "fail":  sum(1 for c in cs if not c.get("passed"))})
                 except json.JSONDecodeError:
                     pass  # 文件还在写，下轮再读
                 continue
@@ -300,18 +451,27 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
             proc = procs.get(udid)
             if proc and proc.poll() is not None:
                 tail = _tail_file(f"/tmp/claude_{udid}.log")
-                print(f"[WARN] {udid} 进程已退出(code={proc.returncode})却无结果，判失败。日志末尾：{tail}")
+                log.warning(f"{udid} 进程已退出(code={proc.returncode})却无结果，判失败。日志末尾：{tail}")
                 results[udid] = "failed"
                 pending.discard(udid)
+                if run_id:
+                    run_status.update_device(run_id, udid, state="crashed")
+                if app_id and version:  # 崩溃即时报警，不等到全部结束
+                    _notify(app_id, version,
+                            f"⚠️ 设备 {udid} 执行进程异常退出(code={proc.returncode})，已判失败。日志末尾：{tail}")
         if pending:
             time.sleep(10)
 
     for udid in pending:
-        print(f"[WARN] {udid} timeout, killing")
+        log.warning(f"{udid} timeout, killing")
         proc = procs.get(udid)
         if proc and proc.poll() is None:
             proc.kill()
         results[udid] = "timeout"
+        if run_id:
+            run_status.update_device(run_id, udid, state="timeout")
+        if app_id and version:
+            _notify(app_id, version, f"⚠️ 设备 {udid} 执行超时({timeout // 60}分钟)，已终止")
 
     return results
 
@@ -330,6 +490,11 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
                 android_cases.append(case)
             elif platform == "ios":
                 ios_cases.append(case)
+
+    # 按平台写入飞书结果表
+    for platform, cases in [("android", android_cases), ("ios", ios_cases)]:
+        if cases:
+            write_results_to_table(app_id, platform, cases)
 
     wiki_urls = {}
     for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
@@ -354,7 +519,7 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
             if "Wiki 报告已创建" in line:
                 url = line.split("：")[-1].strip()
                 wiki_urls[platform] = url
-                print(line)
+                log.info(line)
 
     lines = [f"📱 {app_id} {version} 自动化测试完成\n"]
     for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
@@ -364,7 +529,9 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
         passed = sum(1 for c in cases if c.get("passed"))
         rate   = int(passed / total * 100) if total else 0
         url    = wiki_urls.get(platform, "")
-        lines.append(f"{platform}：{passed}/{total} 通过 ({rate}%)  📄 {url}")
+        review = sum(1 for c in cases if c.get("passed") and _lowconf_review_steps(c))
+        suffix = f"  ⚠️{review}条待复核" if review else ""
+        lines.append(f"{platform}：{passed}/{total} 通过 ({rate}%){suffix}  📄 {url}")
     lines.append(f"\n总耗时：{duration // 60}分{duration % 60}秒")
     _notify(app_id, version, "\n".join(lines))
 
@@ -380,7 +547,7 @@ def parse_args():
     return p.parse_args()
 
 
-def _run(app_id, version, apk_url, ipa_url, platforms=None):
+def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     # platforms: 要执行的平台集合，默认按传入的 url 决定
     if platforms is None:
         platforms = set()
@@ -390,59 +557,69 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None):
             platforms.add("ios")
     if not platforms:
         _notify(app_id, version, "❌ 未提供任何平台的下载地址，终止")
+        run_status.finish(run_id, "failed", "未提供下载地址")
         return
 
+    run_status.init_run(run_id, app_id, version, "/".join(sorted(platforms)))
     devices = load_devices(app_id)
 
     # 1. Download（仅下载要执行的平台）
+    run_status.set_phase(run_id, "downloading", "下载安装包")
     apk_path = f"/tmp/{app_id}_{version}.apk"
     ipa_path = f"/tmp/{app_id}_{version}.ipa"
     if "android" in platforms:
-        print(f"[INFO] Downloading APK: {apk_url}")
+        log.info(f"Downloading APK: {apk_url}")
         if not download_file(apk_url, apk_path):
             _notify(app_id, version, "❌ APK 下载失败，终止")
+            run_status.finish(run_id, "failed", "APK 下载失败")
             return
     if "ios" in platforms:
         ipa_dl = resolve_ios_ipa_url(ipa_url)
-        print(f"[INFO] Downloading IPA: {ipa_dl}")
+        log.info(f"Downloading IPA: {ipa_dl}")
         if not download_file(ipa_dl, ipa_path):
             _notify(app_id, version, "❌ IPA 下载失败，终止")
+            run_status.finish(run_id, "failed", "IPA 下载失败")
             return
 
     # 2. Install（仅安装要执行的平台）
+    run_status.set_phase(run_id, "installing", "安装到设备")
     android_ok, ios_ok = [], []
     if "android" in platforms:
         for d in devices["android"]:
             if install_android(apk_path, d["udid"]):
                 android_ok.append(d)
-                print(f"[INFO] Android {d['udid']} installed")
+                log.info(f"Android {d['udid']} installed")
             else:
-                print(f"[WARN] Android {d['udid']} install failed, skipping")
+                log.warning(f"Android {d['udid']} install failed, skipping")
 
     if "ios" in platforms:
         for d in devices["ios"]:
             if install_ios(ipa_path, d["udid"]):
                 ios_ok.append(d)
-                print(f"[INFO] iOS {d['udid']} installed")
+                log.info(f"iOS {d['udid']} installed")
             else:
-                print(f"[WARN] iOS {d['udid']} install failed, skipping")
+                log.warning(f"iOS {d['udid']} install failed, skipping")
 
     if not android_ok and not ios_ok:
         _notify(app_id, version, "❌ 所有设备安装失败，终止")
+        run_status.finish(run_id, "failed", "所有设备安装失败")
         return
 
-    print(f"[INFO] Install done: Android {len(android_ok)}, iOS {len(ios_ok)}")
+    log.info(f"Install done: Android {len(android_ok)}, iOS {len(ios_ok)}")
 
     # 3. Explore (new version) —— 仅 Android 端触发
     if android_ok:
+        run_status.set_phase(run_id, "exploring", "新版本探索建图")
         run_exploration(app_id, version, android_ok[0]["udid"])
 
     # 4. Read Bitable
-    print("[INFO] Fetching Bitable cases...")
+    run_status.set_phase(run_id, "fetching_cases", "读取用例")
+    log.info("Fetching Bitable cases...")
     try:
         entries = fetch_cases(app_id)
     except Exception as e:
         _notify(app_id, version, f"❌ Bitable 读取失败：{e}")
+        run_status.finish(run_id, "failed", f"Bitable 读取失败：{e}")
         return
     groups  = group_by_device(entries)
     # 仅保留本次执行平台、且安装成功（已连接）的设备组，避免等待离线设备超时
@@ -450,27 +627,34 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None):
     skipped   = {u: g for u, g in groups.items()
                  if g["platform"].lower() in platforms and u not in installed}
     for udid, g in skipped.items():
-        print(f"[WARN] 跳过 {g['platform']} 设备 {udid}（未连接/未安装），{len(g['entries'])} 条用例不执行")
+        log.warning(f"跳过 {g['platform']} 设备 {udid}（未连接/未安装），{len(g['entries'])} 条用例不执行")
     groups  = {u: g for u, g in groups.items()
                if g["platform"].lower() in platforms and u in installed}
     if not groups:
         _notify(app_id, version, f"⚠️ {app_id} {version} 无可执行用例（{'/'.join(sorted(platforms))}，已连接设备上无标记用例）")
+        run_status.finish(run_id, "done", "无可执行用例")
         return
 
     cfg = BITABLE_CONFIGS[app_id]
     total = sum(len(g["entries"]) for g in groups.values())
-    print(f"[INFO] {total} cases across {len(groups)} devices")
+    log.info(f"{total} cases across {len(groups)} devices")
 
     # 5. Parallel execution
+    run_status.set_phase(run_id, "executing", f"{total} 条用例 × {len(groups)} 台设备执行中")
+    for udid, g in groups.items():
+        run_status.update_device(run_id, udid, **{
+            "state": "running", "total": len(g["entries"]),
+            "done": 0, "pass": 0, "fail": 0, "platform": g["platform"]})
+    _notify(app_id, version, f"▶️ 开始执行：{total} 条用例 × {len(groups)} 台设备（{'/'.join(sorted(platforms))}）")
     start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
-    procs   = launch_claude_per_device(app_id, groups,
-                                        cfg["app_token"], cfg["table_id"])
-    results = collect_results(procs)
+    procs   = launch_claude_per_device(app_id, groups)
+    results = collect_results(procs, app_id=app_id, version=version, run_id=run_id)
     duration = int(time.time() - start_time)
-    print(f"[INFO] Execution done, total time {duration}s")
+    log.info(f"Execution done, total time {duration}s")
 
     # 6. Generate reports
+    run_status.set_phase(run_id, "reporting", "生成报告")
     generate_reports(app_id, version, results, duration, start_time_str=start_time_str)
 
     # 7. Cleanup temp files
@@ -478,7 +662,12 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None):
         path = f"/tmp/result_{udid}.json"
         if os.path.exists(path):
             os.remove(path)
-    print("[INFO] Done")
+
+    passed = sum(1 for d in results.values() if isinstance(d, list)
+                 for c in d if c.get("passed"))
+    run_status.finish(run_id, "done", "执行完成",
+                      total=total, passed=passed, duration=duration)
+    log.info("Done")
 
 
 def main():
@@ -489,12 +678,17 @@ def main():
 
     # pid 文件带平台后缀，允许 Android / iOS 同一版本并行独立执行
     suffix   = f"_{args.platform}" if args.platform else ""
+    run_id   = f"{app_id}_{version}{suffix}"
+    logging_setup.bind_run_id(run_id)
     pid_file = f"/tmp/orchestrate_{app_id}_{version}{suffix}.pid"
     with open(pid_file, "w") as f:
         f.write(str(os.getpid()))
 
     try:
-        _run(app_id, version, args.apk_url, args.ipa_url, platforms)
+        _run(app_id, version, args.apk_url, args.ipa_url, platforms, run_id=run_id)
+    except Exception as e:
+        run_status.finish(run_id, "failed", f"未捕获异常：{e}")
+        raise
     finally:
         if os.path.exists(pid_file):
             os.remove(pid_file)

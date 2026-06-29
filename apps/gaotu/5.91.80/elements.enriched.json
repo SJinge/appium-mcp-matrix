@@ -1,0 +1,1232 @@
+{
+  "app_id": "gaotu",
+  "version": "5.91.80",
+  "package": "com.gaotu100.superclass",
+  "source": "aapt2(id 全集) ⨝ android-source(页面归属)",
+  "module_filter": "account",
+  "stats": {
+    "apk_total": 9104,
+    "source_attributed": 113,
+    "page_linked": 50
+  },
+  "elements": [
+    {
+      "id": "accept_login_agreement_iv",
+      "selector": "com.gaotu100.superclass:id/accept_login_agreement_iv",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "accept_login_agreement_layout",
+      "selector": "com.gaotu100.superclass:id/accept_login_agreement_layout",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_choose_country_tv",
+      "selector": "com.gaotu100.superclass:id/account_choose_country_tv",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_devide_line",
+      "selector": "com.gaotu100.superclass:id/account_devide_line",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_edit_container",
+      "selector": "com.gaotu100.superclass:id/account_edit_container",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_edit_splitLine",
+      "selector": "com.gaotu100.superclass:id/account_edit_splitLine",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_enter_action_tv",
+      "selector": "com.gaotu100.superclass:id/account_enter_action_tv",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_enter_delete_iv",
+      "selector": "com.gaotu100.superclass:id/account_enter_delete_iv",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_enter_et",
+      "selector": "com.gaotu100.superclass:id/account_enter_et",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_passcode",
+      "selector": "com.gaotu100.superclass:id/account_passcode",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "account_passcode_description",
+      "selector": "com.gaotu100.superclass:id/account_passcode_description",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "account_passcode_refetch",
+      "selector": "com.gaotu100.superclass:id/account_passcode_refetch",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "account_passcode_tips",
+      "selector": "com.gaotu100.superclass:id/account_passcode_tips",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_passcode_tips_iv",
+      "selector": "com.gaotu100.superclass:id/account_passcode_tips_iv",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "account_sign_btn",
+      "selector": "com.gaotu100.superclass:id/account_sign_btn",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_old_password_login",
+        "fragment_passcode_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "account_visible_password_iv",
+      "selector": "com.gaotu100.superclass:id/account_visible_password_iv",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "attention_iv",
+      "selector": "com.gaotu100.superclass:id/attention_iv",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": []
+    },
+    {
+      "id": "bind_phone_success_close_iv",
+      "selector": "com.gaotu100.superclass:id/bind_phone_success_close_iv",
+      "module": "account",
+      "layouts": [
+        "activity_bind_phone_success"
+      ],
+      "pages": [
+        "BindPhoneSuccessActivity"
+      ]
+    },
+    {
+      "id": "bind_phone_success_description",
+      "selector": "com.gaotu100.superclass:id/bind_phone_success_description",
+      "module": "account",
+      "layouts": [
+        "activity_bind_phone_success"
+      ],
+      "pages": [
+        "BindPhoneSuccessActivity"
+      ]
+    },
+    {
+      "id": "bind_phone_success_line",
+      "selector": "com.gaotu100.superclass:id/bind_phone_success_line",
+      "module": "account",
+      "layouts": [
+        "activity_bind_phone_success"
+      ],
+      "pages": [
+        "BindPhoneSuccessActivity"
+      ]
+    },
+    {
+      "id": "bind_phone_success_number_tv",
+      "selector": "com.gaotu100.superclass:id/bind_phone_success_number_tv",
+      "module": "account",
+      "layouts": [
+        "activity_bind_phone_success"
+      ],
+      "pages": [
+        "BindPhoneSuccessActivity"
+      ]
+    },
+    {
+      "id": "bind_phone_success_title",
+      "selector": "com.gaotu100.superclass:id/bind_phone_success_title",
+      "module": "account",
+      "layouts": [
+        "activity_bind_phone_success"
+      ],
+      "pages": [
+        "BindPhoneSuccessActivity"
+      ]
+    },
+    {
+      "id": "btn_login_shanyan_login",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_login",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "btn_login_shanyan_login_layout2",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_login_layout2",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "btn_login_shanyan_login_tutu",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_login_tutu",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "btn_login_shanyan_subTitle",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_subTitle",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login",
+        "fragment_ali_shanyan_login_4_tutu",
+        "fragment_ali_shanyan_login_v2",
+        "fragment_ali_shanyan_wechat_bind_phone",
+        "fragment_ali_shanyan_wechat_bind_phone_4_tutu",
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "btn_login_shanyan_subTitle_layout_2",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_subTitle_layout_2",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "btn_login_shanyan_subTitle_tutu",
+      "selector": "com.gaotu100.superclass:id/btn_login_shanyan_subTitle_tutu",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "cannot_get_passcode",
+      "selector": "com.gaotu100.superclass:id/cannot_get_passcode",
+      "module": "account",
+      "layouts": [
+        "fragment_verification_login"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity",
+        "ChangePasswordActivity"
+      ]
+    },
+    {
+      "id": "center_ghs_iv",
+      "selector": "com.gaotu100.superclass:id/center_ghs_iv",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": []
+    },
+    {
+      "id": "cl_item_container",
+      "selector": "com.gaotu100.superclass:id/cl_item_container",
+      "module": "account",
+      "layouts": [
+        "view_logoff_reason_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "cl_view_bg",
+      "selector": "com.gaotu100.superclass:id/cl_view_bg",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "content_layout",
+      "selector": "com.gaotu100.superclass:id/content_layout",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "et_other_reason_input",
+      "selector": "com.gaotu100.superclass:id/et_other_reason_input",
+      "module": "account",
+      "layouts": [
+        "view_logoff_reason_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "float_bg",
+      "selector": "com.gaotu100.superclass:id/float_bg",
+      "module": "account",
+      "layouts": [
+        "view_login_float_layout"
+      ],
+      "pages": []
+    },
+    {
+      "id": "float_icon",
+      "selector": "com.gaotu100.superclass:id/float_icon",
+      "module": "account",
+      "layouts": [
+        "view_login_float_layout"
+      ],
+      "pages": []
+    },
+    {
+      "id": "get_passcode",
+      "selector": "com.gaotu100.superclass:id/get_passcode",
+      "module": "account",
+      "layouts": [
+        "fragment_verification_login"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity",
+        "ChangePasswordActivity"
+      ]
+    },
+    {
+      "id": "go_one_key_btn",
+      "selector": "com.gaotu100.superclass:id/go_one_key_btn",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_old_password_login",
+        "fragment_passcode_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "go_passcode_btn",
+      "selector": "com.gaotu100.superclass:id/go_passcode_btn",
+      "module": "account",
+      "layouts": [
+        "fragment_old_password_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "go_password_btn",
+      "selector": "com.gaotu100.superclass:id/go_password_btn",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "icon_login_shanyan_gaotu",
+      "selector": "com.gaotu100.superclass:id/icon_login_shanyan_gaotu",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login",
+        "fragment_ali_shanyan_login_v2",
+        "fragment_ali_shanyan_wechat_bind_phone",
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "icon_login_shanyan_tutu",
+      "selector": "com.gaotu100.superclass:id/icon_login_shanyan_tutu",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login_4_tutu",
+        "fragment_ali_shanyan_wechat_bind_phone_4_tutu",
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "iv_bg_head",
+      "selector": "com.gaotu100.superclass:id/iv_bg_head",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "iv_bg_tail",
+      "selector": "com.gaotu100.superclass:id/iv_bg_tail",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "iv_config_img",
+      "selector": "com.gaotu100.superclass:id/iv_config_img",
+      "module": "account",
+      "layouts": [
+        "shanyan_left_top_view",
+        "shanyan_left_top_view_old"
+      ],
+      "pages": []
+    },
+    {
+      "id": "iv_item_reason",
+      "selector": "com.gaotu100.superclass:id/iv_item_reason",
+      "module": "account",
+      "layouts": [
+        "view_logoff_reason_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "iv_login_agreement_accept",
+      "selector": "com.gaotu100.superclass:id/iv_login_agreement_accept",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "layout_account_main",
+      "selector": "com.gaotu100.superclass:id/layout_account_main",
+      "module": "account",
+      "layouts": [
+        "view_login_edit_text"
+      ],
+      "pages": []
+    },
+    {
+      "id": "layout_agreement",
+      "selector": "com.gaotu100.superclass:id/layout_agreement",
+      "module": "account",
+      "layouts": [
+        "activity_old_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "layout_agreement_main",
+      "selector": "com.gaotu100.superclass:id/layout_agreement_main",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "layout_agreement_shanyan",
+      "selector": "com.gaotu100.superclass:id/layout_agreement_shanyan",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "layout_login_agreement_accept",
+      "selector": "com.gaotu100.superclass:id/layout_login_agreement_accept",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "line_login_shanyan",
+      "selector": "com.gaotu100.superclass:id/line_login_shanyan",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "ll_top_view_bg",
+      "selector": "com.gaotu100.superclass:id/ll_top_view_bg",
+      "module": "account",
+      "layouts": [
+        "activity_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "ll_wechat_login_layout2",
+      "selector": "com.gaotu100.superclass:id/ll_wechat_login_layout2",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login_4_tutu",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "ll_wechat_login_tutu",
+      "selector": "com.gaotu100.superclass:id/ll_wechat_login_tutu",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "login_agreement_tv",
+      "selector": "com.gaotu100.superclass:id/login_agreement_tv",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "login_view_back_iv",
+      "selector": "com.gaotu100.superclass:id/login_view_back_iv",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login",
+        "fragment_ali_shanyan_wechat_bind_phone",
+        "fragment_ali_shanyan_wechat_bind_phone_4_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "login_view_close_iv",
+      "selector": "com.gaotu100.superclass:id/login_view_close_iv",
+      "module": "account",
+      "layouts": [
+        "activity_account_password",
+        "activity_login",
+        "activity_old_login",
+        "fragment_ali_shanyan_login",
+        "fragment_ali_shanyan_login_4_tutu",
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "passcode_accept_agreement_layout",
+      "selector": "com.gaotu100.superclass:id/passcode_accept_agreement_layout",
+      "module": "account",
+      "layouts": [
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "passcode_accept_login_agreement_iv",
+      "selector": "com.gaotu100.superclass:id/passcode_accept_login_agreement_iv",
+      "module": "account",
+      "layouts": [
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "passcode_input_iv_close",
+      "selector": "com.gaotu100.superclass:id/passcode_input_iv_close",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "passcode_input_tips",
+      "selector": "com.gaotu100.superclass:id/passcode_input_tips",
+      "module": "account",
+      "layouts": [
+        "activity_account_password"
+      ],
+      "pages": [
+        "BasePasscodeActivity"
+      ]
+    },
+    {
+      "id": "passcode_login_agreement_layout",
+      "selector": "com.gaotu100.superclass:id/passcode_login_agreement_layout",
+      "module": "account",
+      "layouts": [
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "passcode_login_agreement_tv",
+      "selector": "com.gaotu100.superclass:id/passcode_login_agreement_tv",
+      "module": "account",
+      "layouts": [
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "passcode_login_passcode_et",
+      "selector": "com.gaotu100.superclass:id/passcode_login_passcode_et",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "passcode_login_phone_et",
+      "selector": "com.gaotu100.superclass:id/passcode_login_phone_et",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_passcode_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_accept_agreement_layout",
+      "selector": "com.gaotu100.superclass:id/password_accept_agreement_layout",
+      "module": "account",
+      "layouts": [
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_accept_login_agreement_iv",
+      "selector": "com.gaotu100.superclass:id/password_accept_login_agreement_iv",
+      "module": "account",
+      "layouts": [
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_forget_head_bar",
+      "selector": "com.gaotu100.superclass:id/password_forget_head_bar",
+      "module": "account",
+      "layouts": [
+        "activity_password_forget_tips"
+      ],
+      "pages": [
+        "ForgetPasswordTipsActivity"
+      ]
+    },
+    {
+      "id": "password_forget_tips_tv",
+      "selector": "com.gaotu100.superclass:id/password_forget_tips_tv",
+      "module": "account",
+      "layouts": [
+        "activity_password_forget_tips"
+      ],
+      "pages": [
+        "ForgetPasswordTipsActivity"
+      ]
+    },
+    {
+      "id": "password_login_agreement_layout",
+      "selector": "com.gaotu100.superclass:id/password_login_agreement_layout",
+      "module": "account",
+      "layouts": [
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_login_agreement_tv",
+      "selector": "com.gaotu100.superclass:id/password_login_agreement_tv",
+      "module": "account",
+      "layouts": [
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_login_password_et",
+      "selector": "com.gaotu100.superclass:id/password_login_password_et",
+      "module": "account",
+      "layouts": [
+        "fragment_old_password_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "password_login_phone_et",
+      "selector": "com.gaotu100.superclass:id/password_login_phone_et",
+      "module": "account",
+      "layouts": [
+        "fragment_old_password_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "phone_number",
+      "selector": "com.gaotu100.superclass:id/phone_number",
+      "module": "account",
+      "layouts": [
+        "fragment_verification_login"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity",
+        "ChangePasswordActivity"
+      ]
+    },
+    {
+      "id": "postion_seccurity_detection_description",
+      "selector": "com.gaotu100.superclass:id/postion_seccurity_detection_description",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "postion_seccurity_detection_tv",
+      "selector": "com.gaotu100.superclass:id/postion_seccurity_detection_tv",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "postion_set_new_password_tv",
+      "selector": "com.gaotu100.superclass:id/postion_set_new_password_tv",
+      "module": "account",
+      "layouts": [
+        "activity_set_password"
+      ],
+      "pages": [
+        "SetNewPasswordActivity"
+      ]
+    },
+    {
+      "id": "postion_sign_in_tv",
+      "selector": "com.gaotu100.superclass:id/postion_sign_in_tv",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_old_password_login",
+        "fragment_passcode_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "postion_slash_tv",
+      "selector": "com.gaotu100.superclass:id/postion_slash_tv",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_old_password_login",
+        "fragment_passcode_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "seccurity_detection_back_iv",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_back_iv",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_cant_fetch_passcode",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_cant_fetch_passcode",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_layout",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_layout",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_next_step",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_next_step",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_passcode_et",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_passcode_et",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_passcode_tips",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_passcode_tips",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "seccurity_detection_phone_et",
+      "selector": "com.gaotu100.superclass:id/seccurity_detection_phone_et",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "set_new_password_header_bar",
+      "selector": "com.gaotu100.superclass:id/set_new_password_header_bar",
+      "module": "account",
+      "layouts": [
+        "activity_set_password"
+      ],
+      "pages": [
+        "SetNewPasswordActivity"
+      ]
+    },
+    {
+      "id": "set_password_complete_btn",
+      "selector": "com.gaotu100.superclass:id/set_password_complete_btn",
+      "module": "account",
+      "layouts": [
+        "activity_set_password"
+      ],
+      "pages": [
+        "SetNewPasswordActivity"
+      ]
+    },
+    {
+      "id": "set_password_et",
+      "selector": "com.gaotu100.superclass:id/set_password_et",
+      "module": "account",
+      "layouts": [
+        "activity_set_password"
+      ],
+      "pages": [
+        "SetNewPasswordActivity"
+      ]
+    },
+    {
+      "id": "set_password_tips_tv",
+      "selector": "com.gaotu100.superclass:id/set_password_tips_tv",
+      "module": "account",
+      "layouts": [
+        "activity_set_password"
+      ],
+      "pages": [
+        "SetNewPasswordActivity"
+      ]
+    },
+    {
+      "id": "shanyan_group",
+      "selector": "com.gaotu100.superclass:id/shanyan_group",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "shanyan_group_tutu",
+      "selector": "com.gaotu100.superclass:id/shanyan_group_tutu",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "shanyan_group_tutu_layout2",
+      "selector": "com.gaotu100.superclass:id/shanyan_group_tutu_layout2",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "shanyan_left_top_desc",
+      "selector": "com.gaotu100.superclass:id/shanyan_left_top_desc",
+      "module": "account",
+      "layouts": [
+        "shanyan_left_top_view",
+        "shanyan_left_top_view_old"
+      ],
+      "pages": []
+    },
+    {
+      "id": "shanyan_left_top_title",
+      "selector": "com.gaotu100.superclass:id/shanyan_left_top_title",
+      "module": "account",
+      "layouts": [
+        "shanyan_left_top_view",
+        "shanyan_left_top_view_old"
+      ],
+      "pages": []
+    },
+    {
+      "id": "special_passcode_layout",
+      "selector": "com.gaotu100.superclass:id/special_passcode_layout",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "special_shanyan_layout",
+      "selector": "com.gaotu100.superclass:id/special_shanyan_layout",
+      "module": "account",
+      "layouts": [
+        "activity_security_detection"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity"
+      ]
+    },
+    {
+      "id": "split_line",
+      "selector": "com.gaotu100.superclass:id/split_line",
+      "module": "account",
+      "layouts": [
+        "fragment_old_passcode_login",
+        "fragment_old_password_login",
+        "fragment_passcode_login",
+        "fragment_password_login"
+      ],
+      "pages": []
+    },
+    {
+      "id": "top_guide_line",
+      "selector": "com.gaotu100.superclass:id/top_guide_line",
+      "module": "account",
+      "layouts": [
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_agreement_shanyan",
+      "selector": "com.gaotu100.superclass:id/tv_agreement_shanyan",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "tv_des",
+      "selector": "com.gaotu100.superclass:id/tv_des",
+      "module": "account",
+      "layouts": [
+        "view_login_float_layout"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_item_reason",
+      "selector": "com.gaotu100.superclass:id/tv_item_reason",
+      "module": "account",
+      "layouts": [
+        "view_logoff_reason_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_login",
+      "selector": "com.gaotu100.superclass:id/tv_login",
+      "module": "account",
+      "layouts": [
+        "view_login_float_layout"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_login_shanyan_phoneNum",
+      "selector": "com.gaotu100.superclass:id/tv_login_shanyan_phoneNum",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login",
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": [
+        "LoginShanYanFragment",
+        "WechatBindPhoneActivity",
+        "WechatBindPhoneV2Activity"
+      ]
+    },
+    {
+      "id": "tv_login_shanyan_phoneNum_layout2",
+      "selector": "com.gaotu100.superclass:id/tv_login_shanyan_phoneNum_layout2",
+      "module": "account",
+      "layouts": [
+        "fragment_shanyan_login_tutu"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_logoff_hint_item_desc",
+      "selector": "com.gaotu100.superclass:id/tv_logoff_hint_item_desc",
+      "module": "account",
+      "layouts": [
+        "view_logoff_hint_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_logoff_hint_item_title",
+      "selector": "com.gaotu100.superclass:id/tv_logoff_hint_item_title",
+      "module": "account",
+      "layouts": [
+        "view_logoff_hint_item"
+      ],
+      "pages": []
+    },
+    {
+      "id": "tv_verification_title",
+      "selector": "com.gaotu100.superclass:id/tv_verification_title",
+      "module": "account",
+      "layouts": [
+        "fragment_verification_login"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity",
+        "ChangePasswordActivity"
+      ]
+    },
+    {
+      "id": "verification_input",
+      "selector": "com.gaotu100.superclass:id/verification_input",
+      "module": "account",
+      "layouts": [
+        "fragment_verification_login"
+      ],
+      "pages": [
+        "AbstractSecurityDetectionActivity",
+        "ChangePasswordActivity"
+      ]
+    },
+    {
+      "id": "wechat_sign_in_iv",
+      "selector": "com.gaotu100.superclass:id/wechat_sign_in_iv",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login",
+        "fragment_ali_shanyan_login",
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": []
+    },
+    {
+      "id": "wechat_sign_in_tips_iv",
+      "selector": "com.gaotu100.superclass:id/wechat_sign_in_tips_iv",
+      "module": "account",
+      "layouts": [
+        "activity_login",
+        "activity_old_login",
+        "fragment_ali_shanyan_login",
+        "fragment_ali_shanyan_login_v2"
+      ],
+      "pages": []
+    }
+  ]
+}

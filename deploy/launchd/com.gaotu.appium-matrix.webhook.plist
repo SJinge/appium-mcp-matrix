@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gaotu.appium-matrix.webhook</string>
+
+  <!-- /usr/bin/python3 已装 flask + yaml；如换解释器改这里 -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/mac/Documents/projects/appium-mcp-matrix/server/app.py</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>ENABLED_APPS</key>
+    <string>gaotu</string>
+    <key>PORT</key>
+    <string>5001</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/mac/Documents/projects/appium-mcp-matrix</string>
+
+  <!-- 开机自启 + 崩溃自动拉起（守护核心） -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- launchd 自身的 stdout/stderr（结构化日志另在 logs/webhook.log） -->
+  <key>StandardOutPath</key>
+  <string>/Users/mac/Documents/projects/appium-mcp-matrix/logs/launchd.webhook.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/mac/Documents/projects/appium-mcp-matrix/logs/launchd.webhook.err.log</string>
+</dict>
+</plist>

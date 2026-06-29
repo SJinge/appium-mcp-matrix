@@ -1,0 +1,10 @@
+{
+  "点击登录按钮@LoginActivity": {
+    "hit_count": 1,
+    "module": "account",
+    "page": "LoginActivity",
+    "selector": "com.gaotu100.superclass:id/account_sign_btn",
+    "strategy": "id",
+    "verified_version": "5.91.80"
+  }
+}
