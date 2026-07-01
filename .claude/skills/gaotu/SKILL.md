@@ -137,7 +137,7 @@ elif MODULE == "启动登录":
 
 用例数 ≥ 2 时执行预扫描（**仅路径 A/B 顺序执行**）：> 见 [../../common/prescan.md](../../common/prescan.md)
 
-> 路径 C 并行执行时跳过全局预扫描。每个设备 subagent 在内部对自己分配的用例独立执行预扫描。
+> 路径 C 跳过全局（跨设备）预扫描。改为**每设备在派发批级 subagent 之前**，对该设备全部用例做账号聚类排序 + 按 `BATCH_SIZE` 切批（见 [../../common/prescan.md](../../common/prescan.md)「切批」、[../../common/parallel.md](../../common/parallel.md)「设备内分批」）；批级 subagent 只对本批做预置条件处理。切批前必须全局排序，禁止先切后排。
 
 ---
 
@@ -408,6 +408,12 @@ adb -s <UDID> shell "input tap $((W/2)) $((H*43/100)); input tap $((W*94/100)) $
 
 ## 第八步：清理收尾
 
+> ⚠️ **分批执行时（见 [../../common/parallel.md](../../common/parallel.md)「设备内分批」）本步骤分两档：**
+> - **非最后一批**：跑完本批用例 → 执行下方「Bitable 回写（批级 upsert）」+ append 落盘 → **直接退出**，**不**退教室清理、**不** `delete_session`、**不**重启 App，返回 `CURRENT_ACCOUNT` + 本批通过/失败计数给主 agent。
+> - **最后一批**（`is_last_batch=true`）：退教室 / 恢复 tab / `delete_session()` / 输出本设备**文本执行报告**。⚠️ 飞书 **Wiki 报告 & 群通知不在批级 subagent 生成**——由主 agent 在所有设备所有批完成后读 jsonl 合并、每平台一份统一生成（见 [../../common/parallel.md](../../common/parallel.md) 第5步）。
+>
+> 单设备不分批（用例数 ≤ BATCH_SIZE）且非并行独立执行时，等同「只有最后一批」，可在此直接走完整收尾含 Wiki 报告。
+
 ### 退出教室（若在教室内）
 ```
 1. 截图旋转90° 确认是否横屏
@@ -463,9 +469,12 @@ RESULT_APP_TOKEN="C6X8wCdSLiAd9IkXtNFc6yO2nXg"
 source "$SCRIPTS_DIR/upload_screenshots.sh" "$SHOT_DIR" "$RESULT_APP_TOKEN"
 ```
 
-**步骤二：清空目标表**
+**步骤二：清空目标表 —— 仅 run 开头一次，由主 agent 执行（批级 subagent 跳过本步）**
 
-写入前先删除目标表中所有已有记录（分页拉取 record_id → batch_delete，每批最多 500 条）：
+> 分批执行时（见 [../../common/parallel.md](../../common/parallel.md)），整表清空**只在整个 run 开始、并行派发之前做一次**（Android 表 + iOS 表各一次）。批级 subagent **不执行**本步——否则后一批会把前一批清掉。批级去重改用步骤三的 upsert。
+> 单设备不分批时，此清空即在唯一那批之前执行，等价于原逻辑。
+
+清空逻辑（分页拉取 record_id → batch_delete，每批最多 500 条）：
 
 ```python
 # 伪代码示意
@@ -484,11 +493,24 @@ while True:
     page_token = resp["data"]["page_token"]
 ```
 
-**步骤三：batch_create 写入执行结果**
+**步骤三：批级 upsert 写入执行结果（本批）**
 
-按平台选对应 table_id，将 `CASES_JSON` 中所有用例一次性批量创建：
+> 分批模型下 `CASES_JSON` **只含本批用例**（≤ BATCH_SIZE 条；批与批之间已 append 落盘到 `/tmp/result_<udid>.jsonl`），不是全设备全部用例。
 
-回写字段（已确认正确名称）：
+按平台选对应 table_id，为支持某批崩溃重跑不产生重复，**先删后建**（upsert）：先按本批 `用例ID` 删除结果表中同 ID 的旧记录，再 batch_create 本批。
+
+```python
+# ① 先删本批同 用例ID 的旧记录（upsert 的 delete 半程）
+batch_ids = [c["case_id"] for c in CASES_JSON if c.get("case_id")]
+if batch_ids:
+    # search 结果表中 用例ID ∈ batch_ids 的记录 → batch_delete 其 record_id
+    old_rids = search_result_records_by_case_ids(RESULT_TABLE_ID, batch_ids)
+    if old_rids:
+        POST(f"/bitable/v1/apps/{RESULT_APP_TOKEN}/tables/{RESULT_TABLE_ID}/records/batch_delete",
+             {"records": old_rids})
+```
+
+② 再 batch_create 本批。回写字段（已确认正确名称）：
 - `用例ID`（Number，原表 ID 自增编号，唯一标识）
 - `用例名称`（Text）
 - `模块`（SingleSelect）
@@ -630,4 +652,4 @@ Wiki 输出：按模块分组，每组 H2 标题 + 各用例 H3 标题 + 步骤�
 - 定位失败按三级降级策略（见 [elements.md](elements.md)），不要直接报错中断
 - **截图必须加 `maxWidth: 800`**：Android/iOS 高分辨率设备截图超 2000px 会触发 Claude 多图限制报错，所有 `appium_screenshot` 调用均须传入 `maxWidth: 800`
 - **单次对话截图不超过 10 张**：超出后新开对话，将 UDID、包名、当前执行步骤带入继续
-- **上下文控制**：单条用例工具调用累计超过 50 次时，优先切换到 xpath/id 定位（见 elements.md），减少 AI 视觉重试；subagent 执行全部用例后上下文仍不足时，每条用例单独起一个 subagent
+- **上下文控制**：单条用例工具调用累计超过 50 次时，优先切换到 xpath/id 定位（见 elements.md），减少 AI 视觉重试；**单设备用例数多时按 `BATCH_SIZE=20` 分批，每批一个独立 subagent**（见 [../../common/parallel.md](../../common/parallel.md)「设备内分批」+ [../../common/prescan.md](../../common/prescan.md)「切批」）——批末回写结果表 + append 落盘后退出释放上下文，下一批带 `CURRENT_ACCOUNT` 新起、复用常驻 session 不重登
