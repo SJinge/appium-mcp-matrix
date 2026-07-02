@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts"))
 from feishu_config import APP_ID, APP_SECRET, GROUP_CHAT_ID, BITABLE_CONFIGS, RESULT_TABLES
 import run_status
 import logging_setup
+import ios_wda
 
 log = logging_setup.get_logger("orchestrate", logfile="orchestrate.log")
 
@@ -20,6 +21,10 @@ PKG_NAMES = {
     "xinli":   "com.gaotu100.xinli",
     "ketang":  "com.gaotu100.ketang",
 }
+
+DEFAULT_WDA_TEAM   = "5YX44746D6"
+DEFAULT_WDA_BUNDLE = "com.shijinge.WebDriverAgentRunner"
+DEFAULT_WDA_PORT   = 8100
 
 
 def load_devices(app_id: str, config_path: str = None) -> dict:
@@ -243,15 +248,24 @@ def run_exploration(app_id: str, version: str, android_udid: str):
         log.warning(f"Exploration timeout (30min), continuing")
 
 
-def build_prompt(app_id: str, udid: str, platform: str, entries: list) -> str:
+def build_prompt(app_id: str, udid: str, platform: str, entries: list,
+                 wda_port: int = None) -> str:
     cases_json = json.dumps(
         [{"record_id": e["record_id"], "name": e["name"],
           "module": e["module"], "steps": e["steps"]} for e in entries],
         ensure_ascii=False
     )
+    wda_note = ""
+    if platform.lower() == "ios" and wda_port:
+        wda_note = (
+            f"\n【iOS WDA 已就绪(务必遵守)】\n"
+            f"建 session 必须带 appium:webDriverAgentUrl = http://127.0.0.1:{wda_port}，"
+            f"严禁让 XCUITest driver 自行重装/重启 WDA(会架空已就绪 WDA 并触发签名)。\n"
+        )
     return (
         f"你是{app_id} App 自动化测试工程师。\n"
-        f"设备：{udid}（{platform}）\n\n"
+        f"设备：{udid}（{platform}）\n"
+        f"{wda_note}\n"
         f"⚠️ 跑的是【线上生产环境】：严禁重放 ACTION（点击/提交/下单）做重试，会重复写线上数据。\n\n"
         f"【ASSERT 判定契约（务必遵守，见 common/locator.md「ASSERT 取证链」）】\n"
         f"1. 每个 ASSERT 默认判失败，只有取到可验证证据才能判通过。禁止「看起来像/应该是/大概对了」式判定。\n"
@@ -270,13 +284,15 @@ def build_prompt(app_id: str, udid: str, platform: str, entries: list) -> str:
     )
 
 
-def launch_claude_per_device(app_id: str, groups: dict) -> dict:
+def launch_claude_per_device(app_id: str, groups: dict, wda_ports: dict = None) -> dict:
+    wda_ports = wda_ports or {}
     procs = {}
     skill_dir  = os.path.join(PROJECT_ROOT, ".claude", "skills", app_id)
     common_dir = os.path.join(PROJECT_ROOT, "common")
 
     for udid, group in groups.items():
-        prompt   = build_prompt(app_id, udid, group["platform"], group["entries"])
+        prompt   = build_prompt(app_id, udid, group["platform"], group["entries"],
+                                wda_port=wda_ports.get(udid))
         log_path = f"/tmp/claude_{udid}.log"
         cmd = ["claude", "--add-dir", skill_dir, "--add-dir", common_dir,
                "--print", prompt]
@@ -592,13 +608,24 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
             else:
                 log.warning(f"Android {d['udid']} install failed, skipping")
 
+    wda_ports = {}
     if "ios" in platforms:
         for d in devices["ios"]:
-            if install_ios(ipa_path, d["udid"]):
-                ios_ok.append(d)
-                log.info(f"iOS {d['udid']} installed")
-            else:
+            if not install_ios(ipa_path, d["udid"]):
                 log.warning(f"iOS {d['udid']} install failed, skipping")
+                continue
+            log.info(f"iOS {d['udid']} installed")
+            wda = d.get("wda", {})
+            port = wda.get("port", DEFAULT_WDA_PORT)
+            if ios_wda.ensure_wda_ready(
+                    d["udid"], wda.get("team", DEFAULT_WDA_TEAM),
+                    wda.get("bundle_id", DEFAULT_WDA_BUNDLE), port):
+                ios_ok.append(d)
+                wda_ports[d["udid"]] = port
+            else:
+                _notify(app_id, version,
+                        f"⚠️ iOS {d['udid']} WDA 未就绪，环境阻断，跳过（不写结果表）")
+                log.warning(f"iOS {d['udid']} WDA not ready, skipping (env blocked)")
 
     if not android_ok and not ios_ok:
         _notify(app_id, version, "❌ 所有设备安装失败，终止")
@@ -648,7 +675,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     _notify(app_id, version, f"▶️ 开始执行：{total} 条用例 × {len(groups)} 台设备（{'/'.join(sorted(platforms))}）")
     start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
-    procs   = launch_claude_per_device(app_id, groups)
+    procs   = launch_claude_per_device(app_id, groups, wda_ports=wda_ports)
     results = collect_results(procs, app_id=app_id, version=version, run_id=run_id)
     duration = int(time.time() - start_time)
     log.info(f"Execution done, total time {duration}s")

@@ -101,3 +101,16 @@ def test_collect_results_timeout_marks_failure(tmp_path):
         timeout=1
     )
     assert results["missing_device"] == "timeout"
+
+
+def test_build_prompt_ios_injects_wda_url():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "i1", "iOS", entries, wda_port=8100)
+    assert "webDriverAgentUrl" in prompt
+    assert "http://127.0.0.1:8100" in prompt
+
+
+def test_build_prompt_android_no_wda_url():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "webDriverAgentUrl" not in prompt
