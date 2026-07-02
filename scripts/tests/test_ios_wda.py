@@ -8,6 +8,7 @@ def _urlopen_ok():
     cm = MagicMock()
     resp = MagicMock()
     resp.status = 200
+    resp.read.return_value = b'{"value":{"state":"success"}}'
     cm.__enter__.return_value = resp
     return cm
 
@@ -78,11 +79,39 @@ def test_ensure_ready_starts_procs_then_polls_healthy():
     assert popen.call_count == 2  # xcodebuild + proxy
 
 
+def test_health_check_false_when_200_but_not_wda_json():
+    cm = MagicMock()
+    resp = MagicMock()
+    resp.status = 200
+    resp.read.return_value = b'<html>not wda</html>'
+    cm.__enter__.return_value = resp
+    with patch("ios_wda.urllib.request.urlopen", return_value=cm):
+        assert ios_wda.health_check(8100) is False
+
+
+def test_ensure_ready_kills_stale_proxy_before_restart():
+    # unhealthy, tunnel ok, wda already running, proxy listening (stale) -> kill then restart, then healthy
+    health_seq = [False, True]
+    with patch("ios_wda.health_check", side_effect=lambda p: health_seq.pop(0)), \
+         patch("ios_wda.tunnel_ready", return_value=True), \
+         patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda.proxy_listening", return_value=True), \
+         patch("ios_wda._kill_proxy") as kill, \
+         patch("ios_wda._start_proxy") as start_proxy, \
+         patch("ios_wda.subprocess.Popen"), \
+         patch("ios_wda.time.sleep"):
+        ok = ios_wda.ensure_wda_ready("udid", "TEAM", "bundle", 8100, timeout=30)
+    assert ok is True
+    kill.assert_called_once()
+    start_proxy.assert_called_once()
+
+
 def test_ensure_ready_times_out():
     with patch("ios_wda.health_check", return_value=False), \
          patch("ios_wda.tunnel_ready", return_value=True), \
          patch("ios_wda.wda_running", return_value=True), \
          patch("ios_wda.proxy_listening", return_value=True), \
+         patch("ios_wda._kill_proxy"), \
          patch("ios_wda.subprocess.Popen"), \
          patch("ios_wda.time.sleep"), \
          patch("ios_wda.time.monotonic", side_effect=[0, 1, 200]):

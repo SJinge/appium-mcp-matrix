@@ -18,7 +18,10 @@ except Exception:
 def health_check(port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/status", timeout=2) as r:
-            return r.status == 200
+            if r.status != 200:
+                return False
+            body = json.loads(r.read().decode())
+            return "value" in body or "sessionId" in body
     except Exception:
         return False
 
@@ -56,6 +59,15 @@ def _start_wda(udid: str, team: str, bundle_id: str):
     subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=WDA_DIR)
 
 
+def _kill_proxy(port: int):
+    r = subprocess.run(["lsof", "-ti", f"tcp:{port}"], capture_output=True, text=True)
+    for pid in r.stdout.split():
+        try:
+            subprocess.run(["kill", pid], capture_output=True)
+        except Exception:
+            pass
+
+
 def _start_proxy(udid: str, port: int):
     logf = open(f"/tmp/wda_proxy_{udid}.log", "w")
     cmd = [sys.executable, os.path.join(PROJECT_ROOT, "scripts", "wda_proxy.py"),
@@ -74,8 +86,11 @@ def ensure_wda_ready(udid: str, team: str, bundle_id: str,
         return False
     if not wda_running(udid):
         _start_wda(udid, team, bundle_id)
-    if not proxy_listening(port):
-        _start_proxy(udid, port)
+    if proxy_listening(port):
+        # 不健康却仍在监听 => 上游隧道很可能已失效,视为僵尸,杀掉重起
+        log.info(f"[{udid}] proxy on :{port} listening but WDA unhealthy, restarting (stale)")
+        _kill_proxy(port)
+    _start_proxy(udid, port)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if health_check(port):
