@@ -65,7 +65,11 @@ adb -s <device> install -r <apks_dir>/appium-uiautomator2-server-debug-androidTe
   "appium:bundleId": "<bundleId>",
   "appium:noReset": true,
   "appium:autoAcceptAlerts": true,
+  "appium:webDriverAgentUrl": "http://127.0.0.1:8100",
   "appium:wdaLaunchTimeout": 120000,
   "appium:wdaConnectionTimeout": 120000
 }
 ```
+
+> 真机务必带 `appium:webDriverAgentUrl`（端口由 orchestrate 按设备下发,单设备默认 8100）：
+> WDA 已由 orchestrate 预先拉起,driver 直连即可,不要让它自装(会触发签名、架空已就绪 WDA)。
