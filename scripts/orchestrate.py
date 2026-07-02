@@ -181,8 +181,8 @@ def fetch_cases(app_id: str) -> list:
     body_obj = {
         "filter": {
             "conjunction": "and",
-            "conditions": [{"field_name": "是否自动化执行", "operator": "is",
-                            "value": ["true"]}]
+            "conditions": [{"field_name": "执行方式", "operator": "is",
+                            "value": ["自动"]}]
         },
         "page_size": 500
     }
