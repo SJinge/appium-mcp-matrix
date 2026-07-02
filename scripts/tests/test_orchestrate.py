@@ -114,3 +114,21 @@ def test_build_prompt_android_no_wda_url():
     entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
     prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
     assert "webDriverAgentUrl" not in prompt
+
+
+def test_load_devices_parses_ios_wda(tmp_path):
+    cfg = tmp_path / "devices.yaml"
+    cfg.write_text("""
+default:
+  android: []
+  ios:
+    - udid: "i1"
+      name: "iphone"
+      wda:
+        team: "TEAMX"
+        bundle_id: "com.x.WDA"
+        port: 8101
+""")
+    result = orchestrate.load_devices("gaotu", config_path=str(cfg))
+    assert result["ios"][0]["wda"] == {"team": "TEAMX",
+                                        "bundle_id": "com.x.WDA", "port": 8101}
