@@ -3,8 +3,8 @@ default:
   android:
     - udid: "26KUT24202013751"
       name: "华为 ADA-AL00"
-    - udid: "cd5c614a"
-      name: "小米 23127PN0CC (houji)"
+    - udid: "AWMDUN4201G05874"
+      name: "荣耀平板 HEY2-W09"
   ios:
     - udid: "00008101-001E28D436E0001E"
       name: "111的iPhone12 (iOS 18.7.8)"
