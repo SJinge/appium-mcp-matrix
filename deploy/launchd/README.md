@@ -42,3 +42,25 @@ launchctl unload -w ~/Library/LaunchAgents/com.gaotu.appium-matrix.webhook.plist
 - `ProgramArguments` 里的 python 路径需指向装了 `flask`/`pyyaml` 的解释器（默认 `/usr/bin/python3`，已验证可用）。
 - 路径为本机绝对路径；换机器需同步改 plist 内 4 处路径。
 - `ENABLED_APPS` 在此控制执行白名单，与代码默认一致（仅 gaotu）。
+
+## tunneld(iOS 真机 WDA 隧道,root 守护)
+
+iOS17+ 真机自动化需 RemoteXPC 隧道,必须 root 启动。用 LaunchDaemon 常驻:
+
+安装(一次性,需 sudo):
+```bash
+sudo cp deploy/launchd/com.gaotu.appium-matrix.tunneld.plist /Library/LaunchDaemons/
+sudo chown root:wheel /Library/LaunchDaemons/com.gaotu.appium-matrix.tunneld.plist
+sudo launchctl load -w /Library/LaunchDaemons/com.gaotu.appium-matrix.tunneld.plist
+```
+
+观测:
+```bash
+curl -s http://127.0.0.1:49151/ | python3 -m json.tool   # tunnel 注册表
+tail -f logs/launchd.tunneld.err.log
+```
+
+卸载:`sudo launchctl unload -w /Library/LaunchDaemons/com.gaotu.appium-matrix.tunneld.plist`
+
+> 注:放 `/Library/LaunchDaemons`(非 `~/Library/LaunchAgents`)才以 root 运行。
+> tunneld 只访问 USB 设备、不读 ~/Documents,不撞 webhook 当年的 TCC 坑。

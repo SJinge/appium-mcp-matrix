@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gaotu.appium-matrix.tunneld</string>
+
+  <!-- iOS17+ RemoteXPC 隧道,必须 root(LaunchDaemon 天然以 root 运行) -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/mac/.wda-venv/bin/pymobiledevice3</string>
+    <string>remote</string>
+    <string>tunneld</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/mac/Documents/projects/appium-mcp-matrix/logs/launchd.tunneld.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/mac/Documents/projects/appium-mcp-matrix/logs/launchd.tunneld.err.log</string>
+</dict>
+</plist>
