@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, subprocess, sys, time
+import argparse, json, os, signal, subprocess, sys, time
 import urllib.request, urllib.error, urllib.parse, datetime
 import plistlib
 import yaml
@@ -437,10 +437,26 @@ def _tail_file(path: str, n: int = 200) -> str:
         return ""
 
 
+def _incr_status(run_id, udid, path):
+    """进程仍存活时,仅用当前(可能是增量/半成品)结果文件刷新 /status,绝不判完成。"""
+    if not (run_id and os.path.exists(path)):
+        return
+    try:
+        with open(path) as f:
+            cs = json.load(f)
+    except json.JSONDecodeError:
+        return
+    if isinstance(cs, list):
+        run_status.update_device(run_id, udid, **{
+            "state": "running", "done": len(cs),
+            "pass": sum(1 for c in cs if c.get("passed")),
+            "fail": sum(1 for c in cs if not c.get("passed"))})
+
+
 def collect_results(procs: dict, result_dir: str = "/tmp",
                     timeout: int = 90 * 60,
                     app_id: str = None, version: str = None,
-                    run_id: str = None) -> dict:
+                    run_id: str = None, poll_interval: int = 10) -> dict:
     deadline = time.time() + timeout
     pending  = set(procs.keys())
     results  = {}
@@ -448,24 +464,46 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
     while pending and time.time() < deadline:
         for udid in list(pending):
             path = os.path.join(result_dir, f"result_{udid}.json")
+            proc = procs.get(udid)
+            alive = proc is not None and proc.poll() is None
+
+            # 进程仍存活：无论结果文件是否存在(claude 会先写 [] / 增量写)，
+            # 都不判完成，只借它刷新 /status 进度，避免空文件被误判 done=0。
+            if alive:
+                _incr_status(run_id, udid, path)
+                continue
+
+            # 进程已退出(或测试/兼容场景 proc=None)：以最终结果文件为准。
             if os.path.exists(path):
                 try:
                     with open(path) as f:
                         results[udid] = json.load(f)
-                    pending.discard(udid)
-                    log.info(f"{udid} done, results read")
-                    if run_id:
-                        cs = results[udid] if isinstance(results[udid], list) else []
-                        run_status.update_device(run_id, udid, **{
-                            "state": "done", "done": len(cs), "total": len(cs),
-                            "pass":  sum(1 for c in cs if c.get("passed")),
-                            "fail":  sum(1 for c in cs if not c.get("passed"))})
                 except json.JSONDecodeError:
-                    pass  # 文件还在写，下轮再读
+                    if proc is None:
+                        continue  # 兼容旧行为：无进程可判，文件还在写，下轮再读
+                    # 进程已退出但文件损坏/半写 → 判失败
+                    tail = _tail_file(f"/tmp/claude_{udid}.log")
+                    log.warning(f"{udid} 进程已退出(code={proc.returncode})但结果文件损坏，判失败。日志末尾：{tail}")
+                    results[udid] = "failed"
+                    pending.discard(udid)
+                    if run_id:
+                        run_status.update_device(run_id, udid, state="crashed")
+                    if app_id and version:
+                        _notify(app_id, version,
+                                f"⚠️ 设备 {udid} 结果文件损坏(进程 code={proc.returncode})，已判失败。日志末尾：{tail}")
+                    continue
+                pending.discard(udid)
+                log.info(f"{udid} done, results read")
+                if run_id:
+                    cs = results[udid] if isinstance(results[udid], list) else []
+                    run_status.update_device(run_id, udid, **{
+                        "state": "done", "done": len(cs), "total": len(cs),
+                        "pass":  sum(1 for c in cs if c.get("passed")),
+                        "fail":  sum(1 for c in cs if not c.get("passed"))})
                 continue
-            # 无结果文件且进程已退出 → 它没写结果就挂了（如 429 日限额），立即判失败，不空等
-            proc = procs.get(udid)
-            if proc and proc.poll() is not None:
+
+            # 进程已退出且无结果文件 → 没写结果就挂了（如 429 日限额），立即判失败，不空等
+            if proc is not None:
                 tail = _tail_file(f"/tmp/claude_{udid}.log")
                 log.warning(f"{udid} 进程已退出(code={proc.returncode})却无结果，判失败。日志末尾：{tail}")
                 results[udid] = "failed"
@@ -475,8 +513,9 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
                 if app_id and version:  # 崩溃即时报警，不等到全部结束
                     _notify(app_id, version,
                             f"⚠️ 设备 {udid} 执行进程异常退出(code={proc.returncode})，已判失败。日志末尾：{tail}")
+            # proc is None 且无文件 → 保持 pending，最终走超时(兼容旧测试)
         if pending:
-            time.sleep(10)
+            time.sleep(poll_interval)
 
     for udid in pending:
         log.warning(f"{udid} timeout, killing")
@@ -492,7 +531,9 @@ def collect_results(procs: dict, result_dir: str = "/tmp",
     return results
 
 
-def generate_reports(app_id: str, version: str, results: dict, duration: int, start_time_str: str = None):
+def generate_reports(app_id: str, version: str, results: dict, duration: int,
+                     start_time_str: str = None, device_totals: dict = None,
+                     interrupted: bool = False):
     start_time = start_time_str or datetime.datetime.now().strftime("%H:%M:%S")
     script = os.path.join(PROJECT_ROOT, "scripts", "wiki_report.py")
 
@@ -506,6 +547,13 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
                 android_cases.append(case)
             elif platform == "ios":
                 ios_cases.append(case)
+
+    # 各平台「计划应跑」条数（用于算未执行=应跑−已完成）；来自 _INFLIGHT.device_totals
+    planned = {"Android": 0, "iOS": 0}
+    if device_totals:
+        for info in device_totals.values():
+            plat = "Android" if str(info.get("platform", "")).lower() == "android" else "iOS"
+            planned[plat] += info.get("total", 0)
 
     # 按平台写入飞书结果表
     for platform, cases in [("android", android_cases), ("ios", ios_cases)]:
@@ -537,19 +585,87 @@ def generate_reports(app_id: str, version: str, results: dict, duration: int, st
                 wiki_urls[platform] = url
                 log.info(line)
 
-    lines = [f"📱 {app_id} {version} 自动化测试完成\n"]
+    prefix = "⚠️ 执行中断，部分结果\n" if interrupted else ""
+    head   = "自动化测试中断" if interrupted else "自动化测试完成"
+    lines = [f"{prefix}📱 {app_id} {version} {head}\n"]
     for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
-        if not cases:
+        plan = planned.get(platform, 0)
+        if not cases and not plan:
             continue
-        total  = len(cases)
+        done   = len(cases)
         passed = sum(1 for c in cases if c.get("passed"))
-        rate   = int(passed / total * 100) if total else 0
+        denom  = plan or done            # 有计划数按计划数，否则按已完成数
+        rate   = int(passed / done * 100) if done else 0
+        unexec = max(0, plan - done)
         url    = wiki_urls.get(platform, "")
         review = sum(1 for c in cases if c.get("passed") and _lowconf_review_steps(c))
-        suffix = f"  ⚠️{review}条待复核" if review else ""
-        lines.append(f"{platform}：{passed}/{total} 通过 ({rate}%){suffix}  📄 {url}")
+        parts  = [f"{platform}：{passed}/{denom} 通过 ({rate}%)"]
+        if unexec:
+            parts.append(f"{unexec} 未执行")
+        if review:
+            parts.append(f"⚠️{review}条待复核")
+        seg = "，".join(parts)
+        if url:
+            seg += f"  📄 {url}"
+        lines.append(seg)
     lines.append(f"\n总耗时：{duration // 60}分{duration % 60}秒")
     _notify(app_id, version, "\n".join(lines))
+
+
+# ---- 中断/崩溃兜底：存活跑状态 + 幂等 finalize ----
+# _INFLIGHT 在进入执行阶段后填充，供信号处理器/异常兜底读取当前进度做收尾。
+_INFLIGHT: dict = {}
+_FINALIZED: bool = False
+
+
+def _read_partial_results(udids, result_dir: str = "/tmp") -> dict:
+    """从磁盘读取当前已有的 result 文件；缺失/损坏的跳过(交给 device_totals 算未执行)。"""
+    out = {}
+    for udid in udids:
+        path = os.path.join(result_dir, f"result_{udid}.json")
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    out[udid] = json.load(f)
+            except json.JSONDecodeError:
+                pass
+    return out
+
+
+def finalize(reason: str = None, results: dict = None) -> bool:
+    """幂等收尾：回写结果表 + 发报告(必发,含未执行统计) + 清理 + finish。
+    reason 非空表示中断/异常场景(报告加 ⚠️ 前缀)。返回 True 表示本次执行了收尾。"""
+    global _FINALIZED
+    if _FINALIZED or not _INFLIGHT:
+        return False
+    _FINALIZED = True
+    info   = _INFLIGHT
+    run_id = info["run_id"]
+    dtot   = info["device_totals"]
+    rdir   = info.get("result_dir", "/tmp")
+    if results is None:  # 中断路径：collect_results 未正常返回，直接读磁盘现有结果
+        results = _read_partial_results(list(dtot.keys()), rdir)
+    duration = int(time.time() - info["start_time"])
+    try:
+        run_status.set_phase(run_id, "reporting",
+                             "执行中断，生成部分报告" if reason else "生成报告")
+        generate_reports(info["app_id"], info["version"], results, duration,
+                         start_time_str=info["start_time_str"],
+                         device_totals=dtot, interrupted=bool(reason))
+    except Exception as e:  # 报告失败不能吞掉 finish
+        log.exception(f"finalize 生成报告失败：{e}")
+    finally:
+        for udid in dtot:
+            path = os.path.join(rdir, f"result_{udid}.json")
+            if os.path.exists(path):
+                os.remove(path)
+        passed = sum(1 for d in results.values() if isinstance(d, list)
+                     for c in d if c.get("passed"))
+        total  = sum(v.get("total", 0) for v in dtot.values())
+        run_status.finish(run_id, "interrupted" if reason else "done",
+                          reason or "执行完成",
+                          total=total, passed=passed, duration=duration)
+    return True
 
 
 def parse_args():
@@ -676,24 +792,24 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
     procs   = launch_claude_per_device(app_id, groups, wda_ports=wda_ports)
+
+    # 登记存活跑状态，供信号/异常兜底做幂等收尾（崩溃/被杀也回写+发报告）
+    global _INFLIGHT, _FINALIZED
+    _FINALIZED = False
+    _INFLIGHT = {
+        "run_id": run_id, "app_id": app_id, "version": version,
+        "start_time": start_time, "start_time_str": start_time_str,
+        "result_dir": "/tmp",
+        "device_totals": {u: {"total": len(g["entries"]), "platform": g["platform"]}
+                          for u, g in groups.items()},
+    }
+
     results = collect_results(procs, app_id=app_id, version=version, run_id=run_id)
     duration = int(time.time() - start_time)
     log.info(f"Execution done, total time {duration}s")
 
-    # 6. Generate reports
-    run_status.set_phase(run_id, "reporting", "生成报告")
-    generate_reports(app_id, version, results, duration, start_time_str=start_time_str)
-
-    # 7. Cleanup temp files
-    for udid in groups:
-        path = f"/tmp/result_{udid}.json"
-        if os.path.exists(path):
-            os.remove(path)
-
-    passed = sum(1 for d in results.values() if isinstance(d, list)
-                 for c in d if c.get("passed"))
-    run_status.finish(run_id, "done", "执行完成",
-                      total=total, passed=passed, duration=duration)
+    # 6~7. 报告 + 回写 + 清理 + finish（正常路径带已收集结果）
+    finalize(results=results)
     log.info("Done")
 
 
@@ -711,10 +827,22 @@ def main():
     with open(pid_file, "w") as f:
         f.write(str(os.getpid()))
 
+    # 被 kill(SIGTERM)/Ctrl-C(SIGINT) 时也收尾：回写已有结果 + 发报告，再退出
+    def _sig_handler(signum, frame):
+        name = signal.Signals(signum).name
+        log.warning(f"收到信号 {name}，执行 finalize 收尾后退出")
+        finalize(reason=f"⚠️ 执行中断（{name}），部分结果")
+        sys.exit(128 + signum)
+    signal.signal(signal.SIGTERM, _sig_handler)
+    signal.signal(signal.SIGINT, _sig_handler)
+
     try:
         _run(app_id, version, args.apk_url, args.ipa_url, platforms, run_id=run_id)
     except Exception as e:
-        run_status.finish(run_id, "failed", f"未捕获异常：{e}")
+        log.exception("orchestrate 未捕获异常")
+        # _INFLIGHT 已登记则走 finalize（报告+finish）；否则说明崩在执行前，直接判失败
+        if not finalize(reason=f"⚠️ 未捕获异常：{e}"):
+            run_status.finish(run_id, "failed", f"未捕获异常：{e}")
         raise
     finally:
         if os.path.exists(pid_file):

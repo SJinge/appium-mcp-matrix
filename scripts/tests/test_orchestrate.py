@@ -116,6 +116,128 @@ def test_build_prompt_android_no_wda_url():
     assert "webDriverAgentUrl" not in prompt
 
 
+class _FakeProc:
+    """poll() 依次返回 poll_seq 的值(最后一个值粘住);None=存活,int=已退出。"""
+    def __init__(self, poll_seq, returncode=0):
+        self._seq = list(poll_seq)
+        self.returncode = returncode
+    def poll(self):
+        v = self._seq[0] if len(self._seq) == 1 else self._seq.pop(0)
+        return v
+    def kill(self):
+        pass
+
+
+def test_collect_results_alive_empty_not_done(tmp_path):
+    """回归 bug：进程仍存活时,即便结果文件是空 [] 也不能提前判完成。"""
+    udid = "dev_alive"
+    (tmp_path / f"result_{udid}.json").write_text("[]")
+    proc = _FakeProc([None])  # 永远存活
+    results = orchestrate.collect_results(
+        {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
+    # 存活+空文件 → 不判 done/0，最终因 proc 未退出走超时
+    assert results[udid] == "timeout"
+
+
+def test_collect_results_reads_only_after_exit(tmp_path):
+    """进程退出后才读取最终结果文件。"""
+    udid = "dev_exit"
+    cases = [{"name": "c1", "platform": "Android", "passed": True}]
+    (tmp_path / f"result_{udid}.json").write_text(_json.dumps(cases))
+    proc = _FakeProc([0])  # 已退出
+    results = orchestrate.collect_results(
+        {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
+    assert results[udid][0]["passed"] is True
+
+
+def test_collect_results_exit_no_file_is_failed(tmp_path):
+    """进程退出却没写结果文件 → 判失败(非提前完成)。"""
+    udid = "dev_crash"
+    proc = _FakeProc([1], returncode=1)
+    results = orchestrate.collect_results(
+        {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
+    assert results[udid] == "failed"
+
+
+@pytest.fixture(autouse=True)
+def _reset_inflight():
+    orchestrate._INFLIGHT = {}
+    orchestrate._FINALIZED = False
+    yield
+    orchestrate._INFLIGHT = {}
+    orchestrate._FINALIZED = False
+
+
+def _seed_inflight(tmp_path, device_totals):
+    orchestrate._INFLIGHT = {
+        "run_id": "r_test", "app_id": "gaotu", "version": "9.9.9",
+        "start_time": orchestrate.time.time() - 5, "start_time_str": "00:00:00",
+        "device_totals": device_totals, "result_dir": str(tmp_path),
+    }
+    orchestrate._FINALIZED = False
+
+
+def test_finalize_idempotent(tmp_path):
+    _seed_inflight(tmp_path, {"a1": {"total": 3, "platform": "Android"}})
+    with patch("orchestrate.generate_reports") as gr, \
+         patch("orchestrate.run_status") as rs:
+        assert orchestrate.finalize(results={"a1": []}) is True
+        assert orchestrate.finalize(results={"a1": []}) is False  # 第二次幂等空转
+        assert gr.call_count == 1
+        assert rs.finish.call_count == 1
+
+
+def test_finalize_interrupt_reads_partial_from_disk(tmp_path):
+    # a1 写了 2 条结果，b1(计划 5 条)没写 → 部分结果场景
+    (tmp_path / "result_a1.json").write_text(_json.dumps(
+        [{"platform": "Android", "passed": True},
+         {"platform": "Android", "passed": False}]))
+    _seed_inflight(tmp_path, {"a1": {"total": 4, "platform": "Android"},
+                              "b1": {"total": 5, "platform": "Android"}})
+    with patch("orchestrate.generate_reports") as gr, \
+         patch("orchestrate.run_status") as rs:
+        orchestrate.finalize(reason="⚠️ 中断")
+        # 从磁盘读到 a1 的 2 条；b1 无文件
+        args, kwargs = gr.call_args
+        results = args[2]
+        assert len(results["a1"]) == 2
+        assert kwargs["interrupted"] is True
+        assert kwargs["device_totals"]["b1"]["total"] == 5
+        # 中断态 finish
+        assert rs.finish.call_args[0][1] == "interrupted"
+
+
+def test_generate_reports_notifies_unexecuted_and_interrupt_prefix():
+    results = {"a1": [{"platform": "Android", "passed": True},
+                      {"platform": "Android", "passed": False}]}
+    device_totals = {"a1": {"total": 10, "platform": "Android"}}
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.write_results_to_table"), \
+         patch("orchestrate.subprocess.run") as sr:
+        sr.return_value.stdout = ""
+        orchestrate.generate_reports("gaotu", "9.9.9", results, 120,
+                                     start_time_str="00:00:00",
+                                     device_totals=device_totals, interrupted=True)
+        body = notify.call_args[0][2]
+        assert "⚠️" in body            # 中断前缀
+        assert "8 未执行" in body       # 10 计划 - 2 完成
+        assert "1/10 通过" in body      # passed/planned
+
+
+def test_generate_reports_zero_completion_still_notifies():
+    """一条都没跑完(设备全崩)也要发群通知。"""
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.write_results_to_table"), \
+         patch("orchestrate.subprocess.run") as sr:
+        sr.return_value.stdout = ""
+        orchestrate.generate_reports("gaotu", "9.9.9", {}, 30,
+                                     device_totals={"a1": {"total": 7, "platform": "Android"}},
+                                     interrupted=True)
+        assert notify.called
+        body = notify.call_args[0][2]
+        assert "7 未执行" in body
+
+
 def test_load_devices_parses_ios_wda(tmp_path):
     cfg = tmp_path / "devices.yaml"
     cfg.write_text("""
