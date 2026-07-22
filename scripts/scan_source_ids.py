@@ -131,6 +131,25 @@ def join_with_apk(apk_ids: list, attribution: dict, pkg: str) -> dict:
     }
 
 
+def truth_ids_from_payload(payload: dict) -> list:
+    active_ids = payload.get("active_ids")
+    if isinstance(active_ids, list) and active_ids:
+        return sorted(set(active_ids))
+    entries = payload.get("entries")
+    if isinstance(entries, list) and entries:
+        ids = [entry.get("id") for entry in entries if entry.get("id") and not entry.get("deprecated", False)]
+        if ids:
+            return sorted(set(ids))
+    return sorted(set(payload.get("ids", [])))
+
+
+def truth_entry_map(payload: dict) -> dict:
+    entries = payload.get("entries")
+    if isinstance(entries, list) and entries:
+        return {entry["id"]: entry for entry in entries if entry.get("id")}
+    return {rid: {"id": rid, "deprecated": False} for rid in payload.get("ids", [])}
+
+
 # ---------- IO ----------
 
 def scan_source(source_dir: str, module: str = None):
@@ -189,7 +208,8 @@ def main():
     with open(args.apk_truth) as f:
         truth = json.load(f)
     pkg = truth["package"]
-    apk_ids = truth["ids"]
+    apk_ids = truth_ids_from_payload(truth)
+    truth_entries = truth_entry_map(truth)
     if args.module:
         # 样例验证:只 join 该模块 layout 涉及的 id,避免被全量稀释
         pass
@@ -212,7 +232,10 @@ def main():
         "module_filter": args.module or "all",
         "stats": st,
         # 只落有归属的条目,避免文件被无归属 id 撑爆;无归属的可由 apk-truth 兜底
-        "elements": [e for e in result["enriched"] if e["module"] or e["pages"]],
+        "elements": [
+            {**e, "deprecated": bool(truth_entries.get(e["id"], {}).get("deprecated", False))}
+            for e in result["enriched"] if e["module"] or e["pages"]
+        ],
     }
     with open(out, "w") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)

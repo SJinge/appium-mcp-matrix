@@ -65,11 +65,68 @@ adb -s <device> install -r <apks_dir>/appium-uiautomator2-server-debug-androidTe
   "appium:bundleId": "<bundleId>",
   "appium:noReset": true,
   "appium:autoAcceptAlerts": true,
-  "appium:webDriverAgentUrl": "http://127.0.0.1:8100",
   "appium:wdaLaunchTimeout": 120000,
   "appium:wdaConnectionTimeout": 120000
 }
 ```
 
-> 真机务必带 `appium:webDriverAgentUrl`（端口由 orchestrate 按设备下发,单设备默认 8100）：
-> WDA 已由 orchestrate 预先拉起,driver 直连即可,不要让它自装(会触发签名、架空已就绪 WDA)。
+> 当前 iOS 真机默认不要手工传 `appium:webDriverAgentUrl`。
+> 已验证 `appium-mcp/create_session` 直建会话可正常接管设备；强制走自定义 `webDriverAgentUrl`
+> 反而可能命中不稳定的本地 proxy，出现 `ECONNREFUSED`。
+
+## iOS 真机排障记录
+
+### 本次实际遇到的问题
+
+1. 设备重启后，`Apple Development: jinge.shi@icloud.com` 的设备侧信任会失效。
+   现象：
+   - `xcodebuild test` 失败
+   - `/tmp/wda_build_<udid>.log` 出现：
+     `Unable to launch com.shijinge.WebDriverAgentRunner.xctrunner because it has an invalid code signature, inadequate entitlements or its profile has not been explicitly trusted by the user`
+
+2. 只看 `tidevice list` 在线不够，Xcode 侧还可能是 `unpaired`。
+   现象：
+   - `tidevice list` 能看到设备
+   - `xcodebuild -showdestinations` 里设备是 `Ineligible destination`
+   - 提示 `Pair with the device in the Xcode Devices Window`
+
+3. 自建 `WDA + wda_proxy + appium:webDriverAgentUrl=http://127.0.0.1:<port>` 通路不稳定。
+   现象：
+   - `WebDriverAgentRunner-Runner` 日志显示已经开始跑测试
+   - 但 `create_session` 仍报 `ECONNREFUSED 127.0.0.1:8100`
+   - `scripts/wda_proxy.py` 上游持续报 `upstream connect failed: [Errno 61] Connection refused`
+
+4. `tunneld` 注册表里的 `tunnel-port` 可以连通，但不能简单假设 `[{tunnel-address}]:8100` 一定可达。
+   现象：
+   - `tunnel-address + tunnel-port` 能建 TCP 连接
+   - `tunnel-address + 8100` 直接 `Connection refused`
+
+### 已验证可跑通的方式
+
+1. 设备侧准备：
+   - 手机保持解锁
+   - `设置 -> 通用 -> VPN 与设备管理` 中手动信任 `Apple Development: jinge.shi@icloud.com`
+   - 若 Xcode 报 `unpaired`，在 `Xcode -> Window -> Devices and Simulators` 中重新配对
+   - 确认设备 `Developer Mode` 已开启
+
+2. WDA 就绪验证：
+   - 运行 `ios_wda.ensure_wda_ready(...)` 可把两台设备的 WDA 拉起到 ready
+   - 本次实测：
+     - `iPhone 12 -> :8100 ready`
+     - `iPhone 13 -> :8101 ready`
+
+3. 真正可用的建会话方式：
+   - iOS 真机不要手工传 `appium:webDriverAgentUrl`
+   - 直接调用 `appium-mcp/select_device -> create_session`
+   - capabilities 仅保留：
+     - `appium:udid`
+     - `appium:bundleId`
+     - 以及常规 `XCUITest` 配置
+   - 本次已在 `iPhone 12`、`iPhone 13` 上实测：
+     - `create_session` 成功
+     - `appium_screenshot` 成功
+     - `delete_session` 成功
+
+4. 结论：
+   - 当前 iOS 真机链路可用方案：`设备信任 + 直接 create_session`
+   - 当前不推荐方案：`手工传 webDriverAgentUrl + 依赖 scripts/wda_proxy.py`

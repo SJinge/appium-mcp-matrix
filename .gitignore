@@ -3,4 +3,5 @@ shots/
 auth.json
 runs/
 logs/
+.tools/
 .claude/worktrees/

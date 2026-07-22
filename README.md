@@ -152,7 +152,7 @@ tidevice list
 
 ### 触发执行
 
-在 Claude Code 项目目录中，输入 `/gaotu` 触发 skill，再输入用例指令：
+手工调试时，可在 Claude Code 项目目录中输入 `/gaotu` 触发 skill，再输入用例指令：
 
 **方式 A：搬山 caseId**
 
@@ -175,7 +175,15 @@ tidevice list
 执行飞书表格用例：https://xxx.feishu.cn/wiki/xxxxx?table=tblxxxxxxxx
 ```
 
-Bitable 表格中每条用例含 `Android设备` / `ios设备` 字段，自动按设备拆分执行条目，多台设备并行跑，最终生成 Android 和 iOS 两份独立报告。
+> `/gaotu` 主要用于手工调试/探索。当前自动执行主链路是：webhook → `scripts/orchestrate.py` → `codex`/`claude` subagent。自动编排不依赖手工输入 slash skill。
+
+Bitable 表格中每条用例当前依赖以下字段参与自动编排：
+- `编号`：执行顺序主键；拉回后按 `编号` 稳定排序
+- `所属页面`：执行展示/报告中的页面归属
+- `状态组`：设备内切批主键之一
+- `android执行设备` / `ios执行设备`：按设备拆分执行条目
+
+多台设备并行跑，最终生成 Android 和 iOS 两份独立报告。
 
 ### 执行流程概览
 
@@ -208,14 +216,34 @@ Bitable 表格中每条用例含 `Android设备` / `ios设备` 字段，自动�
 ```
 第零步  解析 Bitable → 生成 EXECUTION_ENTRIES（按设备拆分）
   ↓
-按 device 字段分组 → 每台设备派发一个 subagent（同时启动）
+按 `编号` 全局排序 → 按 device 字段分组
   ↓
-各 subagent 独立完成第一~第八步 → 写 /tmp/result_<udid>.json（纯 JSON 数组格式）
+每台设备内按 `(状态组, 账号)` 切批
+  说明：`状态组=启动弹窗` 为特例，每条用例单独一批、逐条重装恢复首启态
+  ↓
+每台设备派发一个 subagent（同时启动）
+  ↓
+各 subagent 独立完成第一~第八步 → 每跑完一条即增量 append 到 /tmp/result_<udid>.jsonl（JSONL，抗中途崩溃）
   ↓
 主 agent 轮询等待所有 subagent 完成
   ↓
 按平台合并 → batch_create 到 iOS/Android 独立结果表 → Android 报告 + iOS 报告（wiki_report.py × 2）
 ```
+
+### 执行器配置（webhook / orchestrate）
+
+并行执行时，单设备 subagent 的 CLI runner 由环境变量 `ORCH_AGENT_CLI` 控制：
+
+- `codex`：默认值；不依赖 Claude 的 `--add-dir`，由 orchestrator 在 prompt 中注入共享执行上下文；同时会显式关闭 `feishu` / `feishu-docx-blocks` / `Banshan` 等无关 MCP，仅保留执行必需的 `appium-mcp`
+- `claude`：保留现有 `.claude/skills/<app>` + `common/` 注入方式
+
+单设备执行日志统一写到 `/tmp/agent_<udid>.log`，供 orchestrator 崩溃 tail 与排障复用。
+
+当前设备内真实分批规则：
+- 先按 `编号` 稳定排序
+- 再按 `(状态组, 账号)` 切批
+- 同一 `(状态组, 账号)` 桶内继续按 `BATCH_SIZE=20` 限制拆分
+- `状态组=启动弹窗` 不承接现场，强制每条单独一批
 
 ### 常用参数默认值（高途 App）
 
@@ -352,7 +380,7 @@ sips -r 90 /path/to/screenshot.png
 
 **Q: 并行执行时，主 agent 如何知道所有设备跑完了？**
 
-每个设备 subagent 执行完后写入 `/tmp/result_<udid>.json`（格式必须为纯 JSON 数组 `[{...}]`），主 agent 轮询这些文件是否全部存在，全部出现后才合并报告并写入结果表。详见 `common/parallel.md`。
+每个设备 subagent 每跑完一条用例即增量 append 到 `/tmp/result_<udid>.jsonl`（JSONL，一行一条）。文件从首条起就存在，故判完成不靠"文件是否存在"，而以进程退出为准（见 `orchestrate.py:collect_results`）：进程退出后读回已落盘的行——即使中途 429/崩溃，已跑完的用例也照常合并进报告与结果表。详见 `common/parallel.md`。
 
 ---
 

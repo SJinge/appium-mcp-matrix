@@ -92,3 +92,16 @@ def test_seed_from_diff_keeps_valid_drops_removed(tmp_path, monkeypatch):
     new = lc.load_cache("gaotu", "5.91.80")
     assert "保留步骤" in new
     assert "丢弃步骤" not in new
+
+
+def test_truth_ids_falls_back_to_stable_truth_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(lc, "PROJECT_ROOT", str(tmp_path))
+    d = tmp_path / "apps" / "gaotu"
+    d.mkdir(parents=True)
+    (d / "elements.truth.json").write_text(json.dumps({
+        "entries": [
+            {"id": "keep_btn", "deprecated": False},
+            {"id": "old_btn", "deprecated": True},
+        ]
+    }))
+    assert lc._truth_ids("gaotu", "5.91.90") == {"keep_btn"}

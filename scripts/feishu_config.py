@@ -2,13 +2,19 @@ APP_ID        = "cli_a85cf7f3137a500b"
 APP_SECRET    = "udumglgyKwVmDjWKf0E25fuLKpCsYw2y"
 SPACE_ID      = "7531056966526681116"
 PARENT_NODE   = "UflIw2u4aiKfSVkxEOAcc5Mnn6e"
-GROUP_CHAT_ID = "oc_aad4f334d463251e56c2f5495f60027e"
+
+#APP自动化实践
+# GROUP_CHAT_ID = "oc_aad4f334d463251e56c2f5495f60027e"
+
+#app自动化测试
+GROUP_CHAT_ID = "oc_d8a40a448156bdad897b2d05edb329c6"
+
 
 BITABLE_CONFIGS = {
     "gaotu": {
         "app_token": "RLDEbjYG7aiKwBsu9gOcadmlnvc",
-        "table_id":  "tblvXqsSu7xShRJH",
-        "view_id":   "vewJViMvTW",  # 执行用指定视图，按 ID 升序；search 必须带此 view_id 才与用户视图顺序一致
+        "table_id":  "tblHr6v8cui3OJ8X",
+        "view_id":   "vewBM2LQDF",  
     },
     "tutu": {
         "app_token": "",

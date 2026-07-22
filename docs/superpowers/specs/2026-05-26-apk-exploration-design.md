@@ -29,8 +29,8 @@ APK/IPA 路径 → 安装 → 探索生成 App 地图 → 用户描述测试目�
 3. 提取版本号：
    - Android：`adb shell dumpsys package {pkg} | grep versionName`
    - iOS：`tidevice -u {udid} applist | grep {bundleId}`
-4. 确定 catalog 目录：`apps/{app_id}/{version}/`
-5. 若 `index.md` 已存在 → 跳过阶段 2，直接进入阶段 3
+4. 确定 catalog 目录：`apps/{app_id}/`
+5. 每次新版本都更新同一份 `index.md` / `pages/*.md`，不再按版本分目录跳过
 
 ---
 
@@ -46,7 +46,7 @@ APK/IPA 路径 → 安装 → 探索生成 App 地图 → 用户描述测试目�
 
 #### 单页探索步骤
 
-1. `appium_screenshot` → 保存 `apps/{app_id}/{version}/pages/screenshots/{page}.png`
+1. `appium_screenshot` → 保存 `apps/{app_id}/pages/screenshots/{page}.png`
 2. `appium_get_page_source` → 提取可交互元素
 3. AI 归纳：页面名称、主要元素（含 xpath/accessibility_id）、可跳转入口
 4. 写入 `pages/{page}.md`
@@ -64,7 +64,7 @@ APK/IPA 路径 → 安装 → 探索生成 App 地图 → 用户描述测试目�
 
 #### 文件格式
 
-**`apps/{app_id}/{version}/index.md`**（常驻上下文，轻量）：
+**`apps/{app_id}/index.md`**（常驻上下文，轻量）：
 
 ```markdown
 | 页面名称    | 导航路径              | 文件                     | 深度 |
@@ -73,7 +73,7 @@ APK/IPA 路径 → 安装 → 探索生成 App 地图 → 用户描述测试目�
 | 课程详情页  | 首页 → 点击课程卡片     | pages/course_detail.md | 1    |
 ```
 
-**`apps/{app_id}/{version}/pages/{page}.md`**（按需加载）：
+**`apps/{app_id}/pages/{page}.md`**（按需加载）：
 
 ```markdown
 # 课程详情页

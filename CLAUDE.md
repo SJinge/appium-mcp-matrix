@@ -54,6 +54,12 @@ deploy/launchd/      # webhook 守护（launchd plist + 部署说明）
 
 链路：轻舟打包系统 webhook → [server/app.py](server/app.py) 解析（template/卡片/文本三种入口）→ 执行白名单（`ENABLED_APPS`，默认仅 gaotu）+ 幂等标记 → 后台拉起 [scripts/orchestrate.py](scripts/orchestrate.py) 单端执行（下载→安装→探索建图→读 Bitable 用例→按设备并行→写结果表+Wiki 报告+群通知）。
 
+当前 Bitable 自动执行真实规则：
+- 记录取回后先按 `编号` 稳定排序
+- 路径 C 主要使用字段：`编号` / `所属页面` / `状态组` / `android执行设备` / `ios执行设备`
+- 每台设备内按 `(状态组, 账号)` 切批；同桶内再受 `BATCH_SIZE=20` 限制
+- `状态组=启动弹窗` 为特例：每条用例单独一批、逐条重装恢复首启态，不承接上一条现场
+
 ### 启动（launchd 守护，勿再手动 flask run）
 
 server 由 launchd 托管：开机自启、崩溃自动拉起。安装/重启/卸载见 [deploy/launchd/README.md](deploy/launchd/README.md)。
@@ -63,12 +69,12 @@ ln -sf $PWD/deploy/launchd/com.gaotu.appium-matrix.webhook.plist ~/Library/Launc
 launchctl load -w ~/Library/LaunchAgents/com.gaotu.appium-matrix.webhook.plist
 ```
 
-固定约定：端口 **5001**、`PYTHONUNBUFFERED=1`、`ENABLED_APPS=gaotu`、`/usr/bin/python3`（已装 flask+yaml）。
+固定约定：端口 **10086**、`PYTHONUNBUFFERED=1`、`ENABLED_APPS=gaotu`、`/usr/bin/python3`（已装 flask+yaml）。
 
 ### 观测
 
-- 存活：`curl localhost:5001/health` → status/enabled_apps/active_runs
-- 进度：`curl localhost:5001/status`（可加 `?run_id=gaotu_<版本>_android`）→ 阶段 + 每设备通过/失败
+- 存活：`curl localhost:10086/health` → status/enabled_apps/active_runs
+- 进度：`curl localhost:10086/status`（可加 `?run_id=gaotu_<版本>_android`）→ 阶段 + 每设备通过/失败
 - 日志：`logs/webhook.log`（监听）、`logs/orchestrate.log`（执行），按 `run_id` 串联；run 历史在 `runs/history.jsonl`
 - 单设备执行进程崩溃/超时会**即时**飞书报警，不必等全部结束
 

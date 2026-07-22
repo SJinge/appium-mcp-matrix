@@ -61,12 +61,27 @@ def _cache_path(app_id: str, version: str) -> str:
     return os.path.join(PROJECT_ROOT, "apps", app_id, version, "locator_cache.json")
 
 
+def _truth_path(app_id: str, version: str) -> str:
+    versioned = os.path.join(PROJECT_ROOT, "apps", app_id, version, "elements.truth.json")
+    stable = os.path.join(PROJECT_ROOT, "apps", app_id, "elements.truth.json")
+    if os.path.exists(versioned):
+        return versioned
+    return stable
+
+
 def _truth_ids(app_id: str, version: str) -> set:
-    p = os.path.join(PROJECT_ROOT, "apps", app_id, version, "elements.truth.json")
+    p = _truth_path(app_id, version)
     if not os.path.exists(p):
         return set()
     with open(p) as f:
-        return set(json.load(f).get("ids", []))
+        payload = json.load(f)
+    active_ids = payload.get("active_ids")
+    if isinstance(active_ids, list) and active_ids:
+        return set(active_ids)
+    entries = payload.get("entries")
+    if isinstance(entries, list) and entries:
+        return {entry["id"] for entry in entries if entry.get("id") and not entry.get("deprecated", False)}
+    return set(payload.get("ids", []))
 
 
 def load_cache(app_id: str, version: str) -> dict:

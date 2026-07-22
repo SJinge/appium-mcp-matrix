@@ -19,7 +19,7 @@ description: |
 | packageName | `com.gaotu100.superclass` | — |
 | bundleId | — | 首次使用请确认 |
 
-> **账号策略**：不使用硬编码默认账号。登录所需手机号/密码/验证码一律**从用例中解析**——优先取用例「测试步骤」文本中明确写出的账号（如 `输入手机号12345679000`、`密码Gaotu@123`、`验证码1000`），其次取预置条件中指定的账号。用例未提供时向用户询问，**不得套用其它账号**。
+> **账号策略**：不使用硬编码默认账号。登录所需手机号/密码/验证码一律**从用例中解析**——优先取预置条件中的账号（如 `账号：12345679000`、`切换账号12211119071`），其次取步骤文本中明确写出的账号/密码/验证码。自动编排链路中，设备内批次会先按 **状态组 + 账号** 切分；`未登录` 视为独立账号态 `<UNLOGIN>`，未声明账号则记为 `<NONE>`。**不得套用其它账号**。
 >
 > 元素定位规范见 [elements.md](elements.md)
 
@@ -44,9 +44,14 @@ description: |
 
 - **路径 A（搬山 caseId）**：`testCaseDetail(caseId)` → 解析节点树，含"预期结果"的节点为 ASSERT，其余为 ACTION
 - **路径 B（自然语言）**：按换行/序号切分，以"预期："/"验证："开头的行为 ASSERT
-- **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件；**同时捕获每条记录的 `ID` 字段值（自增编号）作为 `case_id`，以及 `record_id`（Bitable内部标识符，格式如 `recXXXXXX`）用于执行后回写来源表**；按 `android执行设备` / `ios执行设备` 字段拆分为 `EXECUTION_ENTRIES`（每条记录最多产出 Android + iOS 两条，两字段均空则跳过）；按设备分组后参考 [../../common/parallel.md](../../common/parallel.md) 并行派发
-  > ⚠️ **取记录必须按指定执行视图顺序**：search 传 `data.view_id`（gaotu = `vewJViMvTW`，见 [../../scripts/feishu_config.py](../../scripts/feishu_config.py)），**禁止传自定义 sort**。用户说的「第 N 条」= 该视图返回 `items[N-1]`。完整规则见 [../../common/parsing.md](../../common/parsing.md) 路径 C。
-  > 预置条件中"进入 XX tab / 进入 app 首页"类条目**直接忽略**，不生成 PRECOND 步骤——tab 导航由模块字段统一处理（见下方 TARGET_PAGE 分析）
+- **路径 C（飞书 Bitable）**：从 URL 提取 `app_token + table_id`，读取记录，解析 测试步骤/验证点/预期结果/预置条件；同时捕获以下字段：
+  - `编号`：当前执行顺序主键；本地按 `编号` 做稳定排序
+  - `record_id`：Bitable 内部标识符（格式如 `recXXXXXX`），用于来源表回写
+  - `所属页面`：执行展示/报告中的页面归属；路径 C 下作为当前 `module`
+  - `状态组`：设备内切批主键之一
+  - `android执行设备` / `ios执行设备`：拆分为 `EXECUTION_ENTRIES`（每条记录最多产出 Android + iOS 两条，两字段均空则跳过）
+  > ⚠️ **取记录必须按指定执行视图顺序**：search 传 `data.view_id`（gaotu = `vewJViMvTW`，见 [../../scripts/feishu_config.py](../../scripts/feishu_config.py)），**禁止传自定义 sort**。用户说的「第 N 条」= 该视图返回 `items[N-1]`。拉回后再按 `编号` 稳定排序，避免接口返回顺序波动。
+  > 设备内执行前，按 **`(状态组, 账号)`** 切批；`状态组=启动弹窗` 为特例，**每条用例单独一批**，组内不承接现场。
 
 - **路径 D（Monkey 测试）**：询问以下参数后，按 `common/monkey.md` 执行：
 
@@ -78,7 +83,7 @@ description: |
 **三级判断，优先级从高到低：**
 
 1. **预置条件**中的起始页描述
-2. 路径 C 的**模块字段**
+2. 路径 C 的**所属页面字段**
 3. **步骤关键词**（兜底）
 
 #### 第一级：预置条件起始页 → 直接赋值 TARGET_PAGE（所有路径）
@@ -99,28 +104,28 @@ description: |
 | 搜索页 | 搜索页 |
 | 登录页、未登录 | 无需导航 |
 
-#### 第二级：模块字段 → 直接赋值 TARGET_PAGE（仅路径 C，预置条件未命中时）
+#### 第二级：所属页面字段 → 直接赋值 TARGET_PAGE（仅路径 C，预置条件未命中时）
 
 ```
-MODULE = Bitable 模块字段值
+PAGE = Bitable 所属页面字段值
 
-if MODULE == "上课":
+if PAGE == "上课":
     TARGET_PAGE = 上课 tab（进入第三级关键词细化）
-elif MODULE == "闪学":
+elif PAGE == "AI闪学":
     TARGET_PAGE = AI闪学 tab
-elif MODULE == "首页":
+elif PAGE == "首页":
     TARGET_PAGE = 首页 tab
-elif MODULE == "我的":
+elif PAGE == "我的":
     TARGET_PAGE = 我的页（进入第三级关键词细化）
-elif MODULE == "消息":
+elif PAGE == "消息":
     TARGET_PAGE = 消息 tab
-elif MODULE == "启动登录":
+elif PAGE == "启动登录":
     TARGET_PAGE = 无需导航
 ```
 
 #### 第三级：步骤关键词 → 细化 TARGET_PAGE
 
-适用于：① 路径 A/B（无模块字段，完整跑关键词表）；② 路径 C 中模块为"上课"或"我的"时补充细化。
+适用于：① 路径 A/B（无所属页面字段，完整跑关键词表）；② 路径 C 中所属页面为"上课"或"我的"时补充细化。
 
 | 步骤关键词（任意命中） | TARGET_PAGE | 导航路径 |
 |----------------------|-------------|---------|
@@ -133,11 +138,11 @@ elif MODULE == "启动登录":
 | 首页、发现、订阅、圈子 | 首页 tab | 底部导航 → 首页 |
 | （默认/其他）| 上课 tab | 已就绪 |
 
-收集到：**平台类型、设备 UDID、账号、步骤列表、TARGET_PAGE**，记录在上下文。
+收集到：**平台类型、设备 UDID、账号、步骤列表、TARGET_PAGE、所属页面、状态组**，记录在上下文。
 
 用例数 ≥ 2 时执行预扫描（**仅路径 A/B 顺序执行**）：> 见 [../../common/prescan.md](../../common/prescan.md)
 
-> 路径 C 跳过全局（跨设备）预扫描。改为**每设备在派发批级 subagent 之前**，对该设备全部用例做账号聚类排序 + 按 `BATCH_SIZE` 切批（见 [../../common/prescan.md](../../common/prescan.md)「切批」、[../../common/parallel.md](../../common/parallel.md)「设备内分批」）；批级 subagent 只对本批做预置条件处理。切批前必须全局排序，禁止先切后排。
+> 路径 C 跳过全局（跨设备）预扫描。改为**每设备在派发批级 subagent 之前**，对该设备全部用例先按 `编号` 全局排序，再按 **`(状态组, 账号)`** 切批（见 [../../common/prescan.md](../../common/prescan.md)「切批」、[../../common/parallel.md](../../common/parallel.md)「设备内分批」）；批级 subagent 只对本批做预置条件处理。`状态组=启动弹窗` 为特例：**每条 1 批、逐条重装恢复首启态**。
 
 ---
 
@@ -202,6 +207,9 @@ appium_app_lifecycle action=activate id=<bundleId>
 | 课程卡片提示 | 截图 → AI 视觉 | `'知道了' button at bottom of popup` |
 | 身份问卷第 1 题 | 截图可见「小学/初中/高中」| 点「高中」→「下一步」|
 | 身份问卷后续 | 截图可见「跳过」| 点「跳过」→「确认退出」|
+| 学习阶段选择弹窗 | 截图可见「一年级」「进入首页」 | 点「一年级」→「进入首页」 |
+| 发现新版本弹窗 | 截图可见「发现新版本」「取消」 | 点「取消」 |
+| 观看时长提醒弹窗 | 截图可见「我知道了」 | 点「我知道了」 |
 | 系统权限弹窗（iOS）| 截图可见"允许"/"好" | `appium_alert action=accept` |
 
 ```bash
@@ -276,9 +284,9 @@ else:
     确认 App 在前台（截图或 page_source），不重启
 ```
 
-**每条用例开始前**，先根据该用例的模块/步骤重新计算 TARGET_PAGE，再执行导航。
+**每条用例开始前**，先根据该用例的所属页面/步骤重新计算 TARGET_PAGE，再执行导航。
 
-TARGET_PAGE 计算规则同第零步（路径 C 先用模块字段，路径 A/B 走关键词表）。
+TARGET_PAGE 计算规则同第零步（路径 C 先用所属页面字段，路径 A/B 走关键词表）。
 
 **导航前先检查当前页面**：`get_page_source` 判断当前页面特征，若已在 TARGET_PAGE 对应页面则跳过导航，直接进入步骤执行。
 
@@ -357,7 +365,7 @@ CASE_END_TS = $(date +%s)
 
 CASES_JSON.append({
     "name": "<用例名称>",
-    "module": "<模块名>",              # 路径C：从 Bitable 模块字段读取；路径A/B：从 TARGET_PAGE 推断（见映射表）
+    "module": "<所属页面/模块名>",      # 路径C：从 Bitable 所属页面字段读取；路径A/B：从 TARGET_PAGE 推断（见映射表）
     "case_id": <原表ID字段值>,         # 路径C：Bitable 记录的 ID 自增编号；路径A/B：留空或填0
     "source_record_id": "<record_id>", # 路径C：Bitable 内部标识符（recXXXXXX），用于回写来源表；路径A/B：留空
     "passed": CASE_PASSED,
@@ -513,7 +521,7 @@ if batch_ids:
 ② 再 batch_create 本批。回写字段（已确认正确名称）：
 - `用例ID`（Number，原表 ID 自增编号，唯一标识）
 - `用例名称`（Text）
-- `模块`（SingleSelect）
+- `模块`（SingleSelect，写当前 `所属页面` / 推断模块值）
 - `执行设备`（Text，写当前执行平台的 UDID，**不写另一平台的设备字段**）
 - `执行结果`（SingleSelect：`通过` / `失败`）
 - `执行详情`（Text）
@@ -623,7 +631,7 @@ python3 "$SCRIPTS_DIR/wiki_report.py" \
 
 | 来源 | 取值方式 |
 |------|---------|
-| 路径 C（Bitable） | 直接读取 `模块` 字段值 |
+| 路径 C（Bitable） | 直接读取 `所属页面` 字段值 |
 | 路径 A（搬山） | 按 TARGET_PAGE 推断（见下表） |
 | 路径 B（自然语言） | 按 TARGET_PAGE 推断（见下表） |
 
@@ -652,4 +660,4 @@ Wiki 输出：按模块分组，每组 H2 标题 + 各用例 H3 标题 + 步骤�
 - 定位失败按三级降级策略（见 [elements.md](elements.md)），不要直接报错中断
 - **截图必须加 `maxWidth: 800`**：Android/iOS 高分辨率设备截图超 2000px 会触发 Claude 多图限制报错，所有 `appium_screenshot` 调用均须传入 `maxWidth: 800`
 - **单次对话截图不超过 10 张**：超出后新开对话，将 UDID、包名、当前执行步骤带入继续
-- **上下文控制**：单条用例工具调用累计超过 50 次时，优先切换到 xpath/id 定位（见 elements.md），减少 AI 视觉重试；**单设备用例数多时按 `BATCH_SIZE=20` 分批，每批一个独立 subagent**（见 [../../common/parallel.md](../../common/parallel.md)「设备内分批」+ [../../common/prescan.md](../../common/prescan.md)「切批」）——批末回写结果表 + append 落盘后退出释放上下文，下一批带 `CURRENT_ACCOUNT` 新起、复用常驻 session 不重登
+- **上下文控制**：单条用例工具调用累计超过 50 次时，优先切换到 xpath/id 定位（见 elements.md），减少 AI 视觉重试；**单设备用例数多时按 `BATCH_SIZE=20` 分批，每批一个独立 subagent**（见 [../../common/parallel.md](../../common/parallel.md)「设备内分批」+ [../../common/prescan.md](../../common/prescan.md)「切批」），但真实切批先按 **`(状态组, 账号)`** 分桶，再在桶内受 `BATCH_SIZE` 限制。`启动弹窗` 桶内不承接、每条独立批次。批末回写结果表 + append 落盘后退出释放上下文，下一批带 `CURRENT_ACCOUNT` 新起、复用常驻 session 不重登

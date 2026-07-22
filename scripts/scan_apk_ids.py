@@ -2,12 +2,12 @@
 """静态扫描 APK，抽取 resource-id 全集，生成元素真相源。
 
 SDD `/case-scan` 的 Android 等价物：不跑 app，直接从 APK 静态抽 resource-id，
-秒级、确定、可 diff。与运行时探索地图（apps/{app_id}/{version}/index.md）互补：
+秒级、确定、可 diff。与运行时探索地图（apps/{app_id}/index.md）互补：
 本脚本产出「元素 ID 全集」，探索地图产出「页面归属 + 导航路径」。
 
 流程：adb pull base.apk → aapt2 dump resources → 解析 id/ 类型
-     → apps/{app_id}/{version}/elements.truth.json
-     → 与上一版本 diff，输出新增/删除清单。
+     → apps/{app_id}/elements.truth.json
+     → 更新 elements.diff.json，输出新增/废弃清单。
 
 用法：
     python3 scripts/scan_apk_ids.py --app-id gaotu --udid cd5c614a
@@ -84,6 +84,67 @@ def diff_ids(old_ids: list, new_ids: list) -> dict:
     return {
         "added":   sorted(new - old),
         "removed": sorted(old - new),
+    }
+
+
+def merge_truth_entries(previous_entries: list, current_ids: list) -> list:
+    """合并旧真相源与本次扫描结果。"""
+    current = set(current_ids)
+    prev_map = {}
+    for entry in previous_entries or []:
+        rid = entry.get("id")
+        if rid:
+            prev_map[rid] = {"id": rid, "deprecated": bool(entry.get("deprecated", False))}
+    merged_ids = sorted(set(prev_map) | current)
+    return [{"id": rid, "deprecated": rid not in current} for rid in merged_ids]
+
+
+def load_existing_truth(truth_path: str) -> dict:
+    if not os.path.exists(truth_path):
+        return {}
+    with open(truth_path) as f:
+        return json.load(f)
+
+
+def truth_entries_from_payload(payload: dict) -> list:
+    entries = payload.get("entries")
+    if isinstance(entries, list) and entries:
+        normalized = []
+        for entry in entries:
+            rid = entry.get("id")
+            if rid:
+                normalized.append({"id": rid, "deprecated": bool(entry.get("deprecated", False))})
+        if normalized:
+            return sorted(normalized, key=lambda item: item["id"])
+    ids = payload.get("ids", [])
+    return [{"id": rid, "deprecated": False} for rid in sorted(set(ids))]
+
+
+def build_truth_payload(app_id: str, pkg: str, version: str, ids: list,
+                        previous: dict = None) -> dict:
+    ids = sorted(set(ids))
+    previous = previous or {}
+    entries = merge_truth_entries(truth_entries_from_payload(previous), ids)
+    active_ids = [entry["id"] for entry in entries if not entry["deprecated"]]
+    deprecated_ids = [entry["id"] for entry in entries if entry["deprecated"]]
+    noise = [i for i in active_ids if is_noise(i)]
+    business = len(active_ids) - len(noise)
+    return {
+        "app_id": app_id,
+        "package": pkg,
+        "version": version,
+        "platform": "android",
+        "source": "aapt2 dump resources",
+        "selector_template": f"{pkg}:id/{{id}}",
+        "total": len(entries),
+        "active_count": len(active_ids),
+        "deprecated_count": len(deprecated_ids),
+        "business_count": business,
+        "noise_count": len(noise),
+        "ids": active_ids,
+        "active_ids": active_ids,
+        "deprecated_ids": deprecated_ids,
+        "entries": entries,
     }
 
 
@@ -173,49 +234,34 @@ def scan(app_id: str, udid: str = None, apk: str = None, version: str = None) ->
 
     print("[3/4] 解析 id 类型资源")
     ids = parse_ids_from_dump(dump)
-    noise = [i for i in ids if is_noise(i)]
-    business = len(ids) - len(noise)
-
-    out_dir = os.path.join(PROJECT_ROOT, "apps", app_id, version)
+    out_dir = os.path.join(PROJECT_ROOT, "apps", app_id)
     os.makedirs(out_dir, exist_ok=True)
-    truth = {
-        "app_id": app_id,
-        "package": pkg,
-        "version": version,
-        "platform": "android",
-        "source": "aapt2 dump resources",
-        "selector_template": f"{pkg}:id/{{id}}",
-        "total": len(ids),
-        "business_count": business,
-        "noise_count": len(noise),
-        "ids": ids,
-    }
     truth_path = os.path.join(out_dir, "elements.truth.json")
+    previous = load_existing_truth(truth_path)
+    truth = build_truth_payload(app_id, pkg, version, ids, previous=previous)
     with open(truth_path, "w") as f:
         json.dump(truth, f, ensure_ascii=False, indent=2)
 
-    # 与上一版本 diff
-    versions = [d for d in os.listdir(os.path.join(PROJECT_ROOT, "apps", app_id))
-                if os.path.isdir(os.path.join(PROJECT_ROOT, "apps", app_id, d))]
-    prev = pick_previous_version(versions, version)
-    diff = None
-    if prev:
-        prev_path = os.path.join(PROJECT_ROOT, "apps", app_id, prev, "elements.truth.json")
-        if os.path.exists(prev_path):
-            with open(prev_path) as f:
-                prev_ids = json.load(f).get("ids", [])
-            d = diff_ids(prev_ids, ids)
-            diff = {"from": prev, "to": version, **d,
-                    "added_count": len(d["added"]), "removed_count": len(d["removed"])}
-            with open(os.path.join(out_dir, "elements.diff.json"), "w") as f:
-                json.dump(diff, f, ensure_ascii=False, indent=2)
+    prev_ids = previous.get("active_ids") or previous.get("ids", [])
+    d = diff_ids(prev_ids, truth["active_ids"])
+    diff = {
+        "from_version": previous.get("version", ""),
+        "to_version": version,
+        "added": d["added"],
+        "deprecated": d["removed"],
+        "added_count": len(d["added"]),
+        "deprecated_count": len(d["removed"]),
+    }
+    with open(os.path.join(out_dir, "elements.diff.json"), "w") as f:
+        json.dump(diff, f, ensure_ascii=False, indent=2)
 
     print(f"[4/4] 写出 {os.path.relpath(truth_path, PROJECT_ROOT)}")
-    print(f"      总计 {len(ids)} 个 resource-id（业务 ~{business} / 噪声 {len(noise)}）")
-    if diff:
-        print(f"      vs {prev}：新增 {diff['added_count']} / 删除 {diff['removed_count']}")
-    elif prev is None:
-        print("      无历史版本可对比（首次扫描）")
+    print(f"      当前有效 {truth['active_count']} / 累积总计 {truth['total']} 个 resource-id")
+    print(f"      业务 ~{truth['business_count']} / 噪声 {truth['noise_count']} / 废弃 {truth['deprecated_count']}")
+    if previous:
+        print(f"      vs {previous.get('version', 'unknown')}：新增 {diff['added_count']} / 废弃 {diff['deprecated_count']}")
+    else:
+        print("      无历史真相源，已创建首份稳定文件")
     return {"truth": truth, "diff": diff}
 
 

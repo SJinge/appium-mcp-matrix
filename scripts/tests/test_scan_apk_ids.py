@@ -52,3 +52,38 @@ def test_diff_ids():
 
 def test_diff_ids_no_change():
     assert s.diff_ids(["a", "b"], ["b", "a"]) == {"added": [], "removed": []}
+
+
+def test_merge_truth_entries_marks_missing_ids_deprecated():
+    previous = [
+        {"id": "a", "deprecated": False},
+        {"id": "b", "deprecated": False},
+    ]
+    merged = s.merge_truth_entries(previous, ["b", "c"])
+    assert merged == [
+        {"id": "a", "deprecated": True},
+        {"id": "b", "deprecated": False},
+        {"id": "c", "deprecated": False},
+    ]
+
+
+def test_merge_truth_entries_revives_previously_deprecated_ids():
+    previous = [
+        {"id": "a", "deprecated": True},
+        {"id": "b", "deprecated": False},
+    ]
+    merged = s.merge_truth_entries(previous, ["a", "b"])
+    assert merged == [
+        {"id": "a", "deprecated": False},
+        {"id": "b", "deprecated": False},
+    ]
+
+
+def test_build_truth_payload_keeps_ids_for_backward_compatibility():
+    payload = s.build_truth_payload("gaotu", "com.gaotu100.superclass", "5.91.90", ["b", "a"])
+    assert payload["ids"] == ["a", "b"]
+    assert payload["entries"] == [
+        {"id": "a", "deprecated": False},
+        {"id": "b", "deprecated": False},
+    ]
+    assert payload["active_ids"] == ["a", "b"]

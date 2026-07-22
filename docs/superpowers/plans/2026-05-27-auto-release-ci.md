@@ -794,17 +794,14 @@ git commit -m "feat: Bitable fetch, record parsing, device grouping"
 # 追加到 scripts/orchestrate.py
 
 def run_exploration(app_id: str, version: str, android_udid: str):
-    index_path = os.path.join(PROJECT_ROOT, "apps", app_id, version, "index.md")
-    if os.path.exists(index_path):
-        print(f"[INFO] 已有地图 {index_path}，跳过探索")
-        return
-
-    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+    app_dir = os.path.join(PROJECT_ROOT, "apps", app_id)
+    index_path = os.path.join(app_dir, "index.md")
+    os.makedirs(app_dir, exist_ok=True)
     prompt = (
         f"探索 {app_id} App，版本 {version}，设备 {android_udid}（Android）。"
         f"广度优先遍历各 Tab 和子页面（最大深度2），"
         f"为每个页面截图并分析 UI 树，"
-        f"生成 apps/{app_id}/{version}/index.md 和 pages/*.md。"
+        f"生成 apps/{app_id}/index.md 和 pages/*.md。"
         f"见 common/device.md 了解设备就绪检查规范。"
     )
     skill_dir = os.path.join(PROJECT_ROOT, ".claude", "skills", app_id)

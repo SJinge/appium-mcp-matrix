@@ -6,10 +6,12 @@
   <key>Label</key>
   <string>com.gaotu.appium-matrix.webhook</string>
 
-  <!-- /usr/bin/python3 已装 flask + yaml；如换解释器改这里 -->
+  <!-- 固定到 CommandLineTools python3(已装 flask + yaml)：不受 xcode-select 影响。
+       勿用 /usr/bin/python3：xcode-select 指向 Xcode.app 时会转发到 Xcode python，
+       该解释器经 launchd 启动无 TCC 权限读 ~/Documents，报 Operation not permitted。 -->
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/python3</string>
+    <string>/Library/Developer/CommandLineTools/usr/bin/python3</string>
     <string>/Users/mac/Documents/projects/appium-mcp-matrix/server/app.py</string>
   </array>
 
@@ -19,8 +21,10 @@
     <string>1</string>
     <key>ENABLED_APPS</key>
     <string>gaotu</string>
+    <key>ORCH_AGENT_CLI</key>
+    <string>codex</string>
     <key>PORT</key>
-    <string>5001</string>
+    <string>10086</string>
   </dict>
 
   <key>WorkingDirectory</key>

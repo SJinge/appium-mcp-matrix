@@ -144,11 +144,20 @@ def local_trigger(app_id: str, version: str, platform: str, url: str) -> bool:
     """本机后台启动 orchestrate（单端）。orchestrate 自身负责写/删 pid 文件。"""
     log_path = f"/tmp/orchestrate_{app_id}_{version}_{platform}.log"
     url_flag = "--apk-url" if platform == "android" else "--ipa-url"
-    cmd = ["python3", ORCHESTRATE_PATH,
+    # 用 sys.executable 继承 webhook 自身解释器(plist 固定的 CLT python)。
+    # 勿用字面 "python3"：子进程会重新过 PATH → /usr/bin/python3(shim)→
+    # xcode-select 指向 Xcode 时被劫持成 Xcode python(PATH 贫瘠、TCC 另算)。
+    cmd = [sys.executable, ORCHESTRATE_PATH,
            "--app", app_id, "--version", version,
            "--platform", platform, url_flag, url]
+    # launchd 的 PATH 极简,缺 /opt/homebrew/bin(adb/claude/node/appium 均在此)
+    # 与 platform-tools;补全后再交给子进程,否则安装/执行阶段外部命令 not found。
+    env = os.environ.copy()
+    extra = ["/opt/homebrew/bin", "/usr/local/bin",
+             os.path.expanduser("~/Library/Android/sdk/platform-tools")]
+    env["PATH"] = ":".join(extra) + ":" + env.get("PATH", "")
     with open(log_path, "w") as f:
-        subprocess.Popen(cmd, stdout=f, stderr=f, start_new_session=True)
+        subprocess.Popen(cmd, stdout=f, stderr=f, start_new_session=True, env=env)
     return True
 
 
@@ -249,7 +258,7 @@ def webhook():
 
 
 if __name__ == "__main__":
-    # launchd / 手动启动统一入口（端口 5001，见 deploy/launchd/）
-    port = int(os.environ.get("PORT", "5001"))
+    # launchd / 手动启动统一入口（端口 10086,见 deploy/launchd/）
+    port = int(os.environ.get("PORT", "10086"))
     log.info(f"webhook server starting on :{port} (enabled_apps={sorted(ENABLED_APPS)})")
     app.run(host="0.0.0.0", port=port)

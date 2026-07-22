@@ -14,9 +14,13 @@ run 结束 append 一行到 runs/history.jsonl，供趋势分析（哪些用例�
 import json
 import os
 import datetime
+import threading
+import uuid
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNS_DIR = os.environ.get("RUN_STATUS_DIR", os.path.join(PROJECT_ROOT, "runs"))
+_LOCKS = {}
+_LOCKS_GUARD = threading.Lock()
 
 
 def _now() -> str:
@@ -25,6 +29,15 @@ def _now() -> str:
 
 def _path(run_id: str) -> str:
     return os.path.join(RUNS_DIR, f"{run_id}.json")
+
+
+def _run_lock(run_id: str) -> threading.RLock:
+    with _LOCKS_GUARD:
+        lock = _LOCKS.get(run_id)
+        if lock is None:
+            lock = threading.RLock()
+            _LOCKS[run_id] = lock
+        return lock
 
 
 def _read(run_id: str) -> dict:
@@ -38,59 +51,72 @@ def _read(run_id: str) -> dict:
 def _write(run_id: str, data: dict):
     os.makedirs(RUNS_DIR, exist_ok=True)
     data["updated_at"] = _now()
-    tmp = _path(run_id) + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, _path(run_id))  # 原子替换，避免读到半截
+    target = _path(run_id)
+
+    def _write_once():
+        tmp = target + f".{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, target)  # 原子替换，避免读到半截
+
+    try:
+        _write_once()
+    except FileNotFoundError:
+        # 现场出现过 tmp 刚写完就在 replace 前消失；补一次重试，避免状态写失败打断主流程。
+        _write_once()
 
 
 def init_run(run_id: str, app_id: str, version: str, platform: str, devices=None) -> dict:
-    data = {
-        "run_id":     run_id,
-        "app_id":     app_id,
-        "version":    version,
-        "platform":   platform,
-        "phase":      "starting",
-        "current":    "已触发，准备下载",
-        "started_at": _now(),
-        "devices":    {},
-    }
-    for udid in (devices or []):
-        data["devices"][udid] = {"state": "pending", "done": 0, "total": 0, "pass": 0, "fail": 0}
-    _write(run_id, data)
-    return data
+    with _run_lock(run_id):
+        data = {
+            "run_id":     run_id,
+            "app_id":     app_id,
+            "version":    version,
+            "platform":   platform,
+            "phase":      "starting",
+            "current":    "已触发，准备下载",
+            "started_at": _now(),
+            "devices":    {},
+        }
+        for udid in (devices or []):
+            data["devices"][udid] = {"state": "pending", "done": 0, "total": 0, "pass": 0, "fail": 0}
+        _write(run_id, data)
+        return data
 
 
 def set_phase(run_id: str, phase: str, note: str = ""):
-    data = _read(run_id)
-    if not data:
-        return
-    data["phase"] = phase
-    if note:
-        data["current"] = note
-    _write(run_id, data)
+    with _run_lock(run_id):
+        data = _read(run_id)
+        if not data:
+            return
+        data["phase"] = phase
+        if note:
+            data["current"] = note
+        _write(run_id, data)
 
 
 def update_device(run_id: str, udid: str, **fields):
-    data = _read(run_id)
-    if not data:
-        return
-    dev = data.setdefault("devices", {}).setdefault(udid, {})
-    dev.update(fields)
-    _write(run_id, data)
+    with _run_lock(run_id):
+        data = _read(run_id)
+        if not data:
+            return
+        dev = data.setdefault("devices", {}).setdefault(udid, {})
+        dev.update(fields)
+        _write(run_id, data)
 
 
 def finish(run_id: str, phase: str = "done", note: str = "", **summary):
-    data = _read(run_id)
-    if not data:
-        data = {"run_id": run_id}
-    data["phase"] = phase
-    if note:
-        data["current"] = note
-    if summary:
-        data.setdefault("summary", {}).update(summary)
-    data["finished_at"] = _now()
-    _write(run_id, data)
+    with _run_lock(run_id):
+        data = _read(run_id)
+        if not data:
+            data = {"run_id": run_id}
+        data["phase"] = phase
+        if note:
+            data["current"] = note
+        if summary:
+            data.setdefault("summary", {}).update(summary)
+        data["finished_at"] = _now()
+        _write(run_id, data)
     # 追加历史（趋势分析用），失败不影响主流程
     try:
         os.makedirs(RUNS_DIR, exist_ok=True)

@@ -27,7 +27,7 @@ scripts/orchestrate.py（Mac主控）
         │
         ├─ 2. 探索（仅新版本触发）
         │     检查 index.md 是否存在
-        │     不存在 → 用1台Android做探索 → 生成 index.md + pages/*.md
+        │     用1台Android做探索 → 更新 index.md + pages/*.md
         │     已存在 → 跳过
         │
         ├─ 3. 读Bitable
@@ -98,9 +98,8 @@ def main():
 
     download_and_install(apk_url, ipa_url, ...)      # 安装（失败→通知退出）
 
-    if not exists(f"apps/{app}/{version}/index.md"): # 探索（新版本）
-        run_exploration(app, version, android_devices[0])
-        # 失败→跳过（不阻断执行）
+    run_exploration(app, version, android_devices[0]) # 探索（每个新版本更新同一份地图）
+    # 失败→跳过（不阻断执行）
 
     entries = fetch_bitable_cases(app)               # 读Bitable（重试3次）
     groups  = group_by_device(entries)               # 按设备分组
@@ -143,7 +142,7 @@ proc = subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
 
 - 仅新版本首次触发，用 1 台 Android 设备执行
 - 广度优先遍历，最大深度 2
-- 生成 `apps/{app}/{version}/index.md` + `pages/*.md`
+- 生成/更新 `apps/{app}/index.md` + `pages/*.md`
 - 探索失败不阻断：退化为 gaotu skill 纯视觉定位（`ai_instruction`）
 
 ---

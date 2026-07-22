@@ -9,9 +9,9 @@
 ## Prompt 正文
 
 ```
-将搬山用例 caseId=23375 同步到飞书多维表格。
+将搬山用例 caseId=23515 同步到飞书多维表格。
 
-目标表格：https://gaotuedu.feishu.cn/base/TAWMbIPtXaZgdjsbi8AcBr1mnNc?table=tblOS1e5pWoC7QC1&view=vew8U8Ocwy
+目标表格：https://gaotuedu.feishu.cn/base/FqOdbfKtAaOwIys9zZXcrH6EnFf?table=tblZ0fn48cchDE6Y&view=vew8U8Ocwy
 
 固定字段（所有用例相同）：
 - 小组: 社区

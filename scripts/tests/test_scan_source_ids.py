@@ -64,3 +64,28 @@ def test_join_with_apk_counts_coverage():
     assert res["stats"]["page_linked"] == 1
     entry = next(e for e in res["enriched"] if e["id"] == "account_sign_btn")
     assert entry["selector"] == "com.gaotu100.superclass:id/account_sign_btn"
+
+
+def test_truth_ids_from_payload_prefers_active_ids():
+    payload = {
+        "ids": ["legacy_a", "legacy_b"],
+        "active_ids": ["active_a"],
+        "entries": [
+            {"id": "active_a", "deprecated": False},
+            {"id": "deprecated_a", "deprecated": True},
+        ],
+    }
+    assert s.truth_ids_from_payload(payload) == ["active_a"]
+
+
+def test_truth_entry_map_includes_deprecated_state():
+    payload = {
+        "entries": [
+            {"id": "active_a", "deprecated": False},
+            {"id": "deprecated_a", "deprecated": True},
+        ]
+    }
+    assert s.truth_entry_map(payload) == {
+        "active_a": {"id": "active_a", "deprecated": False},
+        "deprecated_a": {"id": "deprecated_a", "deprecated": True},
+    }

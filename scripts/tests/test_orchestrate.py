@@ -1,7 +1,12 @@
-import pytest, sys, os
+import pytest, sys, os, json as _json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from unittest.mock import patch
 import orchestrate
+
+
+def _write_jsonl(path, cases):
+    """把 cases 以 JSONL(一行一条)写入 path，模拟 subagent 的增量落盘。"""
+    path.write_text("".join(_json.dumps(c, ensure_ascii=False) + "\n" for c in cases))
 
 def test_load_devices_returns_android_and_ios(tmp_path):
     cfg = tmp_path / "devices.yaml"
@@ -31,17 +36,65 @@ def test_extract_version_android(mock_run):
 def test_install_android_calls_adb(mock_run):
     mock_run.return_value.returncode = 0
     orchestrate.install_android("/tmp/app.apk", "a1")
-    mock_run.assert_called()
-    args = mock_run.call_args[0][0]
-    assert "adb" in args[0]
-    assert "a1" in args
+    assert mock_run.call_count == 2
+    uninstall_args = mock_run.call_args_list[0][0][0]
+    install_args = mock_run.call_args_list[1][0][0]
+    assert uninstall_args == ["adb", "-s", "a1", "uninstall", "com.gaotu100.superclass"]
+    assert install_args == ["adb", "-s", "a1", "install", "-r", "/tmp/app.apk"]
+
+
+@patch("orchestrate.subprocess.run")
+def test_install_ios_uninstalls_before_install(mock_run):
+    mock_run.return_value.returncode = 0
+    mock_run.return_value.stdout = "Complete"
+    assert orchestrate.install_ios("/tmp/app.ipa", "i1") is True
+    assert mock_run.call_count == 2
+    uninstall_args = mock_run.call_args_list[0][0][0]
+    install_args = mock_run.call_args_list[1][0][0]
+    assert uninstall_args == [sys.executable, "-m", "tidevice", "-u", "i1",
+                              "uninstall", "com.gaotu100.superclass"]
+    assert install_args == [sys.executable, "-m", "tidevice", "-u", "i1",
+                            "install", "/tmp/app.ipa"]
+
+
+@patch("orchestrate.subprocess.run")
+def test_download_file_accepts_nonzero_curl_when_file_is_valid(mock_run, tmp_path):
+    dest = tmp_path / "app.apk"
+    dest.write_bytes(b"x" * 1_200_000)
+    mock_run.return_value.returncode = 56
+    mock_run.return_value.stderr = b"curl: (56) Failure when receiving data from the peer"
+    mock_run.return_value.stdout = b""
+
+    assert orchestrate.download_file("https://example.com/app.apk", str(dest)) is True
+
+
+@patch("orchestrate.subprocess.run")
+def test_download_file_rejects_small_file_even_when_present(mock_run, tmp_path):
+    dest = tmp_path / "app.apk"
+    dest.write_bytes(b"x" * 512)
+    mock_run.return_value.returncode = 0
+    mock_run.return_value.stderr = b""
+    mock_run.return_value.stdout = b""
+
+    assert orchestrate.download_file("https://example.com/app.apk", str(dest)) is False
+
+
+def test_notify_can_be_silenced_by_env(monkeypatch):
+    monkeypatch.setenv("ORCH_NO_NOTIFY", "1")
+    with patch("orchestrate._feishu_post") as post:
+        orchestrate._notify("gaotu", "5.91.80", "hello")
+    post.assert_not_called()
+
 
 def test_parse_bitable_record():
     record = {
         "record_id": "rec001",
         "fields": {
+            "编号": "A-02",
             "用例编号": 1,
             "用例名称": [{"text": "测试登录", "type": "text"}],
+            "所属页面": [{"text": "登录页", "type": "text"}],
+            "状态组": [{"text": "login_flow", "type": "text"}],
             "测试步骤": [{"text": "1. 点击登录按钮\n2. 输入手机号", "type": "text"}],
             "预期结果": [{"text": "进入首页", "type": "text"}],
             "验证点":   [{"text": "显示用户头像", "type": "text"}],
@@ -55,11 +108,62 @@ def test_parse_bitable_record():
     entry = orchestrate.parse_record(record)
     assert entry["record_id"] == "rec001"
     assert entry["name"] == "1 测试登录"
+    assert entry["order"] == "A-02"
+    assert entry["module"] == "登录页"
+    assert entry["page"] == "登录页"
+    assert entry["state_group"] == "login_flow"
     assert any(s["type"] == "PRECOND" for s in entry["steps"])
     assert any(s["type"] == "ACTION"  for s in entry["steps"])
     assert any(s["type"] == "ASSERT"  for s in entry["steps"])
     assert entry["android_device"] == "26KUT24202013751"
     assert entry["ios_device"] == "00008101-001E28D436E0001E"
+
+
+def test_parse_bitable_record_falls_back_to_legacy_module():
+    record = {
+        "record_id": "rec002",
+        "fields": {
+            "编号": "2",
+            "用例名称": [{"text": "旧结构用例", "type": "text"}],
+            "模块": [{"text": "首页", "type": "text"}],
+        }
+    }
+    entry = orchestrate.parse_record(record)
+    assert entry["module"] == "首页"
+    assert entry["page"] == ""
+    assert entry["state_group"] == ""
+
+
+def test_case_order_key_sorts_naturally():
+    values = ["A-10", "A-2", "B-1", "", "A-02"]
+    sorted_values = sorted(values, key=orchestrate._case_order_key)
+    assert sorted_values == ["A-2", "A-02", "A-10", "B-1", ""]
+
+
+def test_fetch_cases_sorts_by_order_stably(monkeypatch):
+    payload = {
+        "data": {
+            "items": [
+                {"record_id": "r3", "fields": {"编号": "A-10", "用例名称": "c3"}},
+                {"record_id": "r1", "fields": {"编号": "A-2", "用例名称": "c1"}},
+                {"record_id": "r2", "fields": {"编号": "A-02", "用例名称": "c2"}},
+            ]
+        }
+    }
+
+    class _Resp:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return _json.dumps(payload, ensure_ascii=False).encode()
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", lambda req: _Resp())
+
+    entries = orchestrate.fetch_cases("gaotu")
+    assert [e["record_id"] for e in entries] == ["r1", "r2", "r3"]
 
 def test_group_by_device():
     entries = [
@@ -76,15 +180,304 @@ def test_group_by_device():
     assert "a2" in groups
     assert "" not in groups  # empty device not grouped
 
+
+def test_group_by_device_keeps_multiple_entries_per_same_device():
+    entries = [
+        {"record_id": "r1", "android_device": "a1", "ios_device": "", "name": "case1", "steps": []},
+        {"record_id": "r2", "android_device": "a1", "ios_device": "", "name": "case2", "steps": []},
+    ]
+
+    groups = orchestrate.group_by_device(entries)
+
+    assert [entry["record_id"] for entry in groups["a1"]["entries"]] == ["r1", "r2"]
+
+
+def test_resolve_agent_runner_defaults_to_codex(monkeypatch):
+    monkeypatch.delenv("ORCH_AGENT_CLI", raising=False)
+    assert orchestrate.resolve_agent_runner() == "codex"
+
+
+def test_resolve_agent_runner_accepts_claude(monkeypatch):
+    monkeypatch.setenv("ORCH_AGENT_CLI", "claude")
+    assert orchestrate.resolve_agent_runner() == "claude"
+
+
+def test_resolve_agent_runner_rejects_unknown_value(monkeypatch):
+    monkeypatch.setenv("ORCH_AGENT_CLI", "unknown")
+    with pytest.raises(ValueError, match="ORCH_AGENT_CLI"):
+        orchestrate.resolve_agent_runner()
+
+
+def test_resolve_max_concurrent_agent_procs_defaults_to_20(monkeypatch):
+    monkeypatch.delenv("ORCH_MAX_CONCURRENT_AGENT_PROCS", raising=False)
+    assert orchestrate.resolve_max_concurrent_agent_procs() == 20
+
+
+def test_resolve_max_concurrent_agent_procs_reads_env(monkeypatch):
+    monkeypatch.setenv("ORCH_MAX_CONCURRENT_AGENT_PROCS", "8")
+    assert orchestrate.resolve_max_concurrent_agent_procs() == 8
+
+
+def test_resolve_max_concurrent_agent_procs_rejects_non_positive(monkeypatch):
+    monkeypatch.setenv("ORCH_MAX_CONCURRENT_AGENT_PROCS", "0")
+    with pytest.raises(ValueError, match="ORCH_MAX_CONCURRENT_AGENT_PROCS"):
+        orchestrate.resolve_max_concurrent_agent_procs()
+
+
+def test_resolve_max_batch_prompt_chars_defaults_to_24000(monkeypatch):
+    monkeypatch.delenv("ORCH_MAX_BATCH_PROMPT_CHARS", raising=False)
+    assert orchestrate.resolve_max_batch_prompt_chars() == 24000
+
+
+def test_resolve_max_batch_prompt_chars_reads_env(monkeypatch):
+    monkeypatch.setenv("ORCH_MAX_BATCH_PROMPT_CHARS", "4096")
+    assert orchestrate.resolve_max_batch_prompt_chars() == 4096
+
+
+def test_resolve_max_batch_prompt_chars_rejects_non_positive(monkeypatch):
+    monkeypatch.setenv("ORCH_MAX_BATCH_PROMPT_CHARS", "0")
+    with pytest.raises(ValueError, match="ORCH_MAX_BATCH_PROMPT_CHARS"):
+        orchestrate.resolve_max_batch_prompt_chars()
+
+
+def test_resolve_ui_audit_enabled_defaults_to_true(monkeypatch):
+    monkeypatch.delenv("ORCH_ENABLE_UI_AUDIT", raising=False)
+    assert orchestrate.resolve_ui_audit_enabled() is True
+
+
+def test_resolve_ui_audit_enabled_accepts_false_values(monkeypatch):
+    monkeypatch.setenv("ORCH_ENABLE_UI_AUDIT", "false")
+    assert orchestrate.resolve_ui_audit_enabled() is False
+
+
+def test_agent_log_path_uses_neutral_name():
+    assert orchestrate.agent_log_path("device1") == "/tmp/agent_device1.log"
+
+
+def test_build_agent_command_for_claude_includes_add_dir(tmp_path):
+    skill_dir = str(tmp_path / "skills")
+    common_dir = str(tmp_path / "common")
+    cmd = orchestrate.build_agent_command(
+        runner="claude",
+        prompt="run cases",
+        skill_dir=skill_dir,
+        common_dir=common_dir,
+    )
+    assert cmd[:5] == ["claude", "--add-dir", skill_dir, "--add-dir", common_dir]
+    assert cmd[-2:] == ["--print", "run cases"]
+
+
+def test_build_agent_command_for_codex_does_not_use_add_dir(tmp_path):
+    cmd = orchestrate.build_agent_command(
+        runner="codex",
+        prompt="run cases",
+        skill_dir=str(tmp_path / "skills"),
+        common_dir=str(tmp_path / "common"),
+    )
+    assert cmd[0] == "codex"
+    assert "--add-dir" not in cmd
+
+
+def test_build_shared_execution_context_contains_common_rules():
+    context = orchestrate.build_shared_execution_context("gaotu")
+    assert "common/elements/login.md" in context
+    assert "common/device.md" in context
+
+
+def test_build_prompt_includes_shared_execution_context(monkeypatch):
+    monkeypatch.setattr(orchestrate, "build_shared_execution_context", lambda app_id: "共享上下文片段")
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: True)
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "共享上下文片段" in prompt
+
+
+def test_build_prompt_includes_ui_audit_rules_when_enabled(monkeypatch):
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: True)
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "UI 规范自动检查" in prompt
+    assert "文本是否截断" in prompt
+
+
+def test_build_agent_command_codex_enables_noninteractive_mcp_tools():
+    cmd = orchestrate.build_agent_command("codex", "prompt", "/tmp/skill", "/tmp/common")
+    assert cmd == [
+        "codex",
+        "exec",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        "mcp_servers.feishu.enabled=false",
+        "-c",
+        "mcp_servers.feishu-docx-blocks.enabled=false",
+        "-c",
+        "mcp_servers.Banshan.enabled=false",
+        "prompt",
+    ]
+
+
+def test_launch_agent_per_device_uses_resolved_runner(monkeypatch, tmp_path):
+    entries = {"a1": {"platform": "Android", "entries": []}}
+    popen_calls = []
+
+    class _Proc:
+        pid = 123
+        def poll(self):
+            return None
+
+    def fake_popen(cmd, stdout=None, stderr=None):
+        popen_calls.append(cmd)
+        return _Proc()
+
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    monkeypatch.setattr(orchestrate, "build_prompt", lambda *args, **kwargs: "prompt")
+    monkeypatch.setattr(orchestrate, "agent_log_path", lambda udid: str(tmp_path / f"agent_{udid}.log"))
+    monkeypatch.setattr(orchestrate.subprocess, "Popen", fake_popen)
+    orchestrate.launch_agent_per_device("gaotu", entries, version="5.91.90")
+    assert popen_calls[0][0] == "codex"
+    assert "--dangerously-bypass-approvals-and-sandbox" in popen_calls[0]
+    assert "mcp_servers.feishu.enabled=false" in popen_calls[0]
+
+
+def test_launch_agent_per_device_preserves_claude_add_dir(monkeypatch, tmp_path):
+    entries = {"a1": {"platform": "Android", "entries": []}}
+    popen_calls = []
+
+    class _Proc:
+        pid = 123
+        def poll(self):
+            return None
+
+    def fake_popen(cmd, stdout=None, stderr=None):
+        popen_calls.append(cmd)
+        return _Proc()
+
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "claude")
+    monkeypatch.setattr(orchestrate, "build_prompt", lambda *args, **kwargs: "prompt")
+    monkeypatch.setattr(orchestrate, "agent_log_path", lambda udid: str(tmp_path / f"agent_{udid}.log"))
+    monkeypatch.setattr(orchestrate.subprocess, "Popen", fake_popen)
+    orchestrate.launch_agent_per_device("gaotu", entries, version="5.91.90")
+    assert "--add-dir" in popen_calls[0]
+
+
+def test_run_exploration_uses_resolved_runner(monkeypatch, tmp_path):
+    run_calls = []
+
+    class _Result:
+        returncode = 1
+
+    def fake_run(cmd, stdout=None, stderr=None, timeout=None):
+        run_calls.append(cmd)
+        return _Result()
+
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    monkeypatch.setattr(orchestrate, "build_agent_command",
+                        lambda runner, prompt, skill_dir, common_dir: ["codex", "exec", prompt])
+    monkeypatch.setattr(orchestrate.subprocess, "run", fake_run)
+
+    orchestrate.run_exploration("gaotu", "5.91.90", "a1")
+
+    assert run_calls[0][0] == "codex"
+    assert run_calls[0][1] == "exec"
+
+
+def test_run_exploration_writes_to_app_root_not_version_dir(monkeypatch, tmp_path):
+    run_calls = []
+
+    class _Result:
+        returncode = 1
+
+    def fake_run(cmd, stdout=None, stderr=None, timeout=None):
+        run_calls.append(cmd)
+        return _Result()
+
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    monkeypatch.setattr(orchestrate, "build_agent_command",
+                        lambda runner, prompt, skill_dir, common_dir: ["codex", "exec", prompt])
+    monkeypatch.setattr(orchestrate.subprocess, "run", fake_run)
+
+    orchestrate.run_exploration("gaotu", "5.91.90", "a1")
+
+    assert (tmp_path / "apps" / "gaotu").is_dir()
+    assert not (tmp_path / "apps" / "gaotu" / "5.91.90").exists()
+    assert "生成 apps/gaotu/index.md 和 pages/*.md" in run_calls[0][2]
+
+
+def test_run_exploration_skips_when_index_exists(monkeypatch, tmp_path):
+    run_calls = []
+
+    class _Result:
+        returncode = 1
+
+    app_dir = tmp_path / "apps" / "gaotu"
+    app_dir.mkdir(parents=True)
+    (app_dir / "index.md").write_text("old map")
+
+    def fake_run(cmd, stdout=None, stderr=None, timeout=None):
+        run_calls.append(cmd)
+        return _Result()
+
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    monkeypatch.setattr(orchestrate, "build_agent_command",
+                        lambda runner, prompt, skill_dir, common_dir: ["codex", "exec", prompt])
+    monkeypatch.setattr(orchestrate.subprocess, "run", fake_run)
+
+    orchestrate.run_exploration("gaotu", "5.91.90", "a1")
+
+    assert run_calls == []
+
+
+def test_run_exploration_force_reruns_when_index_exists(monkeypatch, tmp_path):
+    run_calls = []
+
+    class _Result:
+        returncode = 1
+
+    app_dir = tmp_path / "apps" / "gaotu"
+    app_dir.mkdir(parents=True)
+    (app_dir / "index.md").write_text("old map")
+
+    def fake_run(cmd, stdout=None, stderr=None, timeout=None):
+        run_calls.append(cmd)
+        return _Result()
+
+    monkeypatch.setenv("ORCH_FORCE_EXPLORE", "1")
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    monkeypatch.setattr(orchestrate, "build_agent_command",
+                        lambda runner, prompt, skill_dir, common_dir: ["codex", "exec", prompt])
+    monkeypatch.setattr(orchestrate.subprocess, "run", fake_run)
+
+    orchestrate.run_exploration("gaotu", "5.91.90", "a1")
+
+    assert run_calls, "expected forced exploration to rerun when index.md already exists"
+
+
+def test_reset_apps_after_exploration_calls_platform_stoppers(monkeypatch):
+    calls = []
+    monkeypatch.setattr(orchestrate, "_stop_android_app",
+                        lambda udid, pkg: calls.append(("android", udid, pkg)) or True)
+    monkeypatch.setattr(orchestrate, "_stop_ios_app",
+                        lambda udid, bundle_id: calls.append(("ios", udid, bundle_id)) or False)
+
+    orchestrate.reset_apps_after_exploration("gaotu", ["a1"], ["i1"])
+
+    assert calls == [
+        ("android", "a1", "com.gaotu100.superclass"),
+        ("ios", "i1", "com.gaotu100.superclass"),
+    ]
+
 import tempfile
 import json as _json
 
 def test_collect_results_reads_json(tmp_path):
     udid = "test_device"
-    result_file = tmp_path / f"result_{udid}.json"
     cases = [{"name": "case1", "platform": "Android", "device": udid,
                "module": "首页", "passed": True, "duration": 30, "steps": []}]
-    result_file.write_text(_json.dumps(cases))
+    _write_jsonl(tmp_path / f"result_{udid}.jsonl", cases)
 
     results = orchestrate.collect_results(
         {udid: None},
@@ -103,17 +496,1609 @@ def test_collect_results_timeout_marks_failure(tmp_path):
     assert results["missing_device"] == "timeout"
 
 
-def test_build_prompt_ios_injects_wda_url():
+def test_build_prompt_ios_avoids_manual_wda_url():
     entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
     prompt = orchestrate.build_prompt("gaotu", "i1", "iOS", entries, wda_port=8100)
-    assert "webDriverAgentUrl" in prompt
-    assert "http://127.0.0.1:8100" in prompt
+    assert "不要手工传 appium:webDriverAgentUrl=http://127.0.0.1:8100" in prompt
+    assert "ECONNREFUSED" in prompt
 
 
 def test_build_prompt_android_no_wda_url():
     entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
     prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
     assert "webDriverAgentUrl" not in prompt
+
+
+def test_build_prompt_forbids_midrun_summary_output():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "不要输出阶段性总结" in prompt
+    assert "除非全部用例都已执行完成" in prompt
+
+
+def test_build_prompt_allows_safe_dismissal_buttons_for_prod_popups():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "仅当遇到【非预期内】的线上业务弹窗" in prompt
+    assert "关闭" in prompt
+    assert "取消" in prompt
+    assert "放弃讲义" in prompt
+    assert "生产不可达-弹窗阻断" in prompt
+
+
+def test_build_prompt_requires_structured_action_trace_for_script_generation():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "ACTION/PRECOND 步也要写结构化轨迹字段" in prompt
+    assert "script_action" in prompt
+    assert "locator" in prompt
+    assert "input_value" in prompt
+
+
+def test_build_prompt_ios_requires_ios_locator_priority():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "i1", "iOS", entries)
+    assert "by=accessibility_id" in prompt
+    assert "by=name" in prompt
+    assert "by=label" in prompt
+    assert "by=predicate" in prompt
+    assert "by=xpath" in prompt
+
+
+def test_build_prompt_requires_finishing_startup_for_non_launch_popup_batches():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "state_group": "首页", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "若执行前发现 App 还停留在首次启动流程" in prompt
+    assert "先主动完成启动流程" in prompt
+    assert "启动弹窗批次除外" in prompt
+
+
+def test_build_prompt_skips_startup_completion_note_for_launch_popup_batches():
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "state_group": "启动弹窗", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "若执行前发现 App 还停留在首次启动流程" not in prompt
+
+
+def test_generate_case_script_for_passed_high_confidence_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec1",
+        "name": "case one",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "账号：12345679000"},
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/home", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+
+    assert path is not None
+    content = (tmp_path / "apps" / "gaotu" / "cases" / "android" / "rec1.py").read_text()
+    assert "META" in content
+    assert "rec1" in content
+    assert "com.gaotu100.superclass:id/home" in content
+
+
+def test_generate_case_script_adds_assert_ui_when_ui_audit_enabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: True)
+    case = {
+        "record_id": "rec_ui",
+        "name": "ui audit case",
+        "module": "首页",
+        "platform": "iOS",
+        "device": "i1",
+        "passed": True,
+        "steps": [
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "text",
+             "evidence": "首页", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "ios", case)
+
+    content = open(path).read()
+    assert "'type': 'assert_text'" in content
+    assert "'type': 'assert_ui'" in content
+    assert "'rules': ['no_blank', 'no_overlap', 'no_occlusion', 'no_truncation', 'safe_area']" in content
+
+
+def test_generate_case_script_outputs_flow_format(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_flow",
+        "name": "flow case",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "账号未登录"},
+            {"type": "ACTION", "text": "点击登录按钮", "script_action": "tap",
+             "locator": {"by": "text", "value": "点击登录"}},
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/home", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+
+    content = open(path).read()
+    assert "'app_id': 'gaotu'" in content
+    assert "'app_version': '5.91.93'" in content
+    assert "FLOW = [" in content
+    assert "'type': 'prepare_state'" in content
+    assert "'type': 'tap'" in content
+    assert 'ctx["run_flow"]' in content
+
+
+def test_generate_case_script_accepts_string_locators_and_fallbacks(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_string_flow",
+        "name": "flow case",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {
+                "type": "ACTION",
+                "text": "点击登录按钮",
+                "script_action": "tap",
+                "locator": "by=id,value=com.gaotu100.superclass:id/account_sign_btn",
+                "locator_fallbacks": [
+                    "by=xpath,value=//*[@text='登录']",
+                    "com.gaotu100.superclass:id/account_sign_btn",
+                ],
+            },
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/home", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+
+    content = open(path).read()
+    assert "'by': 'id'" in content
+    assert "'value': 'com.gaotu100.superclass:id/account_sign_btn'" in content
+    assert "'fallbacks': [{'by': 'xpath'" in content
+
+
+def test_generate_case_script_normalizes_ios_locator_priority(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_ios_flow",
+        "name": "ios flow case",
+        "module": "首页",
+        "platform": "iOS",
+        "device": "i1",
+        "passed": True,
+        "steps": [
+            {
+                "type": "ACTION",
+                "text": "点击首页按钮",
+                "script_action": "tap",
+                "locator": {"strategy": "accessibility_id", "selector": "首页"},
+                "locator_fallbacks": [
+                    {"name": "首页"},
+                    {"label": "首页"},
+                    "predicate=label == '首页'",
+                    "//*[@name='首页']",
+                ],
+            },
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "text",
+             "evidence": "首页", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "ios", case)
+
+    content = open(path).read()
+    assert "'by': 'accessibility_id'" in content
+    assert "'value': '首页'" in content
+    assert "'by': 'name'" in content
+    assert "'by': 'label'" in content
+    assert "'by': 'predicate'" in content
+    assert "'value': \"label == '首页'\"" in content
+
+
+def test_generate_case_script_infers_prepare_state_from_preconditions(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_precond",
+        "name": "precond case",
+        "module": "启动登录",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "账号未登录"},
+            {"type": "PRECOND", "text": "当前在我的tab"},
+            {"type": "ASSERT", "text": "打开首页", "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/home", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+
+    content = open(path).read()
+    assert "'type': 'prepare_state'" in content
+    assert "'target': 'my_tab'" in content
+    assert "'account': '<UNLOGIN>'" in content
+
+
+def test_generate_case_script_adds_reinstall_for_startup_preconditions(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_reinstall",
+        "name": "startup case",
+        "module": "启动弹窗",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "卸载重装APP，未启动"},
+            {"type": "PRECOND", "text": "当前在登录页"},
+            {"type": "ASSERT", "text": "看到首启弹窗", "verify_method": "text",
+             "evidence": "隐私政策", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+
+    content = open(path).read()
+    assert content.index("'type': 'reinstall_app'") < content.index("'type': 'prepare_state'")
+    assert "'target': 'login'" in content
+
+
+def test_generate_case_script_accepts_assert_pass_field_from_result_jsonl(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_pass_field",
+        "name": "result replay case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ASSERT", "text": "看到隐私弹窗", "pass": True, "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/tvMessage", "confidence": "high"},
+            {"type": "ASSERT", "text": "低置信不生成", "pass": True, "verify_method": "text",
+             "evidence": "温馨提示", "confidence": "low"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+
+    content = open(path).read()
+    assert "'type': 'assert_id'" in content
+    assert "com.gaotu100.superclass:id/tvMessage" in content
+    assert "低置信不生成" not in content
+
+
+def test_generate_case_script_interleaves_numbered_asserts_after_matching_actions(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_interleave",
+        "name": "interleave case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "1. 打开高途 APP", "script_action": "route",
+             "locator": "by=id,value=com.gaotu100.superclass/.ui.activity.SplashActivity"},
+            {"type": "ACTION", "text": "2. 点击不同意", "script_action": "tap",
+             "locator": "by=id,value=com.gaotu100.superclass:id/tvCancel"},
+            {"type": "ASSERT", "text": "1. app成功启动，隐私弹窗正常弹出", "pass": True,
+             "verify_method": "id", "evidence": "com.gaotu100.superclass:id/tvMessage", "confidence": "high"},
+            {"type": "ASSERT", "text": "2. 隐私弹窗切换为温馨提示弹窗", "pass": True,
+             "verify_method": "text", "evidence": "温馨提示", "confidence": "high"},
+            {"type": "ASSERT", "text": "链路汇总断言", "pass": True,
+             "verify_method": "text", "evidence": "不同意 -> 温馨提示", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+    content = open(path).read()
+    assert content.index("SplashActivity") < content.index("com.gaotu100.superclass:id/tvMessage")
+    assert content.index("com.gaotu100.superclass:id/tvMessage") < content.index("com.gaotu100.superclass:id/tvCancel")
+    assert content.index("com.gaotu100.superclass:id/tvCancel") < content.index("'text': '2. 隐私弹窗切换为温馨提示弹窗'")
+
+
+def test_generate_case_script_normalizes_android_route_locator(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_route_android",
+        "name": "android route case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "1. 打开高途 APP", "script_action": "route",
+             "locator": "appPackage=com.gaotu100.superclass, appActivity=.ui.activity.SplashActivity"},
+            {"type": "ASSERT", "text": "1. app成功启动", "pass": True,
+             "verify_method": "id", "evidence": "com.gaotu100.superclass:id/tvMessage", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+    content = open(path).read()
+
+    assert "com.gaotu100.superclass/.ui.activity.SplashActivity" in content
+    assert "appPackage=com.gaotu100.superclass, appActivity=.ui.activity.SplashActivity" not in content
+
+
+def test_generate_case_script_converts_dialog_text_asserts_to_neighbor_id_asserts(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_dialog_id",
+        "name": "dialog assert case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "2. 点击不同意", "script_action": "tap",
+             "locator": "by=id,value=com.gaotu100.superclass:id/tvCancel"},
+            {"type": "ASSERT", "text": "2. 隐私弹窗切换为温馨提示弹窗", "pass": True,
+             "verify_method": "text", "evidence": "温馨提示", "confidence": "high"},
+            {"type": "ACTION", "text": "3. 查看温馨提示弹窗", "script_action": "prepare_state",
+             "locator": "by=id,value=com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm"},
+            {"type": "ASSERT", "text": "3. 温馨提示弹窗文案内容布局完整", "pass": True,
+             "verify_method": "text", "evidence": "标题：温馨提示", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+
+    content = open(path).read()
+    assert "'type': 'assert_id'" in content
+    assert "com.gaotu100.superclass:id/tvCancel" in content
+    assert "com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm" in content
+    assert "'aux_text': '温馨提示'" in content
+    assert "'value': '温馨提示'" not in content
+    assert content.index("com.gaotu100.superclass:id/tvCancel") < content.index("com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm")
+
+
+def test_generate_case_script_skips_auto_handled_android_permission_taps_and_filters_neighbor_anchor(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_auto_dialog_skip",
+        "name": "auto dialog skip case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "1. 允许系统权限", "script_action": "tap",
+             "locator": "by=id,value=com.android.permissioncontroller:id/permission_allow_button"},
+            {"type": "ASSERT", "text": "1. 隐私弹窗正常展示", "pass": True,
+             "verify_method": "text", "evidence": "文案：感谢您下载并使用高途", "confidence": "high"},
+            {"type": "ACTION", "text": "2. 点击同意", "script_action": "tap",
+             "locator": "by=id,value=com.gaotu100.superclass:id/tvConfirm"},
+            {"type": "ASSERT", "text": "2. 进入青少年守护弹窗", "pass": True,
+             "verify_method": "text", "evidence": "标题：青少年守护", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+
+    content = open(path).read()
+    assert "com.android.permissioncontroller:id/permission_allow_button" not in content
+    assert "'aux_text': '文案：感谢您下载并使用高途'" in content
+    assert "com.gaotu100.superclass:id/tvConfirm" in content
+
+
+def test_generate_case_script_skips_summary_chain_asserts(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_summary_skip",
+        "name": "summary skip case",
+        "module": "启动登录",
+        "platform": "Android",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "1. 点击同意", "script_action": "tap",
+             "locator": "by=id,value=com.gaotu100.superclass:id/tvConfirm"},
+            {"type": "ASSERT", "text": "1. 青少年守护弹窗出现", "pass": True,
+             "verify_method": "text", "evidence": "青少年守护", "confidence": "high"},
+            {"type": "ASSERT", "text": "点击「不同意」后隐私弹窗直接切换为温馨提示弹窗，无需关闭再打开\n温馨提示弹窗包含「同意」「简单浏览模式」按钮及三个协议链接\n点击「同意」后跳转至青少年守护弹窗", "pass": True,
+             "verify_method": "text", "evidence": "链路：不同意 -> 温馨提示 -> 同意 -> 青少年守护", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case, version="5.91.93")
+    content = open(path).read()
+
+    assert "链路：不同意 -> 温馨提示 -> 同意 -> 青少年守护" not in content
+
+
+def test_is_toast_like_assert_detects_toast_text_step():
+    assert orchestrate.is_toast_like_assert({
+        "type": "ASSERT",
+        "text": "[TOAST] 显示课程已置顶",
+        "verify_method": "text",
+        "evidence": "课程已置顶",
+    }) is True
+
+
+def test_generate_case_script_skips_low_confidence_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec2",
+        "name": "case two",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "ASSERT", "text": "视觉判断", "verify_method": "vision",
+             "evidence": "/tmp/shot.png", "confidence": "low", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+
+    assert path is None
+
+
+def test_generated_case_script_softens_toast_assert(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_toast",
+        "name": "toast case",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "ASSERT", "text": "[TOAST] 课程已置顶", "verify_method": "text",
+             "evidence": "课程已置顶", "confidence": "high", "passed": True},
+            {"type": "ASSERT", "text": "菜单变成取消置顶", "verify_method": "id",
+             "evidence": "com.gaotu100.superclass:id/menu_cancel_top", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+    result = orchestrate.run_case_script(
+        "gaotu", "android", "a1", path
+    )
+
+    assert result["passed"] is False
+
+
+def test_generated_case_script_passes_when_only_toast_assert_misses(tmp_path, monkeypatch):
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_toast_only",
+        "name": "toast only",
+        "module": "首页",
+        "platform": "Android",
+        "device": "a1",
+        "passed": True,
+        "steps": [
+            {"type": "ASSERT", "text": "[TOAST] 课程已置顶", "verify_method": "text",
+             "evidence": "课程已置顶", "confidence": "high", "passed": True},
+        ],
+    }
+    path = orchestrate.generate_case_script("gaotu", "android", case)
+    monkeypatch.setattr(orchestrate, "_script_runtime_context",
+                        lambda udid: {"assert_evidence_present": lambda method, evidence: False})
+
+    result = orchestrate.run_case_script("gaotu", "android", "a1", path)
+
+    assert result["passed"] is True
+    assert "toast/snackbar辅助断言未命中" in result["note"]
+
+
+def test_run_case_script_prefers_flow_runtime(monkeypatch, tmp_path):
+    script = tmp_path / "flow_case.py"
+    script.write_text(
+        "META={'record_id':'rec1'}\n"
+        "FLOW=[{'type':'assert_text','value':'首页'}]\n"
+        "def execute(ctx):\n"
+        "    return ctx['run_flow'](META, FLOW)\n"
+    )
+    calls = []
+    monkeypatch.setattr(
+        orchestrate,
+        "_script_runtime_context",
+        lambda udid: {"run_flow": lambda meta, flow: calls.append((meta, flow)) or {"passed": True}},
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "_script_runtime_context_for",
+        lambda app_id, platform, udid, script_meta=None: {"run_flow": lambda meta, flow: calls.append((meta, flow)) or {"passed": True}},
+    )
+
+    result = orchestrate.run_case_script("gaotu", "android", "a1", str(script))
+
+    assert result["passed"] is True
+    assert calls and calls[0][0]["record_id"] == "rec1"
+
+
+def test_run_case_script_ios_uses_platform_runtime_and_closes(monkeypatch, tmp_path):
+    script = tmp_path / "ios_flow_case.py"
+    script.write_text(
+        "META={'record_id':'rec_ios'}\n"
+        "FLOW=[{'type':'assert_text','value':'首页'}]\n"
+        "def execute(ctx):\n"
+        "    return ctx['run_flow'](META, FLOW)\n"
+    )
+    closed = []
+    monkeypatch.setattr(
+        orchestrate,
+        "_script_runtime_context_for",
+        lambda app_id, platform, udid, script_meta=None: {
+            "run_flow": lambda meta, flow: {"passed": True, "record_id": meta["record_id"]},
+            "close": lambda: closed.append((app_id, platform, udid)) or True,
+        },
+    )
+
+    result = orchestrate.run_case_script("gaotu", "ios", "i1", str(script))
+
+    assert result["passed"] is True
+    assert closed == [("gaotu", "ios", "i1")]
+
+
+def test_run_case_script_appends_version_mismatch_note(monkeypatch, tmp_path):
+    script = tmp_path / "flow_case.py"
+    script.write_text(
+        "META={'record_id':'rec1','app_version':'5.91.93'}\n"
+        "FLOW=[]\n"
+        "def execute(ctx):\n"
+        "    return {'passed': True, 'note': 'ok'}\n"
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "_script_runtime_context_for",
+        lambda app_id, platform, udid, script_meta=None: {
+            "installed_app_version": "5.91.90",
+            "close": lambda: True,
+        },
+    )
+
+    result = orchestrate.run_case_script("gaotu", "android", "a1", str(script))
+
+    assert result["passed"] is True
+    assert "version mismatch: expected 5.91.93, actual 5.91.90" in result["note"]
+    assert result["script_app_version"] == "5.91.93"
+    assert result["actual_app_version"] == "5.91.90"
+
+
+def test_run_flow_dispatches_prepare_tap_input_and_assert():
+    calls = []
+    runtime = {
+        "reinstall_app": lambda step: calls.append(("reinstall_app", step)) or True,
+        "route": lambda step: calls.append(("route", step)) or True,
+        "prepare_state": lambda step: calls.append(("prepare_state", step)) or True,
+        "handle_known_dialogs": lambda step: calls.append(("handle_known_dialogs", step)) or True,
+        "tap": lambda step: calls.append(("tap", step)) or True,
+        "input": lambda step: calls.append(("input", step)) or True,
+        "assert_evidence_present": lambda method, evidence: method == "id" and evidence == "home_id",
+    }
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [
+            {"type": "reinstall_app"},
+            {"type": "route", "value": "com.gaotu100.superclass/.ui.activity.SplashActivity"},
+            {"type": "prepare_state", "target": "home", "account": "12345679000"},
+            {"type": "handle_known_dialogs"},
+            {"type": "tap", "by": "id", "value": "tab_home"},
+            {"type": "input", "by": "id", "value": "phone", "text": "12345679000"},
+            {"type": "assert_id", "value": "home_id", "text": "看到首页"},
+        ],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert [name for name, _ in calls] == [
+        "reinstall_app",
+        "route",
+        "prepare_state",
+        "handle_known_dialogs",
+        "tap",
+        "input",
+        "handle_known_dialogs",
+    ]
+
+
+def test_run_flow_dispatches_assert_ui_and_preserves_structured_result():
+    runtime = {
+        "assert_ui": lambda step: {
+            "passed": True,
+            "note": "UI无明显异常",
+            "verify_method": "vision",
+            "evidence": "/tmp/ui.png",
+            "confidence": "low",
+            "checkpoint_index": 2,
+        },
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "assert_ui", "text": "UI规范检查"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert result["steps"][0]["type"] == "ASSERT_UI"
+    assert result["steps"][0]["verify_method"] == "vision"
+    assert result["steps"][0]["evidence"] == "/tmp/ui.png"
+    assert result["steps"][0]["confidence"] == "low"
+    assert result["steps"][0]["checkpoint_index"] == 2
+
+
+def test_run_flow_fails_on_unsupported_action_step():
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "tap", "by": "id", "value": "tab_home"}],
+        {"assert_evidence_present": lambda *args, **kwargs: True},
+    )
+
+    assert result["passed"] is False
+    assert "unsupported flow step" in result["note"]
+
+
+def test_run_prepare_state_noop_when_already_on_target():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: 'text="首页" text="我的"',
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: (_ for _ in ()).throw(AssertionError("should not tap")),
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "home"}, runtime) is True
+
+
+def test_run_prepare_state_routes_to_my_tab_when_needed():
+    taps = []
+    page_sources = iter([
+        'text="首页" text="上课"',
+        'text="我的" content-desc="点击登录, 欢迎来到高途"',
+    ])
+    runtime = {
+        "read_page_source": lambda force_refresh=False: next(page_sources),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: taps.append(text) or True,
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "my_tab"}, runtime) is True
+    assert taps == ["我的"]
+
+
+def test_resolve_route_component_prefers_explicit_component():
+    component = orchestrate.orch_case_runtime.resolve_route_component(
+        "a1",
+        {"value": "com.gaotu100.superclass/.ui.activity.SplashActivity"},
+        orchestrate.subprocess,
+    )
+
+    assert component == "com.gaotu100.superclass/.ui.activity.SplashActivity"
+
+
+def test_resolve_route_component_uses_resolve_activity_fallback(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(cmd)
+        return type("Result", (), {
+            "returncode": 0,
+            "stdout": "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.gaotu100.superclass/.ui.activity.SplashActivity\n",
+        })()
+
+    fake_subprocess = type("FakeSubprocess", (), {
+        "run": staticmethod(fake_run),
+        "TimeoutExpired": TimeoutError,
+    })
+
+    component = orchestrate.orch_case_runtime.resolve_route_component(
+        "a1",
+        {
+            "fallbacks": [
+                {"by": "text", "value": "adb shell cmd package resolve-activity --brief com.gaotu100.superclass"}
+            ]
+        },
+        fake_subprocess,
+    )
+
+    assert component == "com.gaotu100.superclass/.ui.activity.SplashActivity"
+    assert calls == [[
+        "adb", "-s", "a1", "shell", "cmd", "package", "resolve-activity", "--brief", "com.gaotu100.superclass"
+    ]]
+
+
+def test_find_bounds_by_locator_supports_xpath_text():
+    center = orchestrate.orch_case_runtime.find_bounds_by_locator(
+        '<node text="不同意" bounds="[10,20][110,220]" />',
+        "xpath",
+        "//*[@text='不同意']",
+    )
+
+    assert center == (60, 120)
+
+
+def test_android_runtime_handle_known_dialogs_prefers_system_allow_button():
+    page_sources = iter([
+        '<node resource-id="com.android.permissioncontroller:id/permission_allow_button" bounds="[10,20][110,220]" />',
+        '<node text="手机号登录" bounds="[0,0][10,10]" />',
+    ])
+    taps = []
+    class FakeSubprocess:
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(cmd, capture_output, text, timeout):
+            return type("Result", (), {"stdout": next(page_sources), "returncode": 0})()
+
+    runtime = orchestrate.orch_case_runtime.script_runtime_context(
+        udid="a1",
+        subprocess_module=FakeSubprocess,
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        tap_with_locator_fn=lambda udid, step, source: True,
+        adb_input_text_fn=lambda udid, text: True,
+        tap_by_text_fn=lambda udid, text: False,
+        run_flow_fn=lambda meta, flow, runtime: {"passed": True},
+        known_dialog_text_actions=(),
+    )
+    original_adb_tap = orchestrate.orch_case_runtime.adb_tap
+    try:
+        orchestrate.orch_case_runtime.adb_tap = lambda udid, x, y, subprocess_module: taps.append((udid, x, y)) or True
+        assert runtime["handle_known_dialogs"]({}) is True
+    finally:
+        orchestrate.orch_case_runtime.adb_tap = original_adb_tap
+
+    assert taps == [("a1", 60, 120)]
+
+
+def test_android_runtime_tap_retries_after_handling_known_dialogs():
+    page_sources = iter([
+        '<node resource-id="com.android.permissioncontroller:id/permission_allow_button" bounds="[10,20][110,220]" />',
+        '<node text="不同意" bounds="[20,30][120,230]" />',
+        '<node text="不同意" bounds="[20,30][120,230]" />',
+    ])
+    tap_attempts = []
+    text_taps = []
+    class FakeSubprocess:
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(cmd, capture_output, text, timeout):
+            return type("Result", (), {"stdout": next(page_sources), "returncode": 0})()
+
+    runtime = orchestrate.orch_case_runtime.script_runtime_context(
+        udid="a1",
+        subprocess_module=FakeSubprocess,
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        tap_with_locator_fn=lambda udid, step, source: tap_attempts.append(source) or ("permissioncontroller" not in source),
+        adb_input_text_fn=lambda udid, text: True,
+        tap_by_text_fn=lambda udid, text: text_taps.append(text) or True,
+        run_flow_fn=lambda meta, flow, runtime: {"passed": True},
+        known_dialog_text_actions=(),
+    )
+    original_adb_tap = orchestrate.orch_case_runtime.adb_tap
+    try:
+        orchestrate.orch_case_runtime.adb_tap = lambda udid, x, y, subprocess_module: True
+        assert runtime["tap"]({"by": "xpath", "value": "//*[@text='不同意']"}) is True
+    finally:
+        orchestrate.orch_case_runtime.adb_tap = original_adb_tap
+
+    assert len(tap_attempts) >= 1
+    assert text_taps == []
+
+
+def test_resolve_latest_local_artifact_prefers_newest(tmp_path, monkeypatch):
+    older = tmp_path / "gaotu_5.91.90.apk"
+    newer = tmp_path / "gaotu_5.91.93.apk"
+    older.write_text("old")
+    newer.write_text("new")
+
+    monkeypatch.setattr(orchestrate.glob, "glob", lambda pattern: [str(older), str(newer)])
+    monkeypatch.setattr(orchestrate.os.path, "getmtime", lambda path: 1 if path == str(older) else 2)
+
+    assert orchestrate._resolve_latest_local_artifact("gaotu", "android") == str(newer)
+
+
+def test_reinstall_app_for_script_uses_android_installer(tmp_path, monkeypatch):
+    apk = tmp_path / "gaotu_5.91.93.apk"
+    apk.write_text("apk")
+    closed = []
+    invalidated = []
+
+    monkeypatch.setattr(orchestrate, "_resolve_local_artifact_for_script", lambda app_id, platform, version='': str(apk))
+    monkeypatch.setattr(orchestrate, "install_android", lambda path, udid: path == str(apk) and udid == "a1")
+    monkeypatch.setattr(orchestrate, "_launch_app_after_reinstall_for_script", lambda app_id, platform, udid, ctx: True)
+
+    ok = orchestrate._reinstall_app_for_script(
+        "gaotu",
+        "android",
+        "a1",
+        {
+            "script_meta": {"app_version": "5.91.93"},
+            "close": lambda: closed.append(True) or True,
+            "invalidate_state": lambda: invalidated.append(True) or True,
+        },
+    )
+
+    assert ok is True
+    assert closed == [True]
+    assert invalidated == [True]
+
+
+def test_reinstall_app_for_script_uses_ios_installer(tmp_path, monkeypatch):
+    ipa = tmp_path / "gaotu_5.91.93.ipa"
+    ipa.write_text("ipa")
+    closed = []
+    invalidated = []
+    install_calls = []
+    launch_calls = []
+
+    monkeypatch.setattr(orchestrate, "_resolve_local_artifact_for_script", lambda app_id, platform, version='': str(ipa))
+    monkeypatch.setattr(
+        orchestrate,
+        "install_ios",
+        lambda path, udid: install_calls.append((path, udid)) or (path == str(ipa) and udid == "i1"),
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "_launch_app_after_reinstall_for_script",
+        lambda app_id, platform, udid, ctx: launch_calls.append((app_id, platform, udid)) or True,
+    )
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+
+    ok = orchestrate._reinstall_app_for_script(
+        "gaotu",
+        "ios",
+        "i1",
+        {
+            "script_meta": {"app_version": "5.91.93"},
+            "close": lambda: closed.append(True) or True,
+            "invalidate_state": lambda: invalidated.append(True) or True,
+        },
+    )
+
+    assert ok is True
+    assert install_calls == [(str(ipa), "i1")]
+    assert launch_calls == []
+    assert closed == [True]
+    assert invalidated == [True]
+
+
+def test_resolve_local_artifact_for_script_prefers_exact_version(tmp_path):
+    original_exists = orchestrate.os.path.exists
+    try:
+        orchestrate.os.path.exists = lambda path: path == "/tmp/gaotu_5.91.93.apk" or original_exists(path)
+        assert orchestrate._resolve_local_artifact_for_script("gaotu", "android", "5.91.93") == "/tmp/gaotu_5.91.93.apk"
+    finally:
+        orchestrate.os.path.exists = original_exists
+
+
+def test_artifact_version_from_path_extracts_version():
+    assert orchestrate._artifact_version_from_path("/tmp/gaotu_5.91.93.apk") == "5.91.93"
+    assert orchestrate._artifact_version_from_path("/tmp/gaotu_5.91.93.ipa") == "5.91.93"
+    assert orchestrate._artifact_version_from_path("/tmp/invalid-name.apk") == ""
+
+
+def test_launch_app_after_reinstall_for_script_android_waits_and_invalidates(monkeypatch):
+    invalidated = []
+    route_calls = []
+    sleep_calls = []
+
+    monkeypatch.setattr(orchestrate, "_resolve_android_launch_component",
+                        lambda udid, package_name: "com.gaotu100.superclass/.ui.activity.SplashActivity")
+    monkeypatch.setattr(orchestrate.orch_case_runtime, "adb_route",
+                        lambda udid, step, subprocess_module: route_calls.append((udid, step["value"])) or True)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    ok = orchestrate._launch_app_after_reinstall_for_script(
+        "gaotu",
+        "android",
+        "a1",
+        {"script_meta": {"bundle_id": "com.gaotu100.superclass"}, "invalidate_state": lambda: invalidated.append(True) or True},
+    )
+
+    assert ok is True
+    assert route_calls == [("a1", "com.gaotu100.superclass/.ui.activity.SplashActivity")]
+    assert sleep_calls == [4]
+    assert invalidated == [True]
+
+
+@patch("orchestrate.subprocess.run")
+def test_launch_app_after_reinstall_for_script_ios_grants_network_and_launches(mock_run, monkeypatch):
+    invalidated = []
+    sleep_calls = []
+    grants = []
+    mock_run.return_value.returncode = 0
+
+    monkeypatch.setattr(orchestrate, "grant_ios_network_permission",
+                        lambda udid, bundle_id: grants.append((udid, bundle_id)) or True)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    ok = orchestrate._launch_app_after_reinstall_for_script(
+        "gaotu",
+        "ios",
+        "i1",
+        {"script_meta": {"bundle_id": "com.gaotu100.superclass"}, "invalidate_state": lambda: invalidated.append(True) or True},
+    )
+
+    assert ok is True
+    assert grants == [("i1", "com.gaotu100.superclass")]
+    assert mock_run.call_args[0][0] == [
+        sys.executable, "-m", "tidevice", "-u", "i1", "launch", "com.gaotu100.superclass"
+    ]
+    assert sleep_calls == [4]
+    assert invalidated == [True]
+
+
+def test_ios_script_runtime_route_creates_session(monkeypatch):
+    created = []
+
+    monkeypatch.setattr(
+        orchestrate.orch_case_runtime_ios,
+        "_create_session",
+        lambda port, bundle_id: created.append((port, bundle_id)) or "sid1",
+    )
+
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1",
+        8100,
+        "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+    )
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "启动"},
+        [{"type": "route", "value": "com.gaotu100.superclass"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert created == [(8100, "com.gaotu100.superclass")]
+
+
+def test_ios_script_runtime_tap_recovers_transport_and_retries(monkeypatch):
+    created = []
+    recovered = []
+
+    def fake_create_session(port, bundle_id):
+        created.append((port, bundle_id))
+        return "" if len(created) == 1 else "sid2"
+
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", fake_create_session)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source", lambda port, session_id: "<App/>")
+    monkeypatch.setattr(
+        orchestrate.orch_case_runtime_ios,
+        "_tap_with_locator",
+        lambda port, session_id, step: session_id == "sid2",
+    )
+
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1",
+        8100,
+        "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+        recover_transport_fn=lambda: recovered.append(True) or True,
+    )
+
+    assert runtime["tap"]({"by": "accessibility_id", "value": "未满14岁"}) is True
+    assert created == [
+        (8100, "com.gaotu100.superclass"),
+        (8100, "com.gaotu100.superclass"),
+    ]
+    assert recovered == [True]
+
+
+def test_assert_evidence_present_splits_compound_text_evidence():
+    runtime = orchestrate._script_runtime_context("a1")
+    runtime["read_page_source"] = lambda force_refresh=False: "温馨提示 同意 隐私政策"
+
+    assert orchestrate._assert_evidence_present(runtime, "text", "实际标题：温馨提示；按钮：同意；文案含隐私政策") is True
+
+
+def test_assert_evidence_present_requires_all_compound_tokens():
+    runtime = orchestrate._script_runtime_context("a1")
+    runtime["read_page_source"] = lambda force_refresh=False: "温馨提示 同意"
+
+    assert orchestrate._assert_evidence_present(runtime, "text", "实际标题：温馨提示；按钮：同意；文案含隐私政策") is False
+
+
+def test_assert_evidence_detail_reports_missing_tokens():
+    runtime = orchestrate._script_runtime_context("a1")
+    runtime["read_page_source"] = lambda force_refresh=False: "温馨提示 同意"
+
+    detail = orchestrate._assert_evidence_detail(runtime, "text", "实际标题：温馨提示；按钮：同意；文案含隐私政策")
+
+    assert detail["matched"] == ["温馨提示", "同意"]
+    assert detail["missing"] == ["隐私政策"]
+
+
+def test_assert_evidence_detail_uses_exact_resource_id_matching():
+    runtime = orchestrate._script_runtime_context("a1")
+    runtime["read_page_source"] = lambda force_refresh=False: (
+        '<node resource-id="com.gaotu100.superclass:id/tvMessage" />'
+        '<node resource-id="com.gaotu100.superclass:id/tvCancel" />'
+        '<node resource-id="com.gaotu100.superclass:id/tvConfirm" />'
+    )
+
+    detail = orchestrate._assert_evidence_detail(
+        runtime,
+        "id",
+        "com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm",
+    )
+
+    assert detail["matched"] == [
+        "com.gaotu100.superclass:id/tvMessage",
+        "com.gaotu100.superclass:id/tvCancel",
+        "com.gaotu100.superclass:id/tvConfirm",
+    ]
+    assert detail["missing"] == ["com.gaotu100.superclass:id/tvTitle"]
+
+
+def test_assert_evidence_detail_expands_compound_id_suffixes():
+    expanded = orchestrate._expand_compound_id_tokens(
+        ["com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm"]
+    )
+
+    assert expanded == [
+        "com.gaotu100.superclass:id/tvTitle",
+        "com.gaotu100.superclass:id/tvMessage",
+        "com.gaotu100.superclass:id/tvCancel",
+        "com.gaotu100.superclass:id/tvConfirm",
+    ]
+
+
+def test_normalize_evidence_token_strips_generic_prefixes():
+    assert orchestrate._normalize_evidence_token("文案：高途用户服务协议") == "高途用户服务协议"
+    assert orchestrate._normalize_evidence_token("提示：温馨提示") == "温馨提示"
+    assert orchestrate._normalize_evidence_token("按钮：同意") == "同意"
+    assert orchestrate._normalize_evidence_token("标题：青少年守护") == "青少年守护"
+
+
+def test_run_flow_includes_assert_token_detail_in_failure_note():
+    runtime = {
+        "assert_evidence_present": lambda method, evidence: False,
+        "assert_evidence_detail": lambda method, evidence: {
+            "matched": ["简单浏览模式", "同意"],
+            "missing": ["儿童隐私保护声明"],
+        },
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "assert_text", "value": "按钮文本：简单浏览模式 / 同意；协议链接文案：儿童隐私保护声明", "text": "复合断言"}],
+        runtime,
+    )
+
+    assert result["passed"] is False
+    assert "missing=['儿童隐私保护声明']" in result["note"]
+    assert "matched=['简单浏览模式', '同意']" in result["steps"][0]["note"]
+
+
+def test_run_flow_assert_id_uses_aux_text_as_advisory_check():
+    runtime = {
+        "assert_evidence_present": lambda method, evidence: method == "id" and evidence == "dialog_left_button",
+        "assert_evidence_detail": lambda method, evidence: (
+            {"matched": ["dialog_left_button"], "missing": []}
+            if method == "id"
+            else {"matched": ["同意"], "missing": ["简单浏览模式"]}
+        ),
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{
+            "type": "assert_id",
+            "value": "dialog_left_button",
+            "aux_text": "按钮：简单浏览模式 / 同意",
+            "text": "弹窗按钮可见",
+        }],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert "aux_missing=['简单浏览模式']" in result["steps"][0]["note"]
+    assert "aux_matched=['同意']" in result["steps"][0]["note"]
+
+
+def test_run_flow_polls_assertion_until_page_stabilizes(monkeypatch):
+    page_sources = [
+        '<node resource-id="com.gaotu100.superclass:id/tvMessage" />',
+        '<node resource-id="com.gaotu100.superclass:id/tvTitle" />'
+        '<node resource-id="com.gaotu100.superclass:id/tvMessage" />'
+        '<node resource-id="com.gaotu100.superclass:id/tvCancel" />'
+        '<node resource-id="com.gaotu100.superclass:id/tvConfirm" />温馨提示',
+    ]
+    state = {"index": 0}
+    runtime = orchestrate._script_runtime_context("a1")
+    def _read_page_source(force_refresh=False):
+        idx = min(state["index"], len(page_sources) - 1)
+        value = page_sources[idx]
+        if force_refresh and state["index"] < len(page_sources) - 1:
+            state["index"] += 1
+        return value
+    runtime["read_page_source"] = _read_page_source
+    runtime["assert_evidence_present"] = lambda method, evidence: orchestrate._assert_evidence_present(runtime, method, evidence)
+    runtime["assert_evidence_detail"] = lambda method, evidence: orchestrate._assert_evidence_detail(runtime, method, evidence)
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{
+            "type": "assert_id",
+            "value": "com.gaotu100.superclass:id/tvTitle|tvMessage|tvCancel|tvConfirm",
+            "aux_text": "温馨提示",
+            "text": "温馨提示弹窗出现",
+        }],
+        runtime,
+    )
+
+    assert result["passed"] is True
+
+
+def test_run_flow_assertion_handles_known_dialogs_before_final_judgement(monkeypatch):
+    calls = []
+    runtime = {
+        "handle_known_dialogs": lambda step: calls.append("handle") or True,
+        "read_page_source": lambda force_refresh=False: calls.append("read") or "",
+        "assert_evidence_present": lambda method, evidence: calls.append(("assert", method, evidence)) or True,
+        "assert_evidence_detail": lambda method, evidence: {"matched": [evidence], "missing": []},
+    }
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "assert_id", "value": "home_anchor", "text": "首页出现"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert calls[:3] == ["handle", "read", ("assert", "id", "home_anchor")]
+
+
+def test_execute_case_with_fallback_prefers_existing_script(monkeypatch):
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": True, "name": "case", "steps": [], "script_source": "script"})
+
+    agent_called = []
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: agent_called.append(True))
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="android",
+        udid="a1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["passed"] is True
+    assert result["script_source"] == "script"
+    assert agent_called == []
+
+
+def test_execute_case_with_fallback_returns_failed_script_result_without_agent(monkeypatch):
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": False, "note": "bad script", "steps": [], "script_source": "script"})
+
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: pytest.fail("failed script result should not regenerate here"))
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: pytest.fail("failed script result should not fall back to agent"))
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="android",
+        udid="a1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["passed"] is False
+    assert result["script_source"] == "script"
+    assert result["note"] == "bad script"
+
+
+def test_execute_case_with_fallback_falls_back_when_script_raises_and_regenerates(monkeypatch):
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("script crashed")))
+
+    generated = []
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: generated.append(True) or "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: {"passed": True, "record_id": "rec1", "name": "case", "module": "首页", "platform": "Android", "device": "a1", "steps": []})
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="android",
+        udid="a1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["passed"] is True
+    assert result["script_fallback"] is True
+    assert result["script_error"] == "RuntimeError: script crashed"
+    assert generated == [True]
+
+
+def test_execute_case_with_fallback_script_result_keeps_order_and_state_group(monkeypatch):
+    entry = {
+        "record_id": "rec1",
+        "name": "case",
+        "module": "首页",
+        "order": "A-02",
+        "state_group": "login_flow",
+        "steps": [],
+    }
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": True, "steps": [], "script_source": "script"})
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: pytest.fail("should not fall back to agent"))
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="android",
+        udid="a1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["record_id"] == "rec1"
+    assert result["order"] == "A-02"
+    assert result["state_group"] == "login_flow"
+
+
+def test_execute_case_with_fallback_ios_prefers_existing_script(monkeypatch):
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    find_calls = []
+    monkeypatch.setattr(orchestrate, "find_case_script",
+                        lambda *args, **kwargs: find_calls.append(True) or "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": True, "name": "case", "steps": [], "script_source": "script"})
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: pytest.fail("existing iOS script should not regenerate"))
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: pytest.fail("should not fall back to agent"))
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="ios",
+        udid="i1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["passed"] is True
+    assert result["script_source"] == "script"
+    assert find_calls == [True]
+
+
+def test_script_runtime_context_for_ios_grants_network_and_uses_wda_port(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(orchestrate, "_resolve_ios_device_wda_config", lambda app_id, udid: {"port": 8101})
+    monkeypatch.setattr(orchestrate, "grant_ios_network_permission",
+                        lambda udid, bundle_id: captured.setdefault("grant", (udid, bundle_id)) or True)
+    monkeypatch.setattr(
+        orchestrate.orch_case_runtime_ios,
+        "script_runtime_context",
+        lambda **kwargs: (captured.setdefault("runtime", kwargs), {"run_flow": lambda *args, **kw: {"passed": True}})[1],
+    )
+
+    ctx = orchestrate._script_runtime_context_for("gaotu", "ios", "i1")
+
+    assert "run_flow" in ctx
+    assert captured["grant"] == ("i1", "com.gaotu100.superclass")
+    assert captured["runtime"]["port"] == 8101
+    assert captured["runtime"]["bundle_id"] == "com.gaotu100.superclass"
+
+
+def test_script_assert_ui_captures_checkpoint_without_agent(monkeypatch):
+    handled = []
+    ctx = {
+        "script_meta": {"record_id": "rec1"},
+        "handle_known_dialogs": lambda step=None: handled.append(step) or True,
+        "capture_screenshot": lambda step=None: "/tmp/shot.png",
+        "read_page_source": lambda force_refresh=False: "<App/>",
+    }
+    monkeypatch.setattr(
+        orchestrate,
+        "_assert_ui_via_agent",
+        lambda *args, **kwargs: pytest.fail("assert_ui should not start agent during script flow"),
+    )
+
+    result = orchestrate._run_script_assert_ui(
+        app_id="gaotu",
+        platform="ios",
+        udid="i1",
+        ctx=ctx,
+        step={"type": "assert_ui"},
+        wda_port=8100,
+    )
+
+    assert result["passed"] is True
+    assert result["verify_method"] == "screenshot"
+    assert result["evidence"] == "/tmp/shot.png"
+    assert result["checkpoint_index"] == 0
+    assert handled == [{"type": "assert_ui"}]
+    assert ctx["_script_ui_audit_checkpoints"][0]["screenshot"] == "/tmp/shot.png"
+
+
+def test_script_ui_audit_entry_allows_known_dialog_handling_first():
+    entry = orchestrate._script_ui_audit_entry(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        {"type": "assert_ui", "text": "UI规范检查：首页"},
+    )
+
+    text = entry["steps"][0]["text"]
+    assert "先自动处理已知系统弹窗" in text
+    assert "除这些已知弹窗外，不执行额外点击/输入/跳转动作" in text
+
+
+def test_finalize_deferred_script_ui_audit_updates_assert_ui_steps(monkeypatch):
+    calls = []
+    ctx = {
+        "script_meta": {"record_id": "rec1"},
+        "_script_ui_audit_checkpoints": [
+            {"index": 0, "text": "UI规范检查：首页", "screenshot": "/tmp/home.png", "page_source": "<App/>"},
+            {"index": 1, "text": "UI规范检查：登录", "screenshot": "/tmp/login.png", "page_source": "<App/>"},
+        ],
+    }
+    monkeypatch.setattr(
+        orchestrate,
+        "_assert_ui_checkpoints_via_agent",
+        lambda *args, **kwargs: calls.append(args) or [
+            {"checkpoint_index": 0, "pass": True, "verify_method": "vision", "evidence": "/tmp/home.png", "confidence": "high", "note": "ok"},
+            {"checkpoint_index": 1, "passed": False, "verify_method": "vision", "evidence": "/tmp/login.png", "confidence": "high", "note": "overlap"},
+        ],
+    )
+    monkeypatch.setattr(orchestrate, "_cleanup_ios_appium_mcp_wda", lambda udid: None)
+    monkeypatch.setattr(orchestrate, "_resolve_ios_device_wda_config", lambda app_id, udid: {})
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args: True)
+    result = {"passed": True, "steps": [
+        {"type": "ASSERT_UI", "text": "UI规范检查：首页", "passed": True, "checkpoint_index": 0},
+        {"type": "ASSERT_UI", "text": "UI规范检查：登录", "passed": True, "checkpoint_index": 1},
+    ]}
+
+    orchestrate._finalize_deferred_script_ui_audit("gaotu", "ios", "i1", ctx, result, wda_port=8100)
+
+    assert len(calls) == 1
+    assert result["passed"] is False
+    assert result["note"] == "assert_ui failed: UI规范检查：登录"
+    assert result["steps"][0]["passed"] is True
+    assert result["steps"][0]["note"] == "ok"
+    assert result["steps"][1]["passed"] is False
+    assert result["steps"][1]["note"] == "overlap"
+
+
+def test_assert_ui_checkpoints_retries_when_agent_returns_no_assert_steps(monkeypatch):
+    calls = []
+    checkpoints = [
+        {"index": 0, "text": "UI规范检查：首页", "screenshot": "/tmp/home.png", "page_source": "<App/>"},
+    ]
+
+    def fake_execute_case_via_agent(**kwargs):
+        calls.append(kwargs["result_dir"])
+        if len(calls) == 1:
+            return {"passed": False, "note": "agent execution failed: failed", "steps": []}
+        return {"passed": True, "steps": [
+            {"type": "ASSERT", "passed": True, "verify_method": "vision",
+             "evidence": "/tmp/home.png", "confidence": "high", "note": "ok"}
+        ]}
+
+    monkeypatch.setenv("ORCH_SCRIPT_UI_AUDIT_RETRIES", "1")
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent", fake_execute_case_via_agent)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda seconds: None)
+
+    results = orchestrate._assert_ui_checkpoints_via_agent(
+        "gaotu", "ios", "i1", {"record_id": "rec1"}, checkpoints, wda_port=8100
+    )
+
+    assert len(calls) == 2
+    assert results == [{
+        "checkpoint_index": 0,
+        "text": "UI规范检查：首页",
+        "passed": True,
+        "verify_method": "vision",
+        "evidence": "/tmp/home.png",
+        "confidence": "high",
+        "note": "ok",
+    }]
+
+
+def test_finalize_deferred_script_ui_audit_stops_appium_mcp_wda_after_agent(monkeypatch):
+    calls = []
+    ctx = {
+        "script_meta": {"record_id": "rec1"},
+        "_script_ui_audit_checkpoints": [
+            {"index": 0, "text": "UI规范检查：首页", "screenshot": "/tmp/home.png", "page_source": "<App/>"},
+        ],
+    }
+    monkeypatch.setattr(orchestrate, "_assert_ui_checkpoints_via_agent",
+                        lambda *args, **kwargs: calls.append("agent") or [{"checkpoint_index": 0, "passed": True}])
+    monkeypatch.setattr(orchestrate, "_cleanup_ios_appium_mcp_wda",
+                        lambda udid: calls.append(("cleanup", udid)))
+    monkeypatch.setattr(orchestrate, "_resolve_ios_device_wda_config",
+                        lambda app_id, udid: {"team": "TEAM1", "bundle_id": "wda.bundle", "port": 8102})
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready",
+                        lambda *args: calls.append("wda") or True)
+
+    orchestrate._finalize_deferred_script_ui_audit("gaotu", "ios", "i1", ctx, {"passed": True, "steps": []}, wda_port=8100)
+
+    assert calls == ["agent", ("cleanup", "i1"), "wda"]
+
+
+def test_execute_case_with_fallback_ui_audit_uses_script_with_assert_ui(monkeypatch):
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: True)
+    find_calls = []
+    monkeypatch.setattr(orchestrate, "find_case_script",
+                        lambda *args, **kwargs: find_calls.append(True) or "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": True, "name": "case", "steps": [
+                            {"type": "ASSERT_UI", "passed": True, "verify_method": "vision"}
+                        ], "script_source": "script"})
+    generated = []
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: generated.append(True) or "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: {"passed": True, "record_id": "rec1", "name": "case", "module": "首页", "platform": "Android", "device": "a1", "steps": []})
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu",
+        platform="android",
+        udid="a1",
+        entry=entry,
+        version="5.91.90",
+        current_account="12345679000",
+        result_dir="/tmp",
+    )
+
+    assert result["passed"] is True
+    assert result["script_source"] == "script"
+    assert find_calls == [True]
+    assert generated == []
+
+
+def test_write_results_to_table_uses_order_and_state_group_fields(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+        def read(self):
+            return _json.dumps(self.payload, ensure_ascii=False).encode()
+
+    def fake_urlopen(req):
+        url = req.full_url
+        if "batch_create" in url:
+            captured["body"] = _json.loads(req.data.decode("utf-8"))
+            return _Resp({"code": 0})
+        return _Resp({"code": 0, "data": {"obj_token": "obj-token"}})
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate, "_resolve_obj_token", lambda app_token: "obj-token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", fake_urlopen)
+
+    orchestrate.write_results_to_table("gaotu", "android", [{
+        "record_id": "rec_case1",
+        "order": "A-02",
+        "state_group": "login_flow",
+        "device": "a1",
+        "name": "case1",
+        "passed": True,
+        "steps": [],
+        "screenshots": [],
+    }])
+
+    fields = captured["body"]["records"][0]["fields"]
+    assert fields["record_id"] == "rec_case1"
+    assert fields["编号"] == "A-02"
+    assert fields["状态组"] == "login_flow"
+    assert fields["执行设备"] == "a1"
+    assert fields["用例名称"] == "case1"
+    assert fields["执行结果"] == "通过"
+
+
+def test_write_results_to_table_coerces_numeric_order_for_number_field(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+        def read(self):
+            return _json.dumps(self.payload, ensure_ascii=False).encode()
+
+    def fake_urlopen(req):
+        url = req.full_url
+        if "batch_create" in url:
+            captured["body"] = _json.loads(req.data.decode("utf-8"))
+            return _Resp({"code": 0})
+        return _Resp({"code": 0, "data": {"obj_token": "obj-token"}})
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate, "_resolve_obj_token", lambda app_token: "obj-token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", fake_urlopen)
+
+    orchestrate.write_results_to_table("gaotu", "android", [{
+        "record_id": "rec_case1",
+        "order": "109",
+        "state_group": "首页",
+        "device": "a1",
+        "name": "case1",
+        "passed": True,
+        "steps": [],
+        "screenshots": [],
+    }])
+
+    fields = captured["body"]["records"][0]["fields"]
+    assert fields["编号"] == 109
+
+
+def test_write_results_to_table_omits_record_id_for_failed_cases(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+        def read(self):
+            return _json.dumps(self.payload, ensure_ascii=False).encode()
+
+    def fake_urlopen(req):
+        url = req.full_url
+        if "batch_create" in url:
+            captured["body"] = _json.loads(req.data.decode("utf-8"))
+            return _Resp({"code": 0})
+        return _Resp({"code": 0, "data": {"obj_token": "obj-token"}})
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate, "_resolve_obj_token", lambda app_token: "obj-token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", fake_urlopen)
+
+    orchestrate.write_results_to_table("gaotu", "ios", [{
+        "record_id": "rec_failed",
+        "device": "i1",
+        "name": "failed case",
+        "passed": False,
+        "steps": [],
+        "screenshots": [],
+    }])
+
+    fields = captured["body"]["records"][0]["fields"]
+    assert "record_id" not in fields
+    assert fields["执行结果"] == "失败"
 
 
 class _FakeProc:
@@ -129,9 +2114,9 @@ class _FakeProc:
 
 
 def test_collect_results_alive_empty_not_done(tmp_path):
-    """回归 bug：进程仍存活时,即便结果文件是空 [] 也不能提前判完成。"""
+    """回归 bug：进程仍存活时,即便结果文件为空也不能提前判完成。"""
     udid = "dev_alive"
-    (tmp_path / f"result_{udid}.json").write_text("[]")
+    (tmp_path / f"result_{udid}.jsonl").write_text("")
     proc = _FakeProc([None])  # 永远存活
     results = orchestrate.collect_results(
         {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
@@ -140,23 +2125,91 @@ def test_collect_results_alive_empty_not_done(tmp_path):
 
 
 def test_collect_results_reads_only_after_exit(tmp_path):
-    """进程退出后才读取最终结果文件。"""
+    """进程正常退出(code=0)后读取 JSONL 结果，判 done。"""
     udid = "dev_exit"
     cases = [{"name": "c1", "platform": "Android", "passed": True}]
-    (tmp_path / f"result_{udid}.json").write_text(_json.dumps(cases))
-    proc = _FakeProc([0])  # 已退出
+    _write_jsonl(tmp_path / f"result_{udid}.jsonl", cases)
+    proc = _FakeProc([0], returncode=0)  # 正常退出
     results = orchestrate.collect_results(
         {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
     assert results[udid][0]["passed"] is True
 
 
 def test_collect_results_exit_no_file_is_failed(tmp_path):
-    """进程退出却没写结果文件 → 判失败(非提前完成)。"""
+    """进程退出却一条结果都没落盘 → 判失败(非提前完成)。"""
     udid = "dev_crash"
     proc = _FakeProc([1], returncode=1)
     results = orchestrate.collect_results(
         {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02)
     assert results[udid] == "failed"
+
+
+def test_collect_results_crash_keeps_partial(tmp_path):
+    """核心：进程 429/异常退出(code=1)但已增量落盘部分用例 → 保留部分结果，不整台判失败。"""
+    udid = "dev_partial"
+    cases = [{"name": "c1", "platform": "Android", "passed": True},
+             {"name": "c2", "platform": "Android", "passed": False}]
+    _write_jsonl(tmp_path / f"result_{udid}.jsonl", cases)
+    proc = _FakeProc([1], returncode=1)  # 异常退出
+    with patch("orchestrate._notify") as notify:
+        results = orchestrate.collect_results(
+            {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02,
+            app_id="gaotu", version="9.9.9", run_id="r_test")
+    # 已跑完的 2 条被保留(而非整台 "failed")
+    assert isinstance(results[udid], list) and len(results[udid]) == 2
+    # 崩溃仍即时报警
+    assert notify.called
+
+
+def test_collect_results_exit0_with_partial_results_marks_crashed(tmp_path):
+    """进程正常退出但只落盘部分结果 → 保留部分结果，但不能记 done。"""
+    udid = "dev_partial_exit0"
+    cases = [{"name": "c1", "platform": "Android", "passed": True}]
+    _write_jsonl(tmp_path / f"result_{udid}.jsonl", cases)
+    proc = _FakeProc([0], returncode=0)
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.run_status") as rs:
+        results = orchestrate.collect_results(
+            {udid: proc},
+            result_dir=str(tmp_path),
+            timeout=1,
+            poll_interval=0.02,
+            app_id="gaotu",
+            version="9.9.9",
+            run_id="r_test",
+            device_totals={udid: {"total": 3, "platform": "Android"}},
+        )
+    assert isinstance(results[udid], list)
+    assert len(results[udid]) == 1
+    assert notify.called
+    assert rs.update_device.call_args.kwargs["state"] == "crashed"
+
+
+def test_collect_results_tolerates_corrupt_last_line(tmp_path):
+    """崩溃时半写的末行损坏 → 跳过该行，前面完整行照常读回。"""
+    udid = "dev_halfwrite"
+    good = _json.dumps({"name": "c1", "platform": "Android", "passed": True})
+    (tmp_path / f"result_{udid}.jsonl").write_text(good + "\n" + '{"name": "c2", "pla')
+    proc = _FakeProc([1], returncode=1)
+    with patch("orchestrate._notify"):
+        results = orchestrate.collect_results(
+            {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02,
+            app_id="gaotu", version="9.9.9", run_id="r_test")
+    assert isinstance(results[udid], list) and len(results[udid]) == 1
+
+
+def test_collect_results_reads_agent_log_tail(monkeypatch, tmp_path):
+    udid = "dev_crash"
+    proc = _FakeProc([1], returncode=1)
+    log_path = tmp_path / f"agent_{udid}.log"
+    log_path.write_text("runner failed")
+    monkeypatch.setattr(orchestrate, "agent_log_path", lambda value: str(tmp_path / f"agent_{value}.log"))
+    with patch("orchestrate._notify") as notify:
+        results = orchestrate.collect_results(
+            {udid: proc}, result_dir=str(tmp_path), timeout=1, poll_interval=0.02,
+            app_id="gaotu", version="9.9.9", run_id="r_test")
+    assert results[udid] == "failed"
+    assert "runner failed" in notify.call_args[0][2]
 
 
 @pytest.fixture(autouse=True)
@@ -189,9 +2242,9 @@ def test_finalize_idempotent(tmp_path):
 
 def test_finalize_interrupt_reads_partial_from_disk(tmp_path):
     # a1 写了 2 条结果，b1(计划 5 条)没写 → 部分结果场景
-    (tmp_path / "result_a1.json").write_text(_json.dumps(
-        [{"platform": "Android", "passed": True},
-         {"platform": "Android", "passed": False}]))
+    _write_jsonl(tmp_path / "result_a1.jsonl",
+                 [{"platform": "Android", "passed": True},
+                  {"platform": "Android", "passed": False}])
     _seed_inflight(tmp_path, {"a1": {"total": 4, "platform": "Android"},
                               "b1": {"total": 5, "platform": "Android"}})
     with patch("orchestrate.generate_reports") as gr, \
@@ -254,3 +2307,631 @@ default:
     result = orchestrate.load_devices("gaotu", config_path=str(cfg))
     assert result["ios"][0]["wda"] == {"team": "TEAMX",
                                         "bundle_id": "com.x.WDA", "port": 8101}
+
+
+def test_chunk_entries_splits_device_cases_in_order():
+    entries = [{"name": f"c{i}"} for i in range(5)]
+    batches = orchestrate.chunk_entries(entries, batch_size=2)
+    assert [[c["name"] for c in batch] for batch in batches] == [
+        ["c0", "c1"],
+        ["c2", "c3"],
+        ["c4"],
+    ]
+
+
+def test_execute_device_batches_writes_each_batch(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [{"name": "c1"}, {"name": "c2"}, {"name": "c3"}],
+    }
+    launched = []
+    writes = []
+    batch_payloads = [
+        [{"name": "c1", "platform": "Android", "device": udid, "passed": True, "steps": []},
+         {"name": "c2", "platform": "Android", "device": udid, "passed": False, "steps": []}],
+        [{"name": "c3", "platform": "Android", "device": udid, "passed": True, "steps": []}],
+    ]
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        launched.append({
+            "udid": batch_udid,
+            "platform": platform,
+            "entries": [e["name"] for e in entries],
+            "result_dir": kwargs["result_dir"],
+            "batch_idx": kwargs["batch_idx"],
+            "batch_count": kwargs["batch_count"],
+        })
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        idx = len(writes)
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_jsonl(result_path, batch_payloads[idx])
+        return {udid: batch_payloads[idx]}
+
+    def fake_write_results_to_table(app_id, platform, cases):
+        writes.append((app_id, platform, [c["name"] for c in cases]))
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", fake_write_results_to_table)
+
+    results = orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=2,
+    )
+
+    assert [x["entries"] for x in launched] == [["c1", "c2"], ["c3"]]
+    assert writes == [
+        ("gaotu", "android", ["c1", "c2"]),
+        ("gaotu", "android", ["c3"]),
+    ]
+    assert [c["name"] for c in results] == ["c1", "c2", "c3"]
+    merged = orchestrate._load_jsonl(tmp_path / f"result_{udid}.jsonl")
+    assert [c["name"] for c in merged] == ["c1", "c2", "c3"]
+
+
+def test_execute_device_batches_uses_script_first_results(monkeypatch, tmp_path):
+    group = {
+        "platform": "Android",
+        "entries": [{"record_id": "rec1", "name": "c1", "module": "首页", "steps": []}],
+    }
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "execute_case_with_fallback",
+                        lambda **kwargs: {
+                            "record_id": "rec1",
+                            "name": "c1",
+                            "module": "首页",
+                            "platform": "Android",
+                            "device": "a1",
+                            "passed": True,
+                            "steps": [],
+                            "_current_account": "",
+                        })
+    writes = []
+    monkeypatch.setattr(orchestrate, "write_results_to_table",
+                        lambda app_id, platform, cases: writes.append((app_id, platform, len(cases))))
+
+    results = orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid="a1",
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert results[0]["record_id"] == "rec1"
+    assert results[0]["passed"] is True
+    assert writes == [("gaotu", "android", 1)]
+
+
+def test_hydrate_batch_cases_backfills_missing_record_id():
+    entries = [
+        {"record_id": "rec1", "name": "c1", "module": "首页"},
+        {"record_id": "rec2", "name": "c2", "module": "登录"},
+    ]
+    cases = [
+        {"seq": 1, "name": "c1", "platform": "Android", "device": "a1", "passed": True, "steps": []},
+        {"seq": 2, "platform": "Android", "device": "a1", "passed": False, "steps": []},
+    ]
+
+    hydrated = orchestrate._hydrate_batch_cases(cases, entries)
+
+    assert hydrated[0]["record_id"] == "rec1"
+    assert hydrated[1]["record_id"] == "rec2"
+    assert hydrated[1]["name"] == "c2"
+    assert hydrated[1]["module"] == "登录"
+
+
+def test_execute_device_batches_groups_by_state_group_and_account(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"name": "c1", "state_group": "g1", "steps": [{"type": "PRECOND", "text": "账号：12345679000"}]},
+            {"name": "c2", "state_group": "g1", "steps": [{"type": "PRECOND", "text": "账号：12345679000"}]},
+            {"name": "c3", "state_group": "g2", "steps": [{"type": "PRECOND", "text": "账号：12211119071"}]},
+            {"name": "c4", "state_group": "g2", "steps": [{"type": "PRECOND", "text": "账号：12211119071"}]},
+        ],
+    }
+    launched = []
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        launched.append({
+            "entries": [e["name"] for e in entries],
+            "current_account": kwargs["current_account"],
+            "batch_idx": kwargs["batch_idx"],
+            "batch_count": kwargs["batch_count"],
+        })
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        idx = len(launched) - 1
+        names = launched[idx]["entries"]
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = [{"seq": pos, "name": n, "platform": "Android", "device": udid, "passed": True, "steps": []}
+                   for pos, n in enumerate(names, 1)]
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", lambda *args, **kwargs: None)
+
+    orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert [x["entries"] for x in launched] == [["c1", "c2"], ["c3", "c4"]]
+    assert [x["batch_count"] for x in launched] == [2, 2]
+
+
+def test_execute_device_batches_splits_same_state_group_on_account_change(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"name": "c1", "state_group": "g1", "steps": [{"type": "PRECOND", "text": "账号：12345679000"}]},
+            {"name": "c2", "state_group": "g1", "steps": [{"type": "PRECOND", "text": "账号：12177931844"}]},
+            {"name": "c3", "state_group": "g1", "steps": [{"type": "PRECOND", "text": "账号：12177931844"}]},
+        ],
+    }
+    launched = []
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        launched.append([e["name"] for e in entries])
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        idx = len(launched) - 1
+        names = launched[idx]
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = [{"name": n, "platform": "Android", "device": udid, "passed": True, "steps": []}
+                   for n in names]
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", lambda *args, **kwargs: None)
+
+    orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert launched == [["c1"], ["c2", "c3"]]
+
+
+def test_build_execution_batches_splits_when_prompt_budget_exceeded(monkeypatch):
+    monkeypatch.setattr(orchestrate, "resolve_max_batch_prompt_chars", lambda: 220)
+    entries = [
+        {
+            "record_id": "r1",
+            "name": "c1",
+            "module": "首页",
+            "state_group": "g1",
+            "steps": [{"type": "ACTION", "text": "A" * 60}],
+        },
+        {
+            "record_id": "r2",
+            "name": "c2",
+            "module": "首页",
+            "state_group": "g1",
+            "steps": [{"type": "ACTION", "text": "B" * 60}],
+        },
+        {
+            "record_id": "r3",
+            "name": "c3",
+            "module": "首页",
+            "state_group": "g1",
+            "steps": [{"type": "ACTION", "text": "C" * 60}],
+        },
+    ]
+
+    batches = orchestrate.build_execution_batches(entries, batch_size=20)
+
+    assert [[entry["name"] for entry in batch] for batch in batches] == [["c1"], ["c2"], ["c3"]]
+
+
+def test_execute_device_batches_writes_results_before_launching_next_context_batch(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"record_id": "r1", "name": "c1", "module": "首页", "state_group": "g1", "steps": [{"type": "ACTION", "text": "A" * 60}]},
+            {"record_id": "r2", "name": "c2", "module": "首页", "state_group": "g1", "steps": [{"type": "ACTION", "text": "B" * 60}]},
+        ],
+    }
+    events = []
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(orchestrate, "resolve_max_batch_prompt_chars", lambda: 220)
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        events.append(("launch", kwargs["batch_idx"], [e["name"] for e in entries]))
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        batch_dir = os.path.basename(result_dir)
+        idx = int(batch_dir.rsplit("_", 1)[-1])
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = [{
+            "record_id": f"r{idx + 1}",
+            "name": f"c{idx + 1}",
+            "platform": "Android",
+            "device": udid,
+            "passed": True,
+            "steps": [],
+        }]
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    def fake_write_results_to_table(app_id, platform, cases):
+        events.append(("write", [c["name"] for c in cases]))
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", fake_write_results_to_table)
+
+    orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert events == [
+        ("launch", 0, ["c1"]),
+        ("write", ["c1"]),
+        ("launch", 1, ["c2"]),
+        ("write", ["c2"]),
+    ]
+
+
+def test_execute_device_batches_splits_launch_popup_group_per_case(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "iOS",
+        "entries": [
+            {"name": "c1", "state_group": "启动弹窗", "steps": []},
+            {"name": "c2", "state_group": "启动弹窗", "steps": []},
+            {"name": "c3", "state_group": "启动弹窗", "steps": []},
+        ],
+    }
+    launched = []
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        launched.append([e["name"] for e in entries])
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        idx = len(launched) - 1
+        names = launched[idx]
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = [{"name": n, "platform": "iOS", "device": udid, "passed": True, "steps": []}
+                   for n in names]
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", lambda *args, **kwargs: None)
+
+    orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert launched == [["c1"], ["c2"], ["c3"]]
+
+
+def test_entry_account_key_accepts_more_precond_formats():
+    assert orchestrate.entry_account_key({
+        "steps": [{"type": "PRECOND", "text": "使用12345679000登录并进入AI闪学"}]
+    }) == "12345679000"
+    assert orchestrate.entry_account_key({
+        "steps": [{"type": "PRECOND", "text": "12345679000已登录，当前在AI闪学页"}]
+    }) == "12345679000"
+    assert orchestrate.entry_account_key({
+        "steps": [{"type": "PRECOND", "text": "账号为12177931844，当前在首页"}]
+    }) == "12177931844"
+
+
+def test_run_clears_result_tables_once_before_batched_execution(monkeypatch):
+    monkeypatch.setattr(orchestrate, "load_devices", lambda app_id: {
+        "android": [{"udid": "a1", "name": "android-dev"}],
+        "ios": [],
+    })
+    monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
+    monkeypatch.setattr(orchestrate, "install_android", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
+        {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "a1", "ios_device": ""},
+    ])
+    monkeypatch.setattr(orchestrate, "run_exploration", lambda *args, **kwargs: None)
+    monkeypatch.setattr(orchestrate, "finalize", lambda **kwargs: True)
+
+    cleared = []
+    monkeypatch.setattr(orchestrate, "clear_result_tables",
+                        lambda app_id, platforms: cleared.append((app_id, tuple(sorted(platforms)))))
+    monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
+                        lambda app_id, groups, **kwargs: {"a1": []})
+
+    with patch("orchestrate.run_status"), patch("orchestrate._notify"):
+        orchestrate._run(
+            app_id="gaotu",
+            version="5.91.90",
+            apk_url="https://example.com/app.apk",
+            ipa_url="",
+            platforms={"android"},
+            run_id="r1",
+        )
+
+    assert cleared == [("gaotu", ("android",))]
+
+
+def test_run_resets_apps_after_exploration(monkeypatch):
+    monkeypatch.setattr(orchestrate, "load_devices", lambda app_id: {
+        "android": [{"udid": "a1", "name": "android-dev"}],
+        "ios": [{"udid": "i1", "name": "ios-dev"}],
+    })
+    monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
+    monkeypatch.setattr(orchestrate, "install_android", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [])
+    monkeypatch.setattr(orchestrate, "run_exploration", lambda *args, **kwargs: None)
+
+    resets = []
+    monkeypatch.setattr(orchestrate, "reset_apps_after_exploration",
+                        lambda app_id, android_devices, ios_devices:
+                        resets.append((app_id, tuple(android_devices), tuple(ios_devices))))
+
+    with patch("orchestrate.run_status"), patch("orchestrate._notify"):
+        orchestrate._run(
+            app_id="gaotu",
+            version="5.91.90",
+            apk_url="https://example.com/app.apk",
+            ipa_url="https://example.com/app.ipa",
+            platforms={"android", "ios"},
+            run_id="r1",
+        )
+
+    assert resets == [("gaotu", ("a1",), ("i1",))]
+
+
+def test_run_ios_executes_after_wda_ready(monkeypatch):
+    monkeypatch.setattr(orchestrate, "load_devices", lambda app_id: {
+        "android": [],
+        "ios": [{"udid": "i1", "name": "ios-dev"}],
+    })
+    monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
+    monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
+        {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "", "ios_device": "i1"},
+    ])
+    monkeypatch.setattr(orchestrate, "clear_result_tables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(orchestrate, "finalize", lambda **kwargs: True)
+
+    executed = []
+    monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
+                        lambda app_id, groups, **kwargs:
+                        executed.append((app_id, sorted(groups.keys()))) or {"i1": []})
+
+    with patch("orchestrate.run_status"), patch("orchestrate._notify"):
+        orchestrate._run(
+            app_id="gaotu",
+            version="5.91.90",
+            apk_url="",
+            ipa_url="https://example.com/app.ipa",
+            platforms={"ios"},
+            run_id="r1",
+        )
+
+    assert executed == [("gaotu", ["i1"])]
+
+
+def test_run_skips_ios_device_when_wda_not_ready(monkeypatch):
+    monkeypatch.setattr(orchestrate, "load_devices", lambda app_id: {
+        "android": [],
+        "ios": [{"udid": "i1", "name": "ios-dev"}],
+    })
+    monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
+    monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: False)
+    monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
+        {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "", "ios_device": "i1"},
+    ])
+
+    executed = []
+    monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
+                        lambda app_id, groups, **kwargs:
+                        executed.append((app_id, sorted(groups.keys()))) or {"i1": []})
+
+    with patch("orchestrate.run_status"), patch("orchestrate._notify") as notify:
+        orchestrate._run(
+            app_id="gaotu",
+            version="5.91.90",
+            apk_url="",
+            ipa_url="https://example.com/app.ipa",
+            platforms={"ios"},
+            run_id="r1",
+        )
+
+    assert executed == []
+    assert any("WDA 未就绪" in args[2] for args, _ in notify.call_args_list)
+
+
+def test_generate_case_script_orders_unmatched_numbered_asserts_by_index(tmp_path, monkeypatch):
+    """编号断言若无同号 ACTION，应按编号插到位（介于前后动作之间），而非全部堆到末尾。"""
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_order",
+        "name": "order case",
+        "module": "启动登录",
+        "platform": "iOS",
+        "passed": True,
+        "steps": [
+            {"type": "ACTION", "text": "2. 点击不同意", "script_action": "tap",
+             "locator": {"by": "accessibility_id", "value": "不同意"}},
+            {"type": "ACTION", "text": "5. 点击同意", "script_action": "tap",
+             "locator": {"by": "accessibility_id", "value": "同意"}},
+            {"type": "ASSERT", "text": "1. 隐私弹窗弹出", "pass": True,
+             "verify_method": "text", "evidence": "page_source contains 同意, 不同意", "confidence": "high"},
+            {"type": "ASSERT", "text": "2. 切换为温馨提示", "pass": True,
+             "verify_method": "text", "evidence": "page_source contains 温馨提示标题", "confidence": "high"},
+            {"type": "ASSERT", "text": "3. 温馨提示正文完整", "pass": True,
+             "verify_method": "text", "evidence": "page_source contains 温馨提示正文内容", "confidence": "high"},
+            {"type": "ASSERT", "text": "4. 同意/简单浏览模式按钮", "pass": True,
+             "verify_method": "text", "evidence": "page_source contains 同意标签, 简单浏览模式", "confidence": "high"},
+            {"type": "ASSERT", "text": "5. 青少年守护弹窗", "pass": True,
+             "verify_method": "text", "evidence": "page_source contains 青少年守护标题", "confidence": "high"},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "ios", case, version="5.91.93")
+    content = open(path).read()
+
+    i2 = content.index("'text': '2. 切换为温馨提示'")
+    i3 = content.index("'text': '3. 温馨提示正文完整'")
+    i4 = content.index("'text': '4. 同意/简单浏览模式按钮'")
+    i5tap = content.index("'value': '同意'")   # step-5 tap locator
+    i5 = content.index("'text': '5. 青少年守护弹窗'")
+    # asserts 3 and 4 must sit AFTER assert 2 and BEFORE the step-5 tap / assert 5
+    assert i2 < i3 < i4 < i5tap < i5
+
+
+def test_known_dialog_actions_wireless_data_precedes_generic_wlan():
+    """使用无线数据弹窗的 source 含'无线局域网'(仅无线局域网按钮),必须先命中专用条目
+    点'无线局域网与蜂窝网络',否则通用('无线局域网','允许')先匹配、点不到'允许'而失败。"""
+    actions = orchestrate._KNOWN_DIALOG_TEXT_ACTIONS
+    markers = [m for m, _ in actions]
+    assert ("使用无线数据", "无线局域网与蜂窝网络") in actions
+    assert markers.index("使用无线数据") < markers.index("无线局域网")
+
+
+def test_ios_handle_known_dialogs_taps_wireless_and_cellular(monkeypatch):
+    dialog_src = '允许"高途"使用无线数据？ 无线局域网与蜂窝网络 仅无线局域网'
+    dismissed_src = "首页 发现"
+    state = {"src": dialog_src}
+    clicked = []
+
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session",
+                        lambda port, bundle_id: "sid")
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source",
+                        lambda port, sid: state["src"])
+
+    def fake_find(port, sid, by, value):
+        # 只有真实存在的按钮"无线局域网与蜂窝网络"能定位到;"允许"不存在
+        return "el" if value == "无线局域网与蜂窝网络" and value in state["src"] else ""
+
+    def fake_click(port, sid, el):
+        clicked.append(el)
+        state["src"] = dismissed_src   # 点击后弹窗消失
+        return True
+
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_find_element", fake_find)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_click_element", fake_click)
+
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=orchestrate._KNOWN_DIALOG_TEXT_ACTIONS,
+    )
+
+    assert runtime["handle_known_dialogs"]({}) is True
+    assert clicked == ["el"]   # 点了'无线局域网与蜂窝网络',没有因'允许'失败
+
+
+def test_ios_handle_known_dialogs_dismisses_system_alert_via_alert_api(monkeypatch):
+    """iOS 系统弹窗不在 page_source,必须走 alert API;按 alert 文案选按钮名 accept。"""
+    ios = orchestrate.orch_case_runtime_ios
+    alert_state = {"text": '允许"高途"使用无线数据？\n关闭无线数据时…'}
+    accepts = []
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "sid")
+    # page_source 里没有该系统弹窗文案(应用内是首页)
+    monkeypatch.setattr(ios, "_get_source", lambda port, sid: "首页 发现")
+    monkeypatch.setattr(ios, "_alert_text", lambda port, sid: alert_state["text"])
+
+    def fake_accept(port, sid, name=None):
+        accepts.append(name)
+        alert_state["text"] = ""   # 点掉后无 alert
+        return True
+    monkeypatch.setattr(ios, "_accept_alert", fake_accept)
+
+    runtime = ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=orchestrate._KNOWN_DIALOG_TEXT_ACTIONS,
+    )
+
+    assert runtime["handle_known_dialogs"]({}) is True
+    assert accepts == ["无线局域网与蜂窝网络"]   # 按文案选对了按钮
+
+
+def test_ios_alert_helpers_exist():
+    ios = orchestrate.orch_case_runtime_ios
+    assert callable(getattr(ios, "_alert_text", None))
+    assert callable(getattr(ios, "_accept_alert", None))

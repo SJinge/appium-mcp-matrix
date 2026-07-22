@@ -14,7 +14,9 @@
 3. 广告 banner
 4. 课程卡片/引导提示
 5. 身份问卷
-6. 系统权限弹窗（iOS）
+6. 版本更新弹窗
+7. 观看时长提醒
+8. 系统权限弹窗（iOS）
 
 ---
 
@@ -53,12 +55,34 @@
 | 高中选项 | `'高中' option button in identity questionnaire` | 选高中，再点下一步 |
 | 跳过（后续题） | `'跳过' button at top-right of questionnaire page` | 跳过后点「确认退出」 |
 
+### 学习阶段选择
+
+| 元素名 | ai_instruction | 备注 |
+|--------|---------------|------|
+| 一年级选项 | `'一年级' option in learning stage selection dialog` | 直接选一年级 |
+| 进入首页按钮 | `'进入首页' button in learning stage selection dialog` | 选完立即进入首页 |
+
+### 版本更新弹窗
+
+| 元素名 | ai_instruction |
+|--------|---------------|
+| 取消按钮 | `'取消' button in found new version dialog` |
+
+### 观看时长提醒
+
+| 元素名 | ai_instruction |
+|--------|---------------|
+| 我知道了按钮 | `'我知道了' button in watch duration reminder dialog` |
+
 ### 系统权限弹窗（iOS）
 
 | 处理方式 | 说明 |
 |---------|------|
 | `appium_alert action=accept` | 允许/好 |
 | AI视觉 | `'允许' or '好' button in system permission dialog` |
+| 通知权限 | 看到“是否允许‘高途’发送通知”→ 点“允许” |
+| 本地网络权限 | 看到“无线局域网”/“本地网络”相关权限弹窗 → 点“允许” |
+| 跟踪权限 | 看到“允许‘高途’跟踪”→ 点“允许” |
 
 ---
 
@@ -71,4 +95,7 @@
 | 广告 | 右上角×或"跳过"，全屏覆盖图片 |
 | 引导提示 | "知道了"、"我知道了" |
 | 身份问卷 | "小学"/"初中"/"高中" 选项 |
+| 学习阶段选择 | "一年级"、"进入首页" |
+| 版本更新 | "发现新版本"、"取消" |
+| 观看时长提醒 | "观看时长提醒"、"我知道了" |
 | 系统权限 | "允许"/"好"（iOS系统弹窗样式） |
