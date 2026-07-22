@@ -1643,7 +1643,6 @@ def write_results_to_table(app_id: str, platform: str, cases: list):
         fields = {
             "编号":     _coerce_number_field(c.get("order", "")),
             "状态组":   c.get("state_group", ""),
-            "模块":     c.get("module", ""),
             "执行设备": c.get("device", ""),
             "用例名称": c.get("name", ""),
             "执行结果": "通过" if passed else "失败",
