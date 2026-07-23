@@ -34,9 +34,9 @@ note 末尾强制追加：`；取证=<id|text|vision>`
 
 ---
 
-## 规范2：Toast / Snackbar 需在动作后立即截图
+## 规范2：Toast / Snackbar / 提示 需在动作后立即截图
 
-触发 Toast 的 ACTION 执行完毕后，**在 1s 内完成截图**，否则 Toast 消失无法验证。
+触发 Toast / 提示的 ACTION 执行完毕后，**在 1s 内完成截图**，否则 Toast / 提示消失无法验证。
 
 ```
 执行 ACTION（如点击"复制"）
@@ -46,7 +46,8 @@ appium_screenshot maxWidth=800
 判断 Toast 文案是否符合预期
 ```
 
-> 步骤列表中 Toast 验证点须标注 `[TOAST]`，不可与下一步 ASSERT 合并截图。
+> 步骤列表中 Toast / 提示类验证点须标注 `[TOAST]`，不可与下一步 ASSERT 合并截图。
+> 此类为**软断言**：`[TOAST]` 抢拍拿到证据即 PASS；1s 窗口内没抓到但最终页面状态实证符合预期（如已进入下一页）时不判整条失败，以最终稳定页面状态为准。
 
 ---
 

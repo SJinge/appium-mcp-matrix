@@ -561,7 +561,14 @@ def generate_case_script(app_id: str, platform: str, case: dict, version: str = 
     if not should_generate_case_script(case):
         return None
 
-    path = case_script_path(app_id, platform, case["record_id"])
+    # agent 结果 JSONL 是外部输入，个别通过用例可能漏写 record_id；
+    # 固化仅是副产物，缺 record_id 时跳过并告警，绝不因此让整轮崩掉。
+    record_id = case.get("record_id")
+    if not record_id:
+        log.warning(f"用例通过但结果缺 record_id，跳过脚本固化: name={case.get('name', '')!r}")
+        return None
+
+    path = case_script_path(app_id, platform, record_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     normalized_platform = platform.lower()
     case_for_flow = dict(case)
@@ -571,7 +578,7 @@ def generate_case_script(app_id: str, platform: str, case: dict, version: str = 
         "app_id": app_id,
         "bundle_id": PKG_NAMES.get(app_id, ""),
         "app_version": version or case.get("app_version", ""),
-        "record_id": case["record_id"],
+        "record_id": record_id,
         "name": case.get("name", ""),
         "module": case.get("module", ""),
         "platform": platform.lower(),
@@ -1580,9 +1587,18 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
             batch_data = batch_results.get(udid)
             if isinstance(batch_data, list):
                 batch_cases = _load_jsonl(_batch_result_path(result_dir, udid, batch_idx)) or batch_data
+                # agent 结果只写 source_record_id（见 skill 结果 schema）；按 entries
+                # backfill 出 record_id/name/module 等，否则下游固化与写表拿不到 record_id。
+                # launch_agent_per_device 路径已 hydrate，此 execute_device_batches 路径此前漏了。
+                batch_cases = _hydrate_batch_cases(batch_cases, batch)
                 for case in batch_cases:
                     if case.get("passed"):
-                        generate_case_script(app_id, group["platform"].lower(), case)
+                        try:
+                            generate_case_script(app_id, group["platform"].lower(), case)
+                        except Exception as e:
+                            # 固化是 best-effort 副产物，任何异常都不许拖垮本批/整轮执行
+                            log.warning(f"用例脚本固化失败(已忽略): "
+                                        f"record_id={case.get('record_id')!r} err={e}")
                 _append_jsonl(aggregate_path, batch_cases)
                 aggregate_cases.extend(batch_cases)
                 if batch_cases:

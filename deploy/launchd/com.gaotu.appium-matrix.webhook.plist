@@ -25,6 +25,10 @@
     <string>codex</string>
     <key>PORT</key>
     <string>10086</string>
+    <!-- 完整安装包(大小严格 == 远端 Content-Length)跨轮复用，跳过重复下载；
+         残包/对不上远端大小仍会重下，不会误用截断包。 -->
+    <key>ORCH_SKIP_DOWNLOAD</key>
+    <string>1</string>
   </dict>
 
   <key>WorkingDirectory</key>

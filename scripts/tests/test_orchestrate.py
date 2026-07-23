@@ -2437,6 +2437,61 @@ def test_hydrate_batch_cases_backfills_missing_record_id():
     assert hydrated[1]["module"] == "登录"
 
 
+def test_execute_device_batches_hydrates_record_id_before_solidify(monkeypatch, tmp_path):
+    """回归：agent 结果只写 source_record_id、无 record_id；execute_device_batches
+    必须先 hydrate 再固化，否则 generate_case_script 读 case["record_id"] 会 KeyError
+    掀翻整轮（线上 5.91.93 事故）。"""
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"record_id": "recPASS", "name": "c1", "state_group": "g1",
+             "steps": [{"type": "PRECOND", "text": "账号：12345679000"}]},
+        ],
+    }
+    launched = []
+    solidified = []
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_launch_agent_batch(app_id, batch_udid, platform, entries, **kwargs):
+        launched.append([e["name"] for e in entries])
+        return _Proc()
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        idx = len(launched) - 1
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_{idx}" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        # 关键：只有 source_record_id，故意不带 record_id
+        payload = [{"seq": 1, "name": "c1", "platform": "Android", "device": udid,
+                    "passed": True, "source_record_id": "recPASS", "steps": []}]
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", fake_launch_agent_batch)
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda app_id, platform, case, **kw: solidified.append(dict(case)))
+
+    orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        version="5.91.90",
+        run_id="r1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    # 通过用例进了固化，且拿到了 backfill 出的 record_id（没有则曾 KeyError 崩整轮）
+    assert len(solidified) == 1
+    assert solidified[0]["record_id"] == "recPASS"
+
+
 def test_execute_device_batches_groups_by_state_group_and_account(monkeypatch, tmp_path):
     udid = "a1"
     group = {
