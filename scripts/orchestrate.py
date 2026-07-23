@@ -232,7 +232,17 @@ def resolve_ios_ipa_url(url: str) -> str:
 
 
 def download_file(url: str, dest: str) -> bool:
-    r = subprocess.run(["curl", "-L", "-o", dest, url], capture_output=True)
+    # 加超时/续传/重试，避免 CDN 连接 stall 时 curl 无限干等卡死整轮：
+    #   --connect-timeout 15         连接 15s 建不上就失败
+    #   --speed-limit/--speed-time   30s 内平均速度 <10KB/s 视为卡死，中断
+    #   --retry 3 --retry-delay 2    卡死/失败自动重试 3 次
+    #   -C -                         断点续传，重试时从已下字节接着下不从头来
+    r = subprocess.run(
+        ["curl", "-L", "--connect-timeout", "15",
+         "--speed-limit", "10240", "--speed-time", "30",
+         "--retry", "3", "--retry-delay", "2", "-C", "-",
+         "-o", dest, url],
+        capture_output=True)
     exists = os.path.exists(dest)
     size_ok = exists and os.path.getsize(dest) > 1_000_000
     if size_ok:
