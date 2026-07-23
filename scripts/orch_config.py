@@ -9,6 +9,15 @@ PKG_NAMES = {
     "ketang":  "com.gaotu100.ketang",
 }
 
+APP_DISPLAY_NAMES = {
+    "gaotu":   "高途",
+    "tutu":    "途途课堂",
+    "jingpin": "高途高中",
+    "gongkao": "高途公职",
+    "xinli":   "高途心理",
+    "ketang":  "高途素养",
+}
+
 DEFAULT_WDA_TEAM = "5YX44746D6"
 DEFAULT_WDA_BUNDLE = "com.shijinge.WebDriverAgentRunner"
 DEFAULT_WDA_PORT = 8100

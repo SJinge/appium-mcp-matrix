@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts"))
 from feishu_config import APP_ID, APP_SECRET, GROUP_CHAT_ID, BITABLE_CONFIGS, RESULT_TABLES
 from orch_config import (
     PKG_NAMES,
+    APP_DISPLAY_NAMES,
     DEFAULT_WDA_TEAM,
     DEFAULT_WDA_BUNDLE,
     DEFAULT_WDA_PORT,
@@ -819,6 +820,122 @@ def grant_ios_network_permission(udid: str, bundle_id: str) -> bool:
     tail = ((result.stdout or "") + " " + (result.stderr or "")).strip()
     log.warning(f"iOS 网络权限授予失败: {udid}, code={result.returncode}, output={tail}")
     return False
+
+
+def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
+                                   timeout: int = 10, interval: float = 1.0) -> bool:
+    """启动 App 并前置处理会阻断首启的 iOS 网络类系统弹窗。"""
+    if not bundle_id:
+        log.warning(f"iOS 网络权限预热缺少 bundleId: {udid}")
+        return False
+    if not grant_ios_network_permission(udid, bundle_id):
+        log.warning(f"iOS {udid} 外部网络权限预授权失败，改用 WDA alert 兜底")
+
+    session_id = orch_case_runtime_ios._create_session(port, bundle_id)
+    if not session_id:
+        log.warning(f"iOS 网络权限预热建 session 失败: {udid}, port={port}")
+        return False
+
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            alert = orch_case_runtime_ios._alert_text(port, session_id)
+            if alert:
+                button = orch_case_runtime_ios._known_dialog_action_text(
+                    alert, _KNOWN_DIALOG_TEXT_ACTIONS)
+                if not orch_case_runtime_ios._accept_alert(port, session_id, button or None):
+                    log.warning(f"iOS 网络权限弹窗处理失败: {udid}, alert={alert[:120]}")
+                    return False
+                continue
+            time.sleep(interval)
+        return True
+    finally:
+        orch_case_runtime_ios._delete_session(port, session_id)
+        _stop_ios_app(udid, bundle_id)
+
+
+def _ios_wda_scroll_down(port: int, session_id: str) -> bool:
+    try:
+        size_body = orch_case_runtime_ios._wda_request(
+            port, "GET", f"/session/{session_id}/window/size", timeout=10)
+        size = size_body.get("value") or {}
+        width = int(size.get("width") or 390)
+        height = int(size.get("height") or 844)
+        orch_case_runtime_ios._wda_request(
+            port,
+            "POST",
+            f"/session/{session_id}/wda/dragfromtoforduration",
+            payload={
+                "duration": 0.2,
+                "fromX": width // 2,
+                "fromY": int(height * 0.78),
+                "toX": width // 2,
+                "toY": int(height * 0.28),
+            },
+            timeout=15,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _ios_tap_text_with_scroll(port: int, session_id: str, texts,
+                              max_scrolls: int = 8) -> bool:
+    candidates = [texts] if isinstance(texts, str) else list(texts)
+    for idx in range(max_scrolls + 1):
+        for text in candidates:
+            try:
+                element_id = orch_case_runtime_ios._find_element(port, session_id, "text", text)
+                if element_id and orch_case_runtime_ios._click_element(port, session_id, element_id):
+                    return True
+            except Exception:
+                pass
+        if idx >= max_scrolls or not _ios_wda_scroll_down(port, session_id):
+            break
+        time.sleep(0.5)
+    return False
+
+
+def grant_ios_network_permission_in_settings(udid: str, app_display_name: str,
+                                             port: int) -> bool:
+    """设置 -> App -> <App> -> 无线数据 -> 无线局域网与蜂窝数据。"""
+    session_id = orch_case_runtime_ios._create_session(port, "com.apple.Preferences")
+    if not session_id:
+        log.warning(f"iOS 设置网络权限建 session 失败: {udid}, port={port}")
+        return False
+    try:
+        source = orch_case_runtime_ios._get_source(port, session_id)
+        if app_display_name not in source:
+            _ios_tap_text_with_scroll(port, session_id, ("App", "应用"), max_scrolls=6)
+            time.sleep(0.8)
+        if not _ios_tap_text_with_scroll(port, session_id, app_display_name, max_scrolls=12):
+            log.warning(f"iOS 设置页未找到 App: {udid}, app={app_display_name}")
+            return False
+        time.sleep(0.8)
+        if not _ios_tap_text_with_scroll(port, session_id, "无线数据", max_scrolls=6):
+            log.warning(f"iOS App 设置页未找到无线数据入口: {udid}, app={app_display_name}")
+            return False
+        time.sleep(0.8)
+        if not _ios_tap_text_with_scroll(
+                port, session_id,
+                ("无线局域网与蜂窝数据", "无线局域网与蜂窝网络"),
+                max_scrolls=2):
+            log.warning(f"iOS 无线数据页未找到无线局域网与蜂窝数据选项: {udid}, app={app_display_name}")
+            return False
+        return True
+    finally:
+        orch_case_runtime_ios._delete_session(port, session_id)
+        _stop_ios_app(udid, "com.apple.Preferences")
+
+
+def ensure_ios_network_permission_ready(app_id: str, udid: str, bundle_id: str,
+                                        port: int) -> bool:
+    if prepare_ios_network_permission(udid, bundle_id, port):
+        return True
+    app_display_name = APP_DISPLAY_NAMES.get(app_id, app_id)
+    if not grant_ios_network_permission_in_settings(udid, app_display_name, port):
+        return False
+    return prepare_ios_network_permission(udid, bundle_id, port)
 
 
 def _resolve_ios_device_wda_config(app_id: str, udid: str) -> dict:
@@ -1954,10 +2071,11 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
                     d["udid"], wda.get("team", DEFAULT_WDA_TEAM),
                     wda.get("bundle_id", DEFAULT_WDA_BUNDLE), port):
                 bundle_id = PKG_NAMES.get(app_id, "")
-                if not grant_ios_network_permission(d["udid"], bundle_id):
+                if not ensure_ios_network_permission_ready(app_id, d["udid"], bundle_id, port):
                     _notify(app_id, version,
-                            f"⚠️ iOS {d['udid']} 网络权限预授权失败，继续执行并由系统弹窗兜底处理")
-                    log.warning(f"iOS {d['udid']} network permission grant failed, continue with dialog fallback")
+                            f"⚠️ iOS {d['udid']} 网络权限预热失败，跳过该设备，避免 App 无网络权限异常执行")
+                    log.warning(f"iOS {d['udid']} network permission prepare failed, skipping")
+                    continue
                 ios_ok.append(d)
                 wda_ports[d["udid"]] = port
             else:

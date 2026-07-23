@@ -1434,6 +1434,79 @@ def test_launch_app_after_reinstall_for_script_ios_grants_network_and_launches(m
     assert invalidated == [True]
 
 
+def test_grant_ios_network_permission_skips_when_no_command_configured(monkeypatch):
+    calls = []
+    monkeypatch.delenv("ORCH_IOS_NETWORK_PERMISSION_CMD", raising=False)
+    monkeypatch.setattr(orchestrate.subprocess, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    assert orchestrate.grant_ios_network_permission("i1", "com.gaotu100.superclass") is True
+    assert calls == []
+
+
+def test_prepare_ios_network_permission_accepts_wireless_alert(monkeypatch):
+    ios = orchestrate.orch_case_runtime_ios
+    alerts = ['允许"高途"使用无线数据？\n关闭无线数据时…', ""]
+    accepts = []
+    stopped = []
+
+    monkeypatch.setattr(orchestrate, "grant_ios_network_permission", lambda udid, bundle_id: True)
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "sid")
+    monkeypatch.setattr(ios, "_alert_text", lambda port, sid: alerts.pop(0) if alerts else "")
+    monkeypatch.setattr(ios, "_accept_alert", lambda port, sid, name=None: accepts.append(name) or True)
+    monkeypatch.setattr(ios, "_delete_session", lambda port, sid: True)
+    monkeypatch.setattr(orchestrate, "_stop_ios_app", lambda udid, bundle_id: stopped.append((udid, bundle_id)) or True)
+
+    assert orchestrate.prepare_ios_network_permission(
+        "i1", "com.gaotu100.superclass", 8100, timeout=0.1, interval=0
+    ) is True
+    assert accepts == ["无线局域网与蜂窝网络"]
+    assert stopped == [("i1", "com.gaotu100.superclass")]
+
+
+def test_grant_ios_network_permission_in_settings_taps_app_wireless_data_path(monkeypatch):
+    ios = orchestrate.orch_case_runtime_ios
+    sources = iter(["设置", "App 列表 高途", "高途 无线数据", "无线局域网与蜂窝数据"])
+    taps = []
+    stopped = []
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "settings-sid")
+    monkeypatch.setattr(ios, "_get_source", lambda port, sid: next(sources))
+    monkeypatch.setattr(orchestrate, "_ios_wda_scroll_down", lambda port, sid: True)
+    monkeypatch.setattr(ios, "_find_element", lambda port, sid, by, value: f"el-{value}")
+    monkeypatch.setattr(ios, "_click_element", lambda port, sid, element_id: taps.append(element_id[3:]) or True)
+    monkeypatch.setattr(ios, "_delete_session", lambda port, sid: True)
+    monkeypatch.setattr(orchestrate, "_stop_ios_app", lambda udid, bundle_id: stopped.append((udid, bundle_id)) or True)
+
+    assert orchestrate.grant_ios_network_permission_in_settings("i1", "高途", 8100) is True
+    assert taps == ["App", "高途", "无线数据", "无线局域网与蜂窝数据"]
+    assert stopped == [("i1", "com.apple.Preferences")]
+
+
+def test_ensure_ios_network_permission_ready_falls_back_to_settings(monkeypatch):
+    calls = []
+    prepare_results = iter([False, True])
+
+    monkeypatch.setattr(
+        orchestrate,
+        "prepare_ios_network_permission",
+        lambda udid, bundle_id, port: calls.append(("prepare", udid, bundle_id, port)) or next(prepare_results),
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "grant_ios_network_permission_in_settings",
+        lambda udid, app_name, port: calls.append(("settings", udid, app_name, port)) or True,
+    )
+
+    assert orchestrate.ensure_ios_network_permission_ready(
+        "gaotu", "i1", "com.gaotu100.superclass", 8100
+    ) is True
+    assert calls == [
+        ("prepare", "i1", "com.gaotu100.superclass", 8100),
+        ("settings", "i1", "高途", 8100),
+        ("prepare", "i1", "com.gaotu100.superclass", 8100),
+    ]
+
+
 def test_ios_script_runtime_route_creates_session(monkeypatch):
     created = []
 
@@ -2790,6 +2863,7 @@ def test_run_resets_apps_after_exploration(monkeypatch):
     monkeypatch.setattr(orchestrate, "install_android", lambda path, udid: True)
     monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
     monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(orchestrate, "ensure_ios_network_permission_ready", lambda *args, **kwargs: True)
     monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [])
     monkeypatch.setattr(orchestrate, "run_exploration", lambda *args, **kwargs: None)
 
@@ -2819,6 +2893,7 @@ def test_run_ios_executes_after_wda_ready(monkeypatch):
     monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
     monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
     monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(orchestrate, "ensure_ios_network_permission_ready", lambda *args, **kwargs: True)
     monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
         {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "", "ios_device": "i1"},
     ])
@@ -2841,6 +2916,38 @@ def test_run_ios_executes_after_wda_ready(monkeypatch):
         )
 
     assert executed == [("gaotu", ["i1"])]
+
+
+def test_run_skips_ios_device_when_network_permission_prepare_fails(monkeypatch):
+    monkeypatch.setattr(orchestrate, "load_devices", lambda app_id: {
+        "android": [],
+        "ios": [{"udid": "i1", "name": "ios-dev"}],
+    })
+    monkeypatch.setattr(orchestrate, "download_file", lambda url, dest: True)
+    monkeypatch.setattr(orchestrate, "install_ios", lambda path, udid: True)
+    monkeypatch.setattr(orchestrate.ios_wda, "ensure_wda_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(orchestrate, "ensure_ios_network_permission_ready", lambda *args, **kwargs: False)
+    monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
+        {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "", "ios_device": "i1"},
+    ])
+
+    executed = []
+    monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
+                        lambda app_id, groups, **kwargs:
+                        executed.append((app_id, sorted(groups.keys()))) or {})
+
+    with patch("orchestrate.run_status"), patch("orchestrate._notify") as notify:
+        orchestrate._run(
+            app_id="gaotu",
+            version="5.91.90",
+            apk_url="",
+            ipa_url="https://example.com/app.ipa",
+            platforms={"ios"},
+            run_id="r1",
+        )
+
+    assert executed == []
+    assert any("网络权限预热失败" in call.args[2] for call in notify.call_args_list)
 
 
 def test_run_skips_ios_device_when_wda_not_ready(monkeypatch):
