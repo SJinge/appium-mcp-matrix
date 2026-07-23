@@ -256,6 +256,22 @@ def _remote_size(url: str) -> int:
         return -1
 
 
+def prune_old_packages(app_id: str, version: str):
+    """只保留当前版本安装包，删除同 App 历史版本的 /tmp 残留包（apk+ipa）。
+
+    在下载阶段开始时调用；当前版本文件（含正被 ORCH_SKIP_DOWNLOAD 复用的包）保留。
+    """
+    keep = {f"{app_id}_{version}.apk", f"{app_id}_{version}.ipa"}
+    for path in glob.glob(f"/tmp/{app_id}_*.apk") + glob.glob(f"/tmp/{app_id}_*.ipa"):
+        if os.path.basename(path) in keep:
+            continue
+        try:
+            os.remove(path)
+            log.info(f"清理历史版本安装包: {path}")
+        except OSError as e:
+            log.warning(f"清理历史包失败 {path}: {e}")
+
+
 def ensure_package(url: str, dest: str, label: str) -> bool:
     """下载安装包到 dest。
 
@@ -756,11 +772,16 @@ def reset_apps_after_exploration(app_id: str, android_devices: list, ios_devices
 
 
 def grant_ios_network_permission(udid: str, bundle_id: str) -> bool:
-    """执行 iOS 网络权限预授权。命令支持通过环境变量覆盖。"""
-    template = os.environ.get(
-        "ORCH_IOS_NETWORK_PERMISSION_CMD",
-        "idevicesetpreferences -u {udid} grant-network {bundle_id}",
-    )
+    """执行可选的 iOS 网络权限预授权。
+
+    iOS 没有类似 Android pm grant 的稳定本地网络权限授权命令。默认跳过外部
+    预授权，依赖运行时 WDA alert API 兜底；如环境提供可靠工具，可通过
+    ORCH_IOS_NETWORK_PERMISSION_CMD 显式接入。
+    """
+    template = os.environ.get("ORCH_IOS_NETWORK_PERMISSION_CMD", "").strip()
+    if not template:
+        log.info(f"iOS 网络权限无可用预授权命令，跳过外部授权并由系统弹窗兜底: {udid}")
+        return True
     try:
         cmd = shlex.split(template.format(udid=udid, bundle_id=bundle_id))
     except Exception as exc:
@@ -769,7 +790,7 @@ def grant_ios_network_permission(udid: str, bundle_id: str) -> bool:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
-        log.warning("idevicesetpreferences 不在 PATH，无法授予 iOS 网络权限")
+        log.warning(f"iOS 网络权限命令不存在: {cmd[0] if cmd else template}")
         return False
     except subprocess.TimeoutExpired:
         log.warning(f"iOS 网络权限授予超时(>60s): {udid}")
@@ -1870,6 +1891,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     run_status.set_phase(run_id, "downloading", "下载安装包")
     apk_path = f"/tmp/{app_id}_{version}.apk"
     ipa_path = f"/tmp/{app_id}_{version}.ipa"
+    prune_old_packages(app_id, version)
     if "android" in platforms:
         if not ensure_package(apk_url, apk_path, "APK"):
             _notify(app_id, version, "❌ APK 下载失败，终止")
