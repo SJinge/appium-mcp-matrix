@@ -245,6 +245,36 @@ def download_file(url: str, dest: str) -> bool:
     return False
 
 
+def _remote_size(url: str) -> int:
+    """HEAD 取远端 Content-Length（跟随重定向取最终值）；取不到返回 -1。"""
+    try:
+        r = subprocess.run(["curl", "-sIL", url], capture_output=True, timeout=30)
+        out = (r.stdout or b"").decode("utf-8", errors="ignore")
+        sizes = re.findall(r"(?im)^content-length:\s*(\d+)", out)
+        return int(sizes[-1]) if sizes else -1
+    except Exception:
+        return -1
+
+
+def ensure_package(url: str, dest: str, label: str) -> bool:
+    """下载安装包到 dest。
+
+    ORCH_SKIP_DOWNLOAD 开启时，仅当本地包已存在且大小与远端 Content-Length
+    严格相等才复用、跳过下载；取不到远端大小或大小不等一律重下，避免复用上一轮
+    被中断的截断半包（历史事故：>1MB 但不完整的残包被当成功）。
+    """
+    if os.environ.get("ORCH_SKIP_DOWNLOAD", "").strip().lower() in ("1", "true", "yes"):
+        if os.path.exists(dest):
+            local, remote = os.path.getsize(dest), _remote_size(url)
+            if remote > 0 and local == remote:
+                log.info(f"{label} 复用本地已完整包，跳过下载（{local} bytes == 远端）: {dest}")
+                return True
+            log.info(f"{label} 本地包不完整/无法核对远端大小"
+                     f"(local={local}, remote={remote})，重新下载")
+    log.info(f"Downloading {label}: {url}")
+    return download_file(url, dest)
+
+
 def _feishu_post(body: dict):
     token = _get_token()
     req = urllib.request.Request(
@@ -1841,15 +1871,13 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     apk_path = f"/tmp/{app_id}_{version}.apk"
     ipa_path = f"/tmp/{app_id}_{version}.ipa"
     if "android" in platforms:
-        log.info(f"Downloading APK: {apk_url}")
-        if not download_file(apk_url, apk_path):
+        if not ensure_package(apk_url, apk_path, "APK"):
             _notify(app_id, version, "❌ APK 下载失败，终止")
             run_status.finish(run_id, "failed", "APK 下载失败")
             return
     if "ios" in platforms:
         ipa_dl = resolve_ios_ipa_url(ipa_url)
-        log.info(f"Downloading IPA: {ipa_dl}")
-        if not download_file(ipa_dl, ipa_path):
+        if not ensure_package(ipa_dl, ipa_path, "IPA"):
             _notify(app_id, version, "❌ IPA 下载失败，终止")
             run_status.finish(run_id, "failed", "IPA 下载失败")
             return
