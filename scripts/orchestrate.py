@@ -667,7 +667,9 @@ def _launch_app_after_reinstall_for_script(app_id: str, platform: str, udid: str
     if platform.lower() == "ios":
         if not bundle_id:
             return False
-        grant_ios_network_permission(udid, bundle_id)
+        wda = _resolve_ios_device_wda_config(app_id, udid)
+        ensure_ios_network_permission_ready(
+            app_id, udid, bundle_id, wda.get("port", DEFAULT_WDA_PORT))
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "tidevice", "-u", udid, "launch", bundle_id],
@@ -1233,7 +1235,7 @@ def _script_runtime_context_for(app_id: str, platform: str, udid: str,
     if normalized_platform == "ios":
         wda = _resolve_ios_device_wda_config(app_id, udid)
         port = wda.get("port", DEFAULT_WDA_PORT)
-        grant_ios_network_permission(udid, bundle_id)
+        ensure_ios_network_permission_ready(app_id, udid, bundle_id, port)
         ctx = orch_case_runtime_ios.script_runtime_context(
             udid=udid,
             port=port,

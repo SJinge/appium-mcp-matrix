@@ -1408,14 +1408,16 @@ def test_launch_app_after_reinstall_for_script_android_waits_and_invalidates(mon
 
 
 @patch("orchestrate.subprocess.run")
-def test_launch_app_after_reinstall_for_script_ios_grants_network_and_launches(mock_run, monkeypatch):
+def test_launch_app_after_reinstall_for_script_ios_ensures_network_and_launches(mock_run, monkeypatch):
     invalidated = []
     sleep_calls = []
-    grants = []
+    ensures = []
     mock_run.return_value.returncode = 0
 
-    monkeypatch.setattr(orchestrate, "grant_ios_network_permission",
-                        lambda udid, bundle_id: grants.append((udid, bundle_id)) or True)
+    monkeypatch.setattr(orchestrate, "_resolve_ios_device_wda_config",
+                        lambda app_id, udid: {"port": 8101})
+    monkeypatch.setattr(orchestrate, "ensure_ios_network_permission_ready",
+                        lambda app_id, udid, bundle_id, port: ensures.append((app_id, udid, bundle_id, port)) or True)
     monkeypatch.setattr(orchestrate.time, "sleep", lambda seconds: sleep_calls.append(seconds))
 
     ok = orchestrate._launch_app_after_reinstall_for_script(
@@ -1426,7 +1428,7 @@ def test_launch_app_after_reinstall_for_script_ios_grants_network_and_launches(m
     )
 
     assert ok is True
-    assert grants == [("i1", "com.gaotu100.superclass")]
+    assert ensures == [("gaotu", "i1", "com.gaotu100.superclass", 8101)]
     assert mock_run.call_args[0][0] == [
         sys.executable, "-m", "tidevice", "-u", "i1", "launch", "com.gaotu100.superclass"
     ]
@@ -1879,11 +1881,11 @@ def test_execute_case_with_fallback_ios_prefers_existing_script(monkeypatch):
     assert find_calls == [True]
 
 
-def test_script_runtime_context_for_ios_grants_network_and_uses_wda_port(monkeypatch):
+def test_script_runtime_context_for_ios_ensures_network_and_uses_wda_port(monkeypatch):
     captured = {}
     monkeypatch.setattr(orchestrate, "_resolve_ios_device_wda_config", lambda app_id, udid: {"port": 8101})
-    monkeypatch.setattr(orchestrate, "grant_ios_network_permission",
-                        lambda udid, bundle_id: captured.setdefault("grant", (udid, bundle_id)) or True)
+    monkeypatch.setattr(orchestrate, "ensure_ios_network_permission_ready",
+                        lambda app_id, udid, bundle_id, port: captured.setdefault("ensure", (app_id, udid, bundle_id, port)) or True)
     monkeypatch.setattr(
         orchestrate.orch_case_runtime_ios,
         "script_runtime_context",
@@ -1893,7 +1895,7 @@ def test_script_runtime_context_for_ios_grants_network_and_uses_wda_port(monkeyp
     ctx = orchestrate._script_runtime_context_for("gaotu", "ios", "i1")
 
     assert "run_flow" in ctx
-    assert captured["grant"] == ("i1", "com.gaotu100.superclass")
+    assert captured["ensure"] == ("gaotu", "i1", "com.gaotu100.superclass", 8101)
     assert captured["runtime"]["port"] == 8101
     assert captured["runtime"]["bundle_id"] == "com.gaotu100.superclass"
 
