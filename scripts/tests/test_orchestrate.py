@@ -1,7 +1,21 @@
-import pytest, sys, os, json as _json
+import pytest, sys, os, glob, json as _json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from unittest.mock import patch
 import orchestrate
+
+# 捕获真实实现，供 prune 专测在隔离前缀上验证；其余测试一律 no-op。
+_REAL_PRUNE = orchestrate.prune_old_packages
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_tmp_prune(monkeypatch):
+    """任何测试都不得对真实 /tmp 执行生产 app 的 prune。
+
+    历史事故:test_run_* 端到端测试调 _run(app_id="gaotu") → 内部 prune_old_packages
+    打真实 /tmp,把线上 run 正在用的 gaotu_5.91.92.ipa 删掉,导致重装类用例找不到包。
+    全局置为 no-op;prune 专测用 _REAL_PRUNE 在 prunetest* 隔离前缀上验证真实逻辑。
+    """
+    monkeypatch.setattr(orchestrate, "prune_old_packages", lambda *a, **k: None)
 
 
 def _write_jsonl(path, cases):
@@ -1822,6 +1836,124 @@ def test_execute_case_with_fallback_falls_back_when_script_raises_and_regenerate
     assert generated == [True]
 
 
+@pytest.mark.parametrize("script_result,expected", [
+    # 通过 → 非机制失败
+    ({"passed": True, "steps": []}, False),
+    # 无步骤明细的失败 → 保守视为真实失败(不回退)
+    ({"passed": False, "note": "bad script", "steps": []}, False),
+    # 动作步失败 → 机制类
+    ({"passed": False, "note": "tap failed",
+      "steps": [{"type": "TAP", "passed": False, "note": "tap failed"}]}, True),
+    ({"passed": False, "note": "prepare_state failed",
+      "steps": [{"type": "PREPARE_STATE", "passed": False, "note": "prepare_state failed"}]}, True),
+    ({"passed": False, "note": "reinstall_app failed",
+      "steps": [{"type": "REINSTALL_APP", "passed": False, "note": "reinstall_app failed"}]}, True),
+    # 不支持步 → 机制类
+    ({"passed": False, "note": "unsupported flow step: swipe",
+      "steps": [{"type": "SWIPE", "passed": False, "note": "unsupported flow step: swipe"}]}, True),
+    # 断言定位器全 miss(matched=[])→ 机制类(脚本失效)
+    ({"passed": False, "note": "script assertion failed: 首页 | matched=[]; missing=['首页']",
+      "steps": [{"type": "ASSERT", "passed": False, "note": "matched=[]; missing=['首页']"}]}, True),
+    # 断言取到值但内容不匹配(matched 非空)→ 真实发现,不回退
+    ({"passed": False, "note": "script assertion failed: 关注 | matched=['首页']; missing=['关注']",
+      "steps": [{"type": "ASSERT", "passed": False, "note": "matched=['首页']; missing=['关注']"}]}, False),
+    # 视觉断言判失败 → 真实 UI 发现,不回退
+    ({"passed": False, "note": "assert_ui failed: 页面空白",
+      "steps": [{"type": "ASSERT_UI", "passed": False, "note": "页面空白"}]}, False),
+    # 先过动作步再断言全 miss → 取终态硬失败步(机制类)
+    ({"passed": False, "note": "script assertion failed: x | matched=[]; missing=['x']",
+      "steps": [
+          {"type": "TAP", "passed": True, "note": ""},
+          {"type": "ASSERT", "passed": False, "note": "matched=[]; missing=['x']"},
+      ]}, True),
+    # 仅 soft_assert 软失败(流程仍继续),终态无硬失败 → 非机制
+    ({"passed": False, "note": "",
+      "steps": [{"type": "ASSERT", "passed": False, "soft_assert": True,
+                 "note": "matched=[]; missing=['toast']"}]}, False),
+])
+def test_is_script_mechanism_failure_classification(script_result, expected):
+    assert orchestrate._is_script_mechanism_failure(script_result) is expected
+
+
+def test_execute_case_with_fallback_mechanism_failure_falls_back_and_regenerates(monkeypatch):
+    """脚本机制类失败(动作步 failed)→ 回退 agent;agent 通过则刷新脚本。"""
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": False, "note": "tap failed",
+                                                 "steps": [{"type": "TAP", "passed": False, "note": "tap failed"}],
+                                                 "script_source": "script"})
+    generated = []
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: generated.append(True) or "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: {"passed": True, "record_id": "rec1", "name": "case",
+                                                 "module": "首页", "platform": "Android", "device": "a1", "steps": []})
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu", platform="android", udid="a1", entry=entry,
+        version="5.91.90", current_account="12345679000", result_dir="/tmp",
+    )
+
+    assert result["passed"] is True
+    assert result["script_fallback"] is True
+    assert result["script_failure_note"] == "tap failed"
+    assert "script_error" not in result
+    assert generated == [True]
+
+
+def test_execute_case_with_fallback_mechanism_failure_agent_also_fails_no_regenerate(monkeypatch):
+    """脚本机制类失败回退 agent,agent 也失败 → 返回 agent 失败,不刷新脚本。"""
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": False, "note": "prepare_state failed",
+                                                 "steps": [{"type": "PREPARE_STATE", "passed": False, "note": "prepare_state failed"}],
+                                                 "script_source": "script"})
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: pytest.fail("agent 失败时不应刷新脚本"))
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: {"passed": False, "note": "agent failed too",
+                                                 "record_id": "rec1", "steps": []})
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu", platform="android", udid="a1", entry=entry,
+        version="5.91.90", current_account="12345679000", result_dir="/tmp",
+    )
+
+    assert result["passed"] is False
+    assert result["script_fallback"] is True
+    assert result["script_failure_note"] == "prepare_state failed"
+
+
+def test_execute_case_with_fallback_real_assertion_failure_no_agent(monkeypatch):
+    """脚本真实断言失败(取到值但内容不匹配)→ 直接返回失败,不回退 agent。"""
+    entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    monkeypatch.setattr(orchestrate, "find_case_script", lambda *args, **kwargs: "/tmp/rec1.py")
+    monkeypatch.setattr(orchestrate, "run_case_script",
+                        lambda *args, **kwargs: {"passed": False,
+                                                 "note": "script assertion failed: 关注 | matched=['首页']; missing=['关注']",
+                                                 "steps": [{"type": "ASSERT", "passed": False,
+                                                            "note": "matched=['首页']; missing=['关注']"}],
+                                                 "script_source": "script"})
+    monkeypatch.setattr(orchestrate, "generate_case_script",
+                        lambda *args, **kwargs: pytest.fail("真实断言失败不应刷新脚本"))
+    monkeypatch.setattr(orchestrate, "execute_case_via_agent",
+                        lambda *args, **kwargs: pytest.fail("真实断言失败不应回退 agent"))
+
+    result = orchestrate.execute_case_with_fallback(
+        app_id="gaotu", platform="android", udid="a1", entry=entry,
+        version="5.91.90", current_account="12345679000", result_dir="/tmp",
+    )
+
+    assert result["passed"] is False
+    assert result["script_source"] == "script"
+    assert "script_fallback" not in result
+
+
 def test_execute_case_with_fallback_script_result_keeps_order_and_state_group(monkeypatch):
     entry = {
         "record_id": "rec1",
@@ -3099,3 +3231,57 @@ def test_ios_alert_helpers_exist():
     ios = orchestrate.orch_case_runtime_ios
     assert callable(getattr(ios, "_alert_text", None))
     assert callable(getattr(ios, "_accept_alert", None))
+
+
+# --- prune_old_packages 跨平台竞态回归 (iOS run 误删安卓在下的 apk) ---
+
+def _touch(path):
+    with open(path, "w") as f:
+        f.write("x")
+
+def test_prune_ios_run_keeps_sibling_apk(tmp_path):
+    """iOS run(仅 platforms=ios)绝不能删同 App 的 .apk（并发安卓 run 正在下）。"""
+    app = "prunetestios"
+    try:
+        _touch(f"/tmp/{app}_5.91.93.apk")   # 安卓并发 run 当前版本包
+        _touch(f"/tmp/{app}_5.91.90.ipa")   # iOS 历史版本，应被删
+        _touch(f"/tmp/{app}_5.91.92.ipa")   # iOS 当前版本，应保留
+        _REAL_PRUNE(app, "5.91.92", {"ios"})
+        assert os.path.exists(f"/tmp/{app}_5.91.93.apk"), "iOS run 误删了安卓 apk"
+        assert os.path.exists(f"/tmp/{app}_5.91.92.ipa"), "当前版本 ipa 被误删"
+        assert not os.path.exists(f"/tmp/{app}_5.91.90.ipa"), "历史 ipa 未清理"
+    finally:
+        for p in glob.glob(f"/tmp/{app}_*"):
+            os.remove(p)
+
+def test_prune_android_run_only_touches_apk(tmp_path):
+    """android run(仅 platforms=android)只清 apk,不碰 ipa。"""
+    app = "prunetestand"
+    try:
+        _touch(f"/tmp/{app}_5.91.90.apk")   # 历史 apk,应删
+        _touch(f"/tmp/{app}_5.91.93.apk")   # 当前 apk,应留
+        _touch(f"/tmp/{app}_5.91.92.ipa")   # iOS 并发 run 包,不能碰
+        _REAL_PRUNE(app, "5.91.93", {"android"})
+        assert not os.path.exists(f"/tmp/{app}_5.91.90.apk"), "历史 apk 未清理"
+        assert os.path.exists(f"/tmp/{app}_5.91.93.apk"), "当前 apk 被误删"
+        assert os.path.exists(f"/tmp/{app}_5.91.92.ipa"), "android run 误碰了 ipa"
+    finally:
+        for p in glob.glob(f"/tmp/{app}_*"):
+            os.remove(p)
+
+def test_prune_no_platforms_fallback_prunes_both(tmp_path):
+    """platforms 为空时兜底:两种扩展名都清理历史、保留当前版本。"""
+    app = "prunetestboth"
+    try:
+        _touch(f"/tmp/{app}_5.91.90.apk")
+        _touch(f"/tmp/{app}_5.91.90.ipa")
+        _touch(f"/tmp/{app}_5.91.93.apk")
+        _touch(f"/tmp/{app}_5.91.93.ipa")
+        _REAL_PRUNE(app, "5.91.93")
+        assert not os.path.exists(f"/tmp/{app}_5.91.90.apk")
+        assert not os.path.exists(f"/tmp/{app}_5.91.90.ipa")
+        assert os.path.exists(f"/tmp/{app}_5.91.93.apk")
+        assert os.path.exists(f"/tmp/{app}_5.91.93.ipa")
+    finally:
+        for p in glob.glob(f"/tmp/{app}_*"):
+            os.remove(p)

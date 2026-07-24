@@ -274,13 +274,27 @@ def _remote_size(url: str) -> int:
         return -1
 
 
-def prune_old_packages(app_id: str, version: str):
-    """只保留当前版本安装包，删除同 App 历史版本的 /tmp 残留包（apk+ipa）。
+def prune_old_packages(app_id: str, version: str, platforms=None):
+    """只保留当前版本安装包，删除同 App 历史版本的 /tmp 残留包。
 
     在下载阶段开始时调用；当前版本文件（含正被 ORCH_SKIP_DOWNLOAD 复用的包）保留。
+
+    仅清理本 run 所属平台的扩展名（android→apk / ios→ipa）。android 与 ios 是
+    两个独立并发进程且版本号常不同，若一起 glob apk+ipa，会把并发的另一平台 run
+    正在下载的当前版本包当"历史版本"删掉（历史事故：iOS run 5.91.92 删掉安卓在下的
+    gaotu_5.91.93.apk 导致 APK 下载失败）。platforms 为空时兜底清理两种扩展名。
     """
-    keep = {f"{app_id}_{version}.apk", f"{app_id}_{version}.ipa"}
-    for path in glob.glob(f"/tmp/{app_id}_*.apk") + glob.glob(f"/tmp/{app_id}_*.ipa"):
+    plats = platforms or {"android", "ios"}
+    exts = []
+    if "android" in plats:
+        exts.append("apk")
+    if "ios" in plats:
+        exts.append("ipa")
+    keep = {f"{app_id}_{version}.{e}" for e in exts}
+    paths = []
+    for e in exts:
+        paths += glob.glob(f"/tmp/{app_id}_*.{e}")
+    for path in paths:
         if os.path.basename(path) in keep:
             continue
         try:
@@ -1364,6 +1378,36 @@ def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
     }
 
 
+def _is_script_mechanism_failure(script_result: dict) -> bool:
+    """脚本失败是否属"机制类失败"——即脚本本身失效(动作步失败/定位器全 miss/不支持步),
+    应回退 agent 自愈并刷新脚本；区别于"真实断言失败"(取到值但内容不匹配 / 视觉断言判异常),
+    那是真实缺陷发现,不回退、直接如实报失败。"""
+    if script_result.get("passed"):
+        return False
+    steps = script_result.get("steps") or []
+    # 视觉断言判失败 = 真实 UI 发现,不回退
+    if any(s.get("type") == "ASSERT_UI" and not s.get("passed") for s in steps):
+        return False
+    # 终态硬失败步(排除 soft_assert 软失败,后者不终止流程)
+    hard_fail = None
+    for s in steps:
+        if s.get("passed"):
+            continue
+        if s.get("type") == "ASSERT" and s.get("soft_assert"):
+            continue
+        hard_fail = s
+    if hard_fail is None:
+        return False
+    if hard_fail.get("type") == "ASSERT":
+        # id/text 断言:定位器全 miss(matched=[])= 脚本失效→回退;取到值但不匹配=真实发现
+        m = re.search(r"matched=(\[[^\]]*\])", hard_fail.get("note") or "")
+        if m:
+            return m.group(1).replace(" ", "") == "[]"
+        return False
+    # 动作步(TAP/INPUT/PREPARE_STATE/REINSTALL_APP…)或 unsupported = 机制类失败
+    return True
+
+
 def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dict,
                                version: str = None, current_account: str = "",
                                wda_port: int = None, result_dir: str = "/tmp",
@@ -1374,6 +1418,7 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
     )
     script_path = find_case_script(app_id, platform, entry["record_id"]) if use_case_script else ""
     script_error = ""
+    script_failure_note = ""
     if script_path:
         try:
             script_result = run_case_script(app_id, platform, udid, script_path)
@@ -1384,9 +1429,18 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
             script_result.setdefault("state_group", entry.get("state_group", ""))
             script_result.setdefault("platform", platform.capitalize())
             script_result.setdefault("device", udid)
-            return script_result
+            # 脚本通过 → 直接返回;脚本"真实失败"(断言语义不符/视觉异常)→ 如实返回失败。
+            # 仅"机制类失败"(脚本失效)才回退 agent 自愈并刷新脚本。
+            if script_result.get("passed") or not _is_script_mechanism_failure(script_result):
+                return script_result
+            script_failure_note = script_result.get("note", "")
+            log.info(
+                f"[{udid}] 脚本机制类失败,回退 agent 执行并尝试刷新脚本: "
+                f"{entry['record_id']} | {script_failure_note}"
+            )
         except Exception:
             script_error = traceback.format_exc(limit=1).strip().splitlines()[-1]
+            log.info(f"[{udid}] 脚本执行异常,回退 agent: {entry['record_id']} | {script_error}")
 
     agent_result = execute_case_via_agent(
         app_id=app_id, platform=platform, udid=udid, entry=entry,
@@ -1396,6 +1450,9 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
     if script_error:
         agent_result["script_fallback"] = True
         agent_result["script_error"] = script_error
+    elif script_path and script_failure_note:
+        agent_result["script_fallback"] = True
+        agent_result["script_failure_note"] = script_failure_note
     if normalized_platform in {"android", "ios"} and agent_result.get("passed"):
         generate_case_script(app_id, platform, agent_result, version=version)
     return agent_result
@@ -2043,7 +2100,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     run_status.set_phase(run_id, "downloading", "下载安装包")
     apk_path = f"/tmp/{app_id}_{version}.apk"
     ipa_path = f"/tmp/{app_id}_{version}.ipa"
-    prune_old_packages(app_id, version)
+    prune_old_packages(app_id, version, platforms)
     if "android" in platforms:
         if not ensure_package(apk_url, apk_path, "APK"):
             _notify(app_id, version, "❌ APK 下载失败，终止")
