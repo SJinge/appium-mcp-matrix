@@ -233,16 +233,23 @@ def resolve_ios_ipa_url(url: str) -> str:
 
 
 def download_file(url: str, dest: str) -> bool:
-    # 加超时/续传/重试，避免 CDN 连接 stall 时 curl 无限干等卡死整轮：
-    #   --connect-timeout 15         连接 15s 建不上就失败
-    #   --speed-limit/--speed-time   30s 内平均速度 <10KB/s 视为卡死，中断
-    #   --retry 3 --retry-delay 2    卡死/失败自动重试 3 次
-    #   -C -                         断点续传，重试时从已下字节接着下不从头来
+    # 加超时/续传/重试，避免 CDN 连接 stall 时 curl 无限干等卡死整轮。
+    # 抖动加固：放宽低速中止窗口 + 多重试 + 断点续传，让偶发抖动能自愈，
+    # 又保留 stall 兜底(真卡死 60s 无进展才中断，不会无限干等)：
+    #   --connect-timeout 15            连接 15s 建不上就失败
+    #   --speed-limit/--speed-time      连续 60s 平均 <10KB/s 才视为卡死中断
+    #                                   (原 30s；抖动多在 1 分钟内恢复，给足缓冲)
+    #   --retry 5 --retry-delay 5       卡死/失败自动重试 5 次，每次间隔 5s 等网络恢复
+    #   --retry-connrefused             连接被拒也纳入重试(不止超时/5xx)
+    #   -C -                            断点续传，重试从已下字节接着下不从头来
+    # 阈值可用 ORCH_DL_SPEED_TIME / ORCH_DL_RETRY 覆盖，免改代码调参。
+    speed_time = os.environ.get("ORCH_DL_SPEED_TIME", "60")
+    retry = os.environ.get("ORCH_DL_RETRY", "5")
     r = subprocess.run(
         ["curl", "-L", "--connect-timeout", "15",
-         "--speed-limit", "10240", "--speed-time", "30",
-         "--retry", "3", "--retry-delay", "2", "-C", "-",
-         "-o", dest, url],
+         "--speed-limit", "10240", "--speed-time", speed_time,
+         "--retry", retry, "--retry-delay", "5", "--retry-connrefused",
+         "-C", "-", "-o", dest, url],
         capture_output=True)
     exists = os.path.exists(dest)
     size_ok = exists and os.path.getsize(dest) > 1_000_000
