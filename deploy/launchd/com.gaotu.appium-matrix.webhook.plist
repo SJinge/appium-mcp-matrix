@@ -22,7 +22,7 @@
     <key>ENABLED_APPS</key>
     <string>gaotu</string>
     <key>ORCH_AGENT_CLI</key>
-    <string>codex</string>
+    <string>claude</string>
     <key>PORT</key>
     <string>10086</string>
     <!-- 完整安装包(大小严格 == 远端 Content-Length)跨轮复用，跳过重复下载；
