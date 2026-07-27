@@ -222,6 +222,37 @@ def test_resolve_agent_runner_rejects_unknown_value(monkeypatch):
         orchestrate.resolve_agent_runner()
 
 
+def test_load_runner_secrets_injects_into_environ(tmp_path):
+    import orch_config
+    secrets = tmp_path / "runner.env"
+    secrets.write_text(
+        "# headless claude 凭据\n"
+        'ANTHROPIC_API_KEY="sk-test-123"\n'
+        "\n"
+        "FOO=bar\n"
+    )
+    env = {"ORCH_SECRETS_FILE": str(secrets)}
+    loaded = orch_config.load_runner_secrets(environ=env)
+    assert loaded == ["ANTHROPIC_API_KEY", "FOO"]
+    assert env["ANTHROPIC_API_KEY"] == "sk-test-123"  # 引号被剥掉
+    assert env["FOO"] == "bar"
+
+
+def test_load_runner_secrets_missing_file_is_noop(tmp_path):
+    import orch_config
+    env = {"ORCH_SECRETS_FILE": str(tmp_path / "nope.env")}
+    assert orch_config.load_runner_secrets(environ=env) == []
+
+
+def test_load_runner_secrets_ignores_comments_and_blank_lines(tmp_path):
+    import orch_config
+    secrets = tmp_path / "runner.env"
+    secrets.write_text("# just a comment\n\n   \nKEY=value\n")
+    env = {"ORCH_SECRETS_FILE": str(secrets)}
+    assert orch_config.load_runner_secrets(environ=env) == ["KEY"]
+    assert env["KEY"] == "value"
+
+
 def test_resolve_max_concurrent_agent_procs_defaults_to_20(monkeypatch):
     monkeypatch.delenv("ORCH_MAX_CONCURRENT_AGENT_PROCS", raising=False)
     assert orchestrate.resolve_max_concurrent_agent_procs() == 20

@@ -20,6 +20,7 @@ from orch_config import (
     DEFAULT_MAX_CONCURRENT_AGENT_PROCS,
     DEFAULT_MAX_BATCH_PROMPT_CHARS,
     resolve_agent_runner,
+    load_runner_secrets,
     resolve_max_concurrent_agent_procs,
     resolve_max_batch_prompt_chars,
     resolve_ui_audit_enabled,
@@ -2231,6 +2232,14 @@ def main():
     suffix   = f"_{args.platform}" if args.platform else ""
     run_id   = f"{app_id}_{version}{suffix}"
     logging_setup.bind_run_id(run_id)
+
+    # 注入仓库外本地凭据(headless claude 需要 ANTHROPIC_API_KEY)，子进程自动继承
+    secret_keys = load_runner_secrets()
+    if secret_keys:
+        log.info(f"已加载 runner 凭据: {', '.join(secret_keys)}")
+    else:
+        log.info("未发现 runner 凭据文件(~/.config/appium-matrix/runner.env)")
+
     pid_file = f"/tmp/orchestrate_{app_id}_{version}{suffix}.pid"
     with open(pid_file, "w") as f:
         f.write(str(os.getpid()))

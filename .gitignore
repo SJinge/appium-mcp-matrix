@@ -1,6 +1,8 @@
 shots/
 .DS_Store
 auth.json
+runner.env
+*.secret.env
 runs/
 logs/
 .tools/
