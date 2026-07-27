@@ -1268,12 +1268,20 @@ def test_android_runtime_handle_known_dialogs_prefers_system_allow_button():
     assert taps == [("a1", 60, 120)]
 
 
-def test_android_runtime_tap_retries_after_handling_known_dialogs():
-    page_sources = iter([
+def test_android_runtime_tap_retries_after_handling_known_dialogs(monkeypatch):
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    scripted = [
         '<node resource-id="com.android.permissioncontroller:id/permission_allow_button" bounds="[10,20][110,220]" />',
         '<node text="不同意" bounds="[20,30][120,230]" />',
-        '<node text="不同意" bounds="[20,30][120,230]" />',
-    ])
+    ]
+    source_box = {"i": 0}
+
+    def next_source():
+        # 脚本化前若干次读,之后稳定停在最后一屏(点后无变化→触发重放逻辑,不会耗尽)
+        idx = min(source_box["i"], len(scripted) - 1)
+        source_box["i"] += 1
+        return scripted[idx]
+
     tap_attempts = []
     text_taps = []
     class FakeSubprocess:
@@ -1281,7 +1289,7 @@ def test_android_runtime_tap_retries_after_handling_known_dialogs():
 
         @staticmethod
         def run(cmd, capture_output, text, timeout):
-            return type("Result", (), {"stdout": next(page_sources), "returncode": 0})()
+            return type("Result", (), {"stdout": next_source(), "returncode": 0})()
 
     runtime = orchestrate.orch_case_runtime.script_runtime_context(
         udid="a1",
@@ -1303,6 +1311,122 @@ def test_android_runtime_tap_retries_after_handling_known_dialogs():
 
     assert len(tap_attempts) >= 1
     assert text_taps == []
+
+
+@pytest.mark.parametrize("step,expected", [
+    ({"by": "text", "value": "同意"}, False),
+    ({"by": "id", "value": "tab_home"}, False),
+    ({"by": "text", "value": "提交订单"}, True),
+    ({"by": "text", "value": "确认支付"}, True),
+    ({"by": "id", "value": "btn", "text": "立即下单"}, True),
+    ({"by": "id", "value": "btn", "fallbacks": [{"by": "text", "value": "领取优惠券"}]}, True),
+    ({"by": "text", "value": "关闭"}, False),
+])
+def test_is_write_action_classification(step, expected):
+    assert orchestrate.orch_case_runtime.is_write_action(step) is expected
+
+
+def _android_tap_runtime(sources, tap_ok, subprocess_stub=None):
+    """构造安卓脚本 runtime,read_page_source 依次返回 sources(耗尽后停在最后一屏)。"""
+    box = {"i": 0}
+
+    def next_source():
+        idx = min(box["i"], len(sources) - 1)
+        box["i"] += 1
+        return sources[idx]
+
+    class FakeSubprocess:
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(cmd, capture_output, text, timeout):
+            return type("Result", (), {"stdout": next_source(), "returncode": 0})()
+
+    return orchestrate.orch_case_runtime.script_runtime_context(
+        udid="a1",
+        subprocess_module=FakeSubprocess,
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        tap_with_locator_fn=tap_ok,
+        adb_input_text_fn=lambda udid, text: True,
+        tap_by_text_fn=lambda udid, text: True,
+        run_flow_fn=lambda meta, flow, runtime: {"passed": True},
+        known_dialog_text_actions=(),
+    )
+
+
+def test_android_tap_replays_when_ui_unchanged(monkeypatch):
+    """导航类点击点后 UI 无变化 → 重放该点击(最多 2 次)。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    taps = []
+    runtime = _android_tap_runtime(
+        sources=["<node text='首页'/>"],  # 恒定不变 → 触发重放
+        tap_ok=lambda udid, step, source: taps.append(source) or True,
+    )
+    assert runtime["tap"]({"by": "text", "value": "同意"}) is True
+    # 初次 1 次 + 重放 2 次 = 3 次点击
+    assert len(taps) == 3
+
+
+def test_android_tap_stops_replay_when_ui_changes(monkeypatch):
+    """点后 UI 变化 → 不再重放。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    taps = []
+    # 读序:handle_known_dialogs 预读 1 次 + before 1 次(均"首页"),点后读到"详情页"已变化
+    runtime = _android_tap_runtime(
+        sources=["<node text='首页'/>", "<node text='首页'/>", "<node text='详情页'/>"],
+        tap_ok=lambda udid, step, source: taps.append(source) or True,
+    )
+    assert runtime["tap"]({"by": "text", "value": "同意"}) is True
+    assert len(taps) == 1  # 只点了一次,UI 已变化不重放
+
+
+def test_android_tap_write_action_never_replays(monkeypatch):
+    """写操作(下单/支付…)点后即便 UI 无变化也不重放,防重复写线上数据。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    taps = []
+    runtime = _android_tap_runtime(
+        sources=["<node text='结算页'/>"],  # 恒定不变
+        tap_ok=lambda udid, step, source: taps.append(source) or True,
+    )
+    assert runtime["tap"]({"by": "text", "value": "提交订单"}) is True
+    assert len(taps) == 1  # 写操作只点一次
+
+
+def test_ios_tap_replays_when_ui_unchanged(monkeypatch):
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", lambda port, bundle_id: "sid")
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source", lambda port, sid: "<App/>")  # 恒定
+    clicks = []
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_tap_with_locator",
+                        lambda port, sid, step: clicks.append(step.get("value")) or True)
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+    )
+    assert runtime["tap"]({"by": "accessibility_id", "value": "同意"}) is True
+    assert len(clicks) == 3  # 初次 + 重放 2 次
+
+
+def test_ios_tap_write_action_never_replays(monkeypatch):
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", lambda port, bundle_id: "sid")
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source", lambda port, sid: "<App/>")
+    clicks = []
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_tap_with_locator",
+                        lambda port, sid, step: clicks.append(step.get("value")) or True)
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+    )
+    assert runtime["tap"]({"by": "accessibility_id", "value": "确认支付"}) is True
+    assert len(clicks) == 1
 
 
 def test_resolve_latest_local_artifact_prefers_newest(tmp_path, monkeypatch):
@@ -1560,6 +1684,7 @@ def test_ios_script_runtime_tap_recovers_transport_and_retries(monkeypatch):
         created.append((port, bundle_id))
         return "" if len(created) == 1 else "sid2"
 
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
     monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", fake_create_session)
     monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source", lambda port, session_id: "<App/>")
     monkeypatch.setattr(

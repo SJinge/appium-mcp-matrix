@@ -6,6 +6,8 @@ import time
 import urllib.error
 import urllib.request
 
+from orch_case_runtime import is_write_action
+
 
 def page_matches_target(page_source: str, target: str) -> bool:
     if not page_source or not target:
@@ -270,20 +272,35 @@ def script_runtime_context(
         return ensure_session()
 
     def tap(step: dict) -> bool:
+        write_action = is_write_action(step)
         for attempt in range(2):
             if not ensure_session():
                 if attempt == 0 and recover_transport():
                     continue
                 return False
-            read_page_source(force_refresh=True)
+            before = read_page_source(force_refresh=True)
             try:
-                if _tap_with_locator(port, session["id"], step):
-                    return True
+                clicked = _tap_with_locator(port, session["id"], step)
             except Exception:
-                pass
-            if attempt == 0 and recover_transport():
-                continue
-            return False
+                clicked = False
+            if not clicked:
+                if attempt == 0 and recover_transport():
+                    continue
+                return False
+            # 导航/幂等类点击:点后 UI 无变化(常见 WDA click 返回 200 但界面未动)则重放该点击,
+            # 最多 2 次;写操作(提交/下单/支付…)不重放,防重复写线上数据。
+            if not write_action:
+                for _ in range(2):
+                    time.sleep(1)
+                    after = read_page_source(force_refresh=True)
+                    if after and after != before:
+                        break
+                    try:
+                        if not _tap_with_locator(port, session["id"], step):
+                            break
+                    except Exception:
+                        break
+            return True
         return False
 
     def tap_text(text: str) -> bool:

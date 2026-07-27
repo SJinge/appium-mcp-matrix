@@ -138,9 +138,10 @@ text/content-desc 的 xpath:`//*[@text='目标']`、`//*[contains(@content-desc,
 ASSERT **判失败前**,在同一页面内 `appium_get_page_source` 短轮询(默认 3 次 × 2s)等动画/网络/弹窗稳定后再终判。
 
 - ⚠️ 这是**重新查询页面**(只读),**不是重试用例**。轮询只刷新 UI 树读取,无副作用。
-- **重放 ACTION 分两类**:
+- **重放 ACTION 分两类**(agent 与脚本 runtime 均适用):
   - 导航/幂等类点击(同意/关闭弹窗、切 tab、页面跳转、打开 H5 等不写业务数据的点击):点后 UI 无变化(动作未生效,常见 iOS WDA click 返回成功但界面未动)时,可重放该点击**最多 2 次**,仍无效再判失败。
   - 写操作(提交/下单/支付/发送/确认/保存/领取等会写线上数据的点击):**严禁重放**——首次点击服务端可能已成功、仅界面未跳转,重放会重复下单/扣款;这类只做只读断言轮询。
+  - 脚本 runtime 已内置该逻辑:`tap` 点击后对比前后 page source,非写操作且 UI 未变化时自动重放(写操作按关键词黑名单 `WRITE_ACTION_KEYWORDS` 跳过重放),见 [orch_case_runtime.py](../scripts/orch_case_runtime.py) / [orch_case_runtime_ios.py](../scripts/orch_case_runtime_ios.py)。
 
 ---
 

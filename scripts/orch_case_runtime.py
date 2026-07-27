@@ -3,6 +3,22 @@ import re
 import time
 
 
+# 会写线上数据的点击(提交/下单/支付…):严禁重放做重试——首次点击服务端可能已成功、
+# 仅界面未跳转,重放会重复下单/扣款。这类点击只点一次,不做"点后无变化→重放"。
+WRITE_ACTION_KEYWORDS = (
+    "提交", "下单", "支付", "付款", "购买", "发送", "确认", "保存", "领取", "结算", "兑换",
+)
+
+
+def is_write_action(step: dict) -> bool:
+    parts = [str(step.get("value") or ""), str(step.get("text") or "")]
+    for fallback in step.get("fallbacks") or []:
+        if isinstance(fallback, dict):
+            parts.append(str(fallback.get("value") or ""))
+    haystack = " ".join(parts)
+    return any(kw in haystack for kw in WRITE_ACTION_KEYWORDS)
+
+
 def parse_bounds_center(bounds: str):
     match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds or "")
     if not match:
@@ -442,10 +458,25 @@ def script_runtime_context(
     def tap(step: dict) -> bool:
         if not handle_known_dialogs({}):
             return False
-        ok = tap_with_locator_fn(udid, step, read_page_source(force_refresh=True))
+        before = read_page_source(force_refresh=True)
+        ok = tap_with_locator_fn(udid, step, before)
         if not ok and handle_known_dialogs({}):
-            ok = tap_with_locator_fn(udid, step, read_page_source(force_refresh=True))
-        return ok
+            before = read_page_source(force_refresh=True)
+            ok = tap_with_locator_fn(udid, step, before)
+        if not ok:
+            return False
+        # 导航/幂等类点击:点后 UI 无变化(动作未生效)则重放该点击,最多 2 次;
+        # 写操作(提交/下单/支付…)不重放,防重复写线上数据。
+        if not is_write_action(step):
+            for _ in range(2):
+                time.sleep(1)
+                after = read_page_source(force_refresh=True)
+                if after and after != before:
+                    break
+                handle_known_dialogs({})
+                if not tap_with_locator_fn(udid, step, read_page_source(force_refresh=True)):
+                    break
+        return True
 
     def route(step: dict) -> bool:
         if not handle_known_dialogs({}):
