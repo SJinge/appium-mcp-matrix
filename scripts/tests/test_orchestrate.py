@@ -1879,6 +1879,203 @@ def test_run_flow_assertion_handles_known_dialogs_before_final_judgement(monkeyp
     assert calls[:3] == ["handle", "read", ("assert", "id", "home_anchor")]
 
 
+def _counting_assert_runtime():
+    """runtime，断言恒失败并统计断言尝试次数，用于验证轮询预算。"""
+    calls = {"n": 0}
+
+    def _present(method, evidence):
+        calls["n"] += 1
+        return False
+
+    runtime = {
+        "reinstall_app": lambda step: True,
+        "route": lambda step: True,
+        "tap": lambda step: True,
+        "read_page_source": lambda force_refresh=False: "",
+        "handle_known_dialogs": lambda step: True,
+        "assert_evidence_present": _present,
+        "assert_evidence_detail": lambda method, evidence: {"matched": [], "missing": [evidence]},
+    }
+    return runtime, calls
+
+
+def test_run_flow_first_launch_assert_gets_longer_poll_budget(monkeypatch):
+    # reinstall_app 之后的首个断言(首启协议/隐私弹窗)应用加长轮询预算,覆盖冷启渲染。
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    runtime, calls = _counting_assert_runtime()
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "启动登录"},
+        [{"type": "reinstall_app"},
+         {"type": "assert_id", "value": "privacy_anchor", "text": "隐私弹窗"}],
+        runtime,
+    )
+    assert result["passed"] is False
+    assert calls["n"] == orchestrate.orch_case_runtime.FIRST_LAUNCH_POLL_ATTEMPTS
+
+
+def test_run_flow_assert_after_tap_uses_default_poll_budget(monkeypatch):
+    # 一旦发生交互(tap),就不再是首启态,断言回落到默认轮询预算。
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    runtime, calls = _counting_assert_runtime()
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "启动登录"},
+        [{"type": "reinstall_app"},
+         {"type": "tap", "by": "id", "value": "x"},
+         {"type": "assert_id", "value": "anchor", "text": "断言"}],
+        runtime,
+    )
+    assert result["passed"] is False
+    assert calls["n"] == orchestrate.orch_case_runtime.ASSERT_POLL_ATTEMPTS
+
+
+def test_xctestrun_path_prefers_pinned_over_default_derived(tmp_path, monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    pinned_root = tmp_path / "pinned"
+    default_dd = tmp_path / "DerivedData"
+    # 固定路径产物
+    pinned_products = pinned_root / "u1" / "Build" / "Products"
+    pinned_products.mkdir(parents=True)
+    (pinned_products / "WDA.xctestrun").write_text("x")
+    # 默认 DerivedData 产物
+    dd_products = default_dd / "WebDriverAgent-abc" / "Build" / "Products"
+    dd_products.mkdir(parents=True)
+    (dd_products / "WDA.xctestrun").write_text("y")
+    monkeypatch.setattr(ios_wda, "DERIVED_DATA_ROOT", str(pinned_root))
+    monkeypatch.setattr(ios_wda, "DEFAULT_DERIVED_DATA", str(default_dd))
+    assert ios_wda._xctestrun_path("u1") == str(pinned_products / "WDA.xctestrun")
+
+
+def test_xctestrun_path_falls_back_to_default_derived(tmp_path, monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    pinned_root = tmp_path / "pinned"  # 不建产物 → 固定路径为空
+    default_dd = tmp_path / "DerivedData"
+    dd_products = default_dd / "WebDriverAgent-abc" / "Build" / "Products"
+    dd_products.mkdir(parents=True)
+    expected = dd_products / "WDA.xctestrun"
+    expected.write_text("y")
+    monkeypatch.setattr(ios_wda, "DERIVED_DATA_ROOT", str(pinned_root))
+    monkeypatch.setattr(ios_wda, "DEFAULT_DERIVED_DATA", str(default_dd))
+    # 有默认产物就复用,不该触发全量构建(返回非空)
+    assert ios_wda._xctestrun_path("u1") == str(expected)
+
+
+def test_xctestrun_path_empty_when_nothing_built(tmp_path, monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    monkeypatch.setattr(ios_wda, "DERIVED_DATA_ROOT", str(tmp_path / "pinned"))
+    monkeypatch.setattr(ios_wda, "DEFAULT_DERIVED_DATA", str(tmp_path / "DerivedData"))
+    assert ios_wda._xctestrun_path("u1") == ""
+
+
+def test_device_wda_port_reads_use_port_from_xctestrun(tmp_path):
+    import plistlib
+    ios_wda = orchestrate.ios_wda
+    xctr = tmp_path / "WDA.xctestrun"
+    with open(xctr, "wb") as f:
+        plistlib.dump({"WebDriverAgentRunner": {
+            "EnvironmentVariables": {"USE_PORT": "8102"}}}, f)
+    assert ios_wda._device_wda_port(str(xctr)) == 8102
+
+
+def test_device_wda_port_defaults_when_missing(tmp_path):
+    import plistlib
+    ios_wda = orchestrate.ios_wda
+    xctr = tmp_path / "WDA.xctestrun"
+    with open(xctr, "wb") as f:
+        plistlib.dump({"WebDriverAgentRunner": {"EnvironmentVariables": {}}}, f)
+    assert ios_wda._device_wda_port(str(xctr), default=8100) == 8100
+    # 文件不存在也回退 default
+    assert ios_wda._device_wda_port("/no/such.xctestrun", default=8100) == 8100
+
+
+def test_ensure_wda_ready_passes_device_port_to_proxy(monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    hc = {"n": 0}
+    monkeypatch.setattr(ios_wda, "health_check", lambda port: hc.__setitem__("n", hc["n"] + 1) or hc["n"] > 1)
+    monkeypatch.setattr(ios_wda, "tunnel_ready", lambda udid: True)
+    monkeypatch.setattr(ios_wda, "wda_running", lambda udid: True)  # 已在跑,不重启
+    monkeypatch.setattr(ios_wda, "_xctestrun_path", lambda udid: "/x/y.xctestrun")
+    monkeypatch.setattr(ios_wda, "_device_wda_port", lambda xctr, default=8100: 8102)
+    monkeypatch.setattr(ios_wda, "proxy_listening", lambda port: False)
+    monkeypatch.setattr(ios_wda.time, "sleep", lambda _: None)
+    got = {}
+    monkeypatch.setattr(ios_wda, "_start_proxy",
+                        lambda udid, port, device_port=8100: got.update(device_port=device_port))
+    ok = ios_wda.ensure_wda_ready("u1", "T", "b", 8100, timeout=10)
+    assert ok is True
+    assert got["device_port"] == 8102
+
+
+def test_ios_wda_start_full_build_when_no_product(monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    monkeypatch.setattr(ios_wda, "_xctestrun_path", lambda udid: "")
+    captured = []
+    monkeypatch.setattr(ios_wda.subprocess, "Popen", lambda cmd, **kw: captured.append(cmd))
+    ios_wda._start_wda("u1", "TEAMX", "com.b.wda", rebuild=True)
+    assert captured[0][:2] == ["xcodebuild", "test"]
+    assert "-derivedDataPath" in captured[0]
+    assert "DEVELOPMENT_TEAM=TEAMX" in captured[0]
+
+
+def test_ios_wda_relaunch_without_rebuild_when_product_exists(monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    monkeypatch.setattr(ios_wda, "_xctestrun_path",
+                        lambda udid: "/tmp/wda_derived/u1/Build/Products/x.xctestrun")
+    captured = []
+    monkeypatch.setattr(ios_wda.subprocess, "Popen", lambda cmd, **kw: captured.append(cmd))
+    ios_wda._start_wda("u1", "TEAMX", "com.b.wda", rebuild=False)
+    assert captured[0][:2] == ["xcodebuild", "test-without-building"]
+    assert "-xctestrun" in captured[0]
+    # 复用产物不得重新签名(否则免费证书信任又失效)
+    assert "-allowProvisioningUpdates" not in captured[0]
+    assert not any(str(a).startswith("DEVELOPMENT_TEAM=") for a in captured[0])
+
+
+def test_ensure_wda_ready_relaunches_without_rebuild_when_product_exists(monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    hc = {"n": 0}
+
+    def _health(port):
+        hc["n"] += 1
+        return hc["n"] > 1  # 首次探测未就绪,启动后就绪
+
+    monkeypatch.setattr(ios_wda, "health_check", _health)
+    monkeypatch.setattr(ios_wda, "tunnel_ready", lambda udid: True)
+    monkeypatch.setattr(ios_wda, "wda_running", lambda udid: False)
+    monkeypatch.setattr(ios_wda, "_xctestrun_path", lambda udid: "/x/y.xctestrun")
+    monkeypatch.setattr(ios_wda, "proxy_listening", lambda port: False)
+    monkeypatch.setattr(ios_wda, "_start_proxy", lambda udid, port, device_port=8100: None)
+    monkeypatch.setattr(ios_wda.time, "sleep", lambda _: None)
+    started = {}
+    monkeypatch.setattr(ios_wda, "_start_wda",
+                        lambda udid, team, bundle_id, rebuild=True: started.update(rebuild=rebuild))
+    ok = ios_wda.ensure_wda_ready("u1", "T", "b", 8100, timeout=10)
+    assert ok is True
+    assert started["rebuild"] is False
+
+
+def test_ensure_wda_ready_full_build_when_no_product(monkeypatch):
+    ios_wda = orchestrate.ios_wda
+    hc = {"n": 0}
+
+    def _health(port):
+        hc["n"] += 1
+        return hc["n"] > 1
+
+    monkeypatch.setattr(ios_wda, "health_check", _health)
+    monkeypatch.setattr(ios_wda, "tunnel_ready", lambda udid: True)
+    monkeypatch.setattr(ios_wda, "wda_running", lambda udid: False)
+    monkeypatch.setattr(ios_wda, "_xctestrun_path", lambda udid: "")
+    monkeypatch.setattr(ios_wda, "proxy_listening", lambda port: False)
+    monkeypatch.setattr(ios_wda, "_start_proxy", lambda udid, port, device_port=8100: None)
+    monkeypatch.setattr(ios_wda.time, "sleep", lambda _: None)
+    started = {}
+    monkeypatch.setattr(ios_wda, "_start_wda",
+                        lambda udid, team, bundle_id, rebuild=True: started.update(rebuild=rebuild))
+    ok = ios_wda.ensure_wda_ready("u1", "T", "b", 8100, timeout=10)
+    assert ok is True
+    assert started["rebuild"] is True
+
+
 def test_execute_case_with_fallback_prefers_existing_script(monkeypatch):
     entry = {"record_id": "rec1", "name": "case", "module": "首页", "steps": []}
     monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)

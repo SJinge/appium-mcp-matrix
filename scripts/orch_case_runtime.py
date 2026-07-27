@@ -3,6 +3,15 @@ import re
 import time
 
 
+# 断言轮询预算(消 flaky,只读):默认 4 次 × 2.5s ≈ 10s。
+ASSERT_POLL_ATTEMPTS = 4
+ASSERT_POLL_INTERVAL = 2.5
+# 首启弹窗(reinstall/route 后 App 冷启,要先跑网络初始化才弹协议/隐私窗)等更久:
+# 8 次 × 2.5s ≈ 20s,覆盖荣耀/华为平板冷启到弹窗的耗时,避免抓空 matched=[]。
+FIRST_LAUNCH_POLL_ATTEMPTS = 8
+FIRST_LAUNCH_POLL_INTERVAL = 2.5
+
+
 # 会写线上数据的点击(提交/下单/支付…):严禁重放做重试——首次点击服务端可能已成功、
 # 仅界面未跳转,重放会重复下单/扣款。这类点击只点一次,不做"点后无变化→重放"。
 WRITE_ACTION_KEYWORDS = (
@@ -197,6 +206,9 @@ def _safe_label(value: str) -> str:
 def run_flow(meta: dict, flow: list, runtime: dict) -> dict:
     results = []
     soft_misses = []
+    # 刚 reinstall_app / route 之后 App 处于冷启态,首个断言(常为首启协议/隐私弹窗)
+    # 需要更久的轮询等待渲染;发生任何 tap/input 或跑过一次断言后即回落到默认预算。
+    awaiting_first_launch = False
     for item in flow:
         step_type = item.get("type", "")
         if step_type == "assert_ui":
@@ -259,9 +271,14 @@ def run_flow(meta: dict, flow: list, runtime: dict) -> dict:
             refresh_page = runtime.get("read_page_source")
             detail_fn = runtime.get("assert_evidence_detail")
             handle_known_dialogs = runtime.get("handle_known_dialogs")
+            if awaiting_first_launch:
+                attempts, interval = FIRST_LAUNCH_POLL_ATTEMPTS, FIRST_LAUNCH_POLL_INTERVAL
+            else:
+                attempts, interval = ASSERT_POLL_ATTEMPTS, ASSERT_POLL_INTERVAL
+            awaiting_first_launch = False  # 首个断言用掉长预算后回落默认
             ok = False
             detail = {}
-            for attempt in range(3):
+            for attempt in range(attempts):
                 if callable(handle_known_dialogs):
                     handle_known_dialogs({})
                 if callable(refresh_page):
@@ -271,8 +288,8 @@ def run_flow(meta: dict, flow: list, runtime: dict) -> dict:
                     detail = detail_fn(verify_method, item.get("value", ""))
                 if ok:
                     break
-                if attempt < 2:
-                    time.sleep(2)
+                if attempt < attempts - 1:
+                    time.sleep(interval)
             aux_detail = {}
             aux_text = item.get("aux_text", "")
             if aux_text and callable(detail_fn):
@@ -322,6 +339,10 @@ def run_flow(meta: dict, flow: list, runtime: dict) -> dict:
                 "passed": ok,
                 "note": "" if ok else f"{step_type} failed",
             })
+            if ok and step_type in ("reinstall_app", "route"):
+                awaiting_first_launch = True  # 冷启,下一个断言等首弹更久
+            elif step_type in ("tap", "input"):
+                awaiting_first_launch = False  # 已交互,不再是首启态
             if not ok:
                 return {
                     "record_id": meta.get("record_id", ""),

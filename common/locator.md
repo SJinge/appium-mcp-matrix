@@ -135,7 +135,7 @@ text/content-desc 的 xpath:`//*[@text='目标']`、`//*[contains(@content-desc,
 
 ### 断言轮询(消 flaky,只读,生产安全)
 
-ASSERT **判失败前**,在同一页面内 `appium_get_page_source` 短轮询(默认 3 次 × 2s)等动画/网络/弹窗稳定后再终判。
+ASSERT **判失败前**,在同一页面内 `appium_get_page_source` 短轮询等动画/网络/弹窗稳定后再终判。脚本 runtime 预算:默认 4 次 × 2.5s(≈10s);**刚 `reinstall_app`/`route` 冷启后的首个断言**(常为首启协议/隐私弹窗,要先跑网络初始化才渲染)用加长预算 8 次 × 2.5s(≈20s),一旦发生 tap/input 交互即回落默认,见 [orch_case_runtime.py](../scripts/orch_case_runtime.py) 的 `FIRST_LAUNCH_POLL_*`。
 
 - ⚠️ 这是**重新查询页面**(只读),**不是重试用例**。轮询只刷新 UI 树读取,无副作用。
 - **重放 ACTION 分两类**(agent 与脚本 runtime 均适用):
