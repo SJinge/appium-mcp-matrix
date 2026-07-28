@@ -10,6 +10,10 @@ ASSERT_POLL_INTERVAL = 2.5
 # 8 次 × 2.5s ≈ 20s,覆盖荣耀/华为平板冷启到弹窗的耗时,避免抓空 matched=[]。
 FIRST_LAUNCH_POLL_ATTEMPTS = 8
 FIRST_LAUNCH_POLL_INTERVAL = 2.5
+# 动作步(tap/input)定位轮询:页面加载中目标元素可能尚未渲染,像断言一样短轮询等它出现,
+# 命中即点,避免一次 miss 就判机制失败、误触回退 agent。默认 4 次 × 1.5s ≈ 6s。
+TAP_POLL_ATTEMPTS = 4
+TAP_POLL_INTERVAL = 1.5
 
 
 # 会写线上数据的点击(提交/下单/支付…):严禁重放做重试——首次点击服务端可能已成功、
@@ -476,14 +480,26 @@ def script_runtime_context(
                 break
         return True
 
-    def tap(step: dict) -> bool:
+    def _locate_and_tap_polled(step: dict):
+        """定位并点击 step 目标,像断言一样短轮询等元素渲染出现。
+        返回 (是否命中并点击, 命中时所在的 page source)。页面加载中元素尚未出现时,
+        不该一次 miss 就判失败——那会误触回退 agent、白烧一次 LLM。每轮先兜已知弹窗。
+        注:tap_with_locator_fn 命中即点,故轮询到 ok 时点击已发生。"""
         if not handle_known_dialogs({}):
-            return False
-        before = read_page_source(force_refresh=True)
-        ok = tap_with_locator_fn(udid, step, before)
-        if not ok and handle_known_dialogs({}):
-            before = read_page_source(force_refresh=True)
-            ok = tap_with_locator_fn(udid, step, before)
+            return False, ""
+        source = read_page_source(force_refresh=True)
+        ok = tap_with_locator_fn(udid, step, source)
+        attempt = 0
+        while not ok and attempt < TAP_POLL_ATTEMPTS:
+            attempt += 1
+            time.sleep(TAP_POLL_INTERVAL)
+            handle_known_dialogs({})
+            source = read_page_source(force_refresh=True)
+            ok = tap_with_locator_fn(udid, step, source)
+        return ok, source
+
+    def tap(step: dict) -> bool:
+        ok, before = _locate_and_tap_polled(step)
         if not ok:
             return False
         # 导航/幂等类点击:点后 UI 无变化(动作未生效)则重放该点击,最多 2 次;
@@ -509,13 +525,9 @@ def script_runtime_context(
         return ok
 
     def input_text(step: dict) -> bool:
-        if not handle_known_dialogs({}):
+        ok, _ = _locate_and_tap_polled(step)
+        if not ok:
             return False
-        if not tap_with_locator_fn(udid, step, read_page_source(force_refresh=True)):
-            if not handle_known_dialogs({}):
-                return False
-            if not tap_with_locator_fn(udid, step, read_page_source(force_refresh=True)):
-                return False
         text = step.get("text", "")
         if text == "":
             return False

@@ -223,6 +223,17 @@ def generate_reports(
             parts.append(f"{unexec} 未执行")
         if review:
             parts.append(f"⚠️{review}条待复核")
+        # 脚本命中率:有脚本的用例中,脚本直接跑完(未回退 agent)的占比。
+        # 低命中 = 固化脚本没在稳定,需回头修脚本定位/时序。exec_source 由执行层打标。
+        scripted = [c for c in cases if c.get("exec_source") in ("script", "script_fallback")]
+        if scripted:
+            via_script = sum(1 for c in scripted if c.get("exec_source") == "script")
+            fell_back = len(scripted) - via_script
+            hit_rate = int(via_script / len(scripted) * 100)
+            seg_script = f"脚本命中 {via_script}/{len(scripted)} ({hit_rate}%)"
+            if fell_back:
+                seg_script += f"，回退 {fell_back}"
+            parts.append(seg_script)
         seg = "，".join(parts)
         if url:
             seg += f"  📄 {url}"

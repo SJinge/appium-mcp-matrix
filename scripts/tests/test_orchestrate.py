@@ -1522,6 +1522,50 @@ def test_android_tap_write_action_never_replays(monkeypatch):
     assert len(taps) == 1  # 写操作只点一次
 
 
+def test_android_tap_polls_until_element_appears(monkeypatch):
+    """页面加载中目标元素尚未出现:动作步短轮询等它渲染,命中即点,不一次 miss 就失败。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    calls = {"n": 0}
+
+    def tap_ok(udid, step, source):
+        calls["n"] += 1
+        return calls["n"] >= 3  # 前 2 次 miss(加载中),第 3 次命中
+
+    # 用写操作用例避免点后重放干扰计数,只验证"定位轮询到第 3 次命中"
+    runtime = _android_tap_runtime(sources=["<node/>"], tap_ok=tap_ok)
+    assert runtime["tap"]({"by": "text", "value": "提交订单"}) is True
+    assert calls["n"] == 3
+
+
+def test_android_tap_fails_after_poll_budget_exhausted(monkeypatch):
+    """元素始终不出现:轮询预算耗尽后才判失败(回退 agent),不无限等。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    calls = {"n": 0}
+
+    def tap_ok(udid, step, source):
+        calls["n"] += 1
+        return False
+
+    runtime = _android_tap_runtime(sources=["<node/>"], tap_ok=tap_ok)
+    assert runtime["tap"]({"by": "text", "value": "同意"}) is False
+    # 初次 1 次 + 轮询 TAP_POLL_ATTEMPTS 次
+    assert calls["n"] == 1 + orchestrate.orch_case_runtime.TAP_POLL_ATTEMPTS
+
+
+def test_android_input_polls_until_element_appears(monkeypatch):
+    """input 走同一套定位轮询:输入框未渲染时等它出现再输入。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime.time, "sleep", lambda _: None)
+    calls = {"n": 0}
+
+    def tap_ok(udid, step, source):
+        calls["n"] += 1
+        return calls["n"] >= 2
+
+    runtime = _android_tap_runtime(sources=["<node/>"], tap_ok=tap_ok)
+    assert runtime["input"]({"by": "id", "value": "phone", "text": "12300000000"}) is True
+    assert calls["n"] == 2
+
+
 def test_ios_tap_replays_when_ui_unchanged(monkeypatch):
     monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
     monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", lambda port, bundle_id: "sid")
@@ -2228,6 +2272,7 @@ def test_execute_case_with_fallback_prefers_existing_script(monkeypatch):
 
     assert result["passed"] is True
     assert result["script_source"] == "script"
+    assert result["exec_source"] == "script"  # 脚本直接跑完,命中率分子
     assert agent_called == []
 
 
@@ -2284,6 +2329,7 @@ def test_execute_case_with_fallback_falls_back_when_script_raises_and_regenerate
     assert result["passed"] is True
     assert result["script_fallback"] is True
     assert result["script_error"] == "RuntimeError: script crashed"
+    assert result["exec_source"] == "script_fallback"  # 有脚本但失效回退
     assert generated == [True]
 
 
@@ -2933,6 +2979,41 @@ def test_generate_reports_notifies_unexecuted_and_interrupt_prefix():
         assert "⚠️" in body            # 中断前缀
         assert "8 未执行" in body       # 10 计划 - 2 完成
         assert "1/10 通过" in body      # passed/planned
+
+
+def test_generate_reports_shows_script_hit_rate():
+    """报告展示脚本命中率:有脚本的用例中脚本直接跑完的占比 + 回退数。"""
+    results = {"a1": [
+        {"platform": "Android", "passed": True, "exec_source": "script"},
+        {"platform": "Android", "passed": True, "exec_source": "script"},
+        {"platform": "Android", "passed": True, "exec_source": "script_fallback"},
+        {"platform": "Android", "passed": True, "exec_source": "agent"},  # 无脚本,不计入命中率分母
+    ]}
+    device_totals = {"a1": {"total": 4, "platform": "Android"}}
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.write_results_to_table"), \
+         patch("orchestrate.subprocess.run") as sr:
+        sr.return_value.stdout = ""
+        orchestrate.generate_reports("gaotu", "9.9.9", results, 60,
+                                     start_time_str="00:00:00",
+                                     device_totals=device_totals)
+        body = notify.call_args[0][2]
+        # 有脚本 3 条(2 script + 1 fallback),命中 2 → 2/3(66%),回退 1
+        assert "脚本命中 2/3 (66%)" in body
+        assert "回退 1" in body
+
+
+def test_generate_reports_no_script_hides_hit_rate():
+    """全是从零 agent(无脚本)时不显示命中率段。"""
+    results = {"a1": [{"platform": "Android", "passed": True, "exec_source": "agent"}]}
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.write_results_to_table"), \
+         patch("orchestrate.subprocess.run") as sr:
+        sr.return_value.stdout = ""
+        orchestrate.generate_reports("gaotu", "9.9.9", results, 60,
+                                     start_time_str="00:00:00",
+                                     device_totals={"a1": {"total": 1, "platform": "Android"}})
+        assert "脚本命中" not in notify.call_args[0][2]
 
 
 def test_generate_reports_zero_completion_still_notifies():

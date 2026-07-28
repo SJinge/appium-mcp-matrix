@@ -1474,6 +1474,8 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
             # 脚本通过 → 直接返回;脚本"真实失败"(断言语义不符/视觉异常)→ 如实返回失败。
             # 仅"机制类失败"(脚本失效)才回退 agent 自愈并刷新脚本。
             if script_result.get("passed") or not _is_script_mechanism_failure(script_result):
+                # 脚本直接跑完(未回退)——脚本命中率的分子
+                script_result["exec_source"] = "script"
                 return script_result
             script_failure_note = script_result.get("note", "")
             log.info(
@@ -1495,6 +1497,8 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
     elif script_path and script_failure_note:
         agent_result["script_fallback"] = True
         agent_result["script_failure_note"] = script_failure_note
+    # exec_source:有脚本却回退 → script_fallback(脚本失效);本就无脚本 → agent(从零跑)
+    agent_result["exec_source"] = "script_fallback" if script_path else "agent"
     if normalized_platform in {"android", "ios"} and agent_result.get("passed"):
         generate_case_script(app_id, platform, agent_result, version=version)
     return agent_result
@@ -1819,6 +1823,8 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
                 # launch_agent_per_device 路径已 hydrate，此 execute_device_batches 路径此前漏了。
                 batch_cases = _hydrate_batch_cases(batch_cases, batch)
                 for case in batch_cases:
+                    # 本批无任何现成脚本(进入此分支的前提),全部从零跑 agent
+                    case.setdefault("exec_source", "agent")
                     if case.get("passed"):
                         try:
                             generate_case_script(app_id, group["platform"].lower(), case)
