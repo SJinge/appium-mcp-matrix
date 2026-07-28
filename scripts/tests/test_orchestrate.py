@@ -1602,6 +1602,87 @@ def test_ios_tap_write_action_never_replays(monkeypatch):
     assert len(clicks) == 1
 
 
+def _ios_runtime_for_alert(monkeypatch, alerts):
+    """构造只关心系统 alert 的 iOS runtime;alerts 为按序返回的 alert 文案列表。"""
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", lambda port, bundle_id: "sid")
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_get_source", lambda port, sid: "<App/>")
+    seq = list(alerts)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_alert_text",
+                        lambda port, sid: seq.pop(0) if seq else "")
+    accepts = []
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_accept_alert",
+                        lambda port, sid, name=None: accepts.append(name) or True)
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+    )
+    return runtime, accepts
+
+
+def test_ios_dismiss_system_alert_accepts_network_alert(monkeypatch):
+    # 冷启后网络权限弹窗遮挡隐私弹窗:该 step 幂等清掉它并返回 True。
+    runtime, accepts = _ios_runtime_for_alert(
+        monkeypatch, ['允许"高途"使用无线数据？\n关闭无线数据时…', ""])
+    assert runtime["dismiss_system_alert"]({}) is True
+    assert accepts == ["无线局域网与蜂窝网络"]
+
+
+def test_ios_dismiss_system_alert_noop_when_no_alert(monkeypatch):
+    # 无系统弹窗:跳过、不点任何按钮,仍返回 True(不中断 FLOW)。
+    runtime, accepts = _ios_runtime_for_alert(monkeypatch, [""])
+    assert runtime["dismiss_system_alert"]({}) is True
+    assert accepts == []
+
+
+def test_ios_dismiss_system_alert_true_when_session_unavailable(monkeypatch):
+    # 建 session 失败(8100 proxy 挂)也视为已就绪返回 True,绝不因它判失败。
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios.time, "sleep", lambda _: None)
+    monkeypatch.setattr(orchestrate.orch_case_runtime_ios, "_create_session", lambda port, bundle_id: "")
+    runtime = orchestrate.orch_case_runtime_ios.script_runtime_context(
+        "i1", 8100, "com.gaotu100.superclass",
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        run_flow_fn=orchestrate._run_flow,
+        known_dialog_text_actions=(),
+    )
+    assert runtime["dismiss_system_alert"]({}) is True
+
+
+def test_android_dismiss_system_alert_taps_allow_and_returns_true():
+    source = ('<node resource-id="com.android.permissioncontroller:id/permission_allow_button" '
+              'bounds="[10,20][110,220]" />')
+    taps = []
+    class FakeSubprocess:
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(cmd, capture_output, text, timeout):
+            return type("Result", (), {"stdout": source, "returncode": 0})()
+
+    runtime = orchestrate.orch_case_runtime.script_runtime_context(
+        udid="a1",
+        subprocess_module=FakeSubprocess,
+        assert_evidence_present_fn=lambda runtime, method, evidence: True,
+        run_prepare_state_fn=lambda udid, step, runtime: True,
+        tap_with_locator_fn=lambda udid, step, source: True,
+        adb_input_text_fn=lambda udid, text: True,
+        tap_by_text_fn=lambda udid, text: False,
+        run_flow_fn=lambda meta, flow, runtime: {"passed": True},
+        known_dialog_text_actions=(),
+    )
+    original_adb_tap = orchestrate.orch_case_runtime.adb_tap
+    try:
+        orchestrate.orch_case_runtime.adb_tap = lambda udid, x, y, subprocess_module: taps.append((x, y)) or True
+        assert runtime["dismiss_system_alert"]({}) is True
+    finally:
+        orchestrate.orch_case_runtime.adb_tap = original_adb_tap
+    assert taps == [(60, 120)]
+
+
 def test_resolve_latest_local_artifact_prefers_newest(tmp_path, monkeypatch):
     older = tmp_path / "gaotu_5.91.90.apk"
     newer = tmp_path / "gaotu_5.91.93.apk"

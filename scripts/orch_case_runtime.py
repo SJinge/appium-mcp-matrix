@@ -458,6 +458,13 @@ def script_runtime_context(
                 return True
         return False
 
+    def dismiss_system_alert(step: dict = None) -> bool:
+        # 幂等的系统权限弹窗清除 step:Android 权限授权框(允许/仅使用时允许/仅本次)。
+        # 无弹窗视为已就绪返回 True,绝不因它中断整条 FLOW。iOS 侧同名 step 清 SpringBoard alert。
+        source = read_page_source(force_refresh=True)
+        _tap_system_allow_if_present(source)
+        return True
+
     def handle_known_dialogs(step: dict) -> bool:
         for _ in range(6):
             source = read_page_source(force_refresh=True)
@@ -537,6 +544,7 @@ def script_runtime_context(
     runtime["assert_evidence_detail"] = assert_evidence_detail
     runtime["prepare_state"] = prepare_state
     runtime["handle_known_dialogs"] = handle_known_dialogs
+    runtime["dismiss_system_alert"] = dismiss_system_alert
     runtime["route"] = route
     runtime["tap"] = tap
     runtime["input"] = input_text

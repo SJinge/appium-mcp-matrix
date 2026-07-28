@@ -1,0 +1,10 @@
+{
+  "拒绝剪切板授权弹窗": {
+    "hit_count": 1,
+    "module": "启动弹窗",
+    "page": "",
+    "selector": "com.gaotu100.superclass:id/customer_dialog_cancel",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  }
+}

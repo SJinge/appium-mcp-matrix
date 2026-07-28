@@ -336,19 +336,30 @@ def script_runtime_context(
         except Exception:
             return False
 
-    def handle_known_dialogs(step: dict) -> bool:
+    def _clear_system_alerts() -> None:
         # iOS 系统权限弹窗(使用无线数据/通知/本地网络/跟踪)在 SpringBoard 层，
         # 不进 app 的 page_source，且盖在最上层拦截点击。必须先用 WDA alert API 清掉，
         # 否则后续 tap 会"假 PASS"(元素在弹窗背后、click 返回 200 但页面不动)。
+        for _ in range(5):
+            alert = _alert_text(port, session["id"])
+            if not alert:
+                break
+            button = _known_dialog_action_text(alert, known_dialog_text_actions)
+            if not _accept_alert(port, session["id"], button or None):
+                break
+            page_source["value"] = None  # 弹窗已变化，作废 source 缓存
+
+    def dismiss_system_alert(step: dict = None) -> bool:
+        # 幂等的系统 alert 清除 step:重装/冷启后系统网络权限弹窗常盖在隐私弹窗之上，
+        # 拦截"同意"点击致首个断言误判(见 memory: ios_startup_network_alert_blocker)。
+        # 无弹窗/建 session 失败都视为已就绪返回 True,绝不因它中断整条 FLOW。
         if ensure_session():
-            for _ in range(5):
-                alert = _alert_text(port, session["id"])
-                if not alert:
-                    break
-                button = _known_dialog_action_text(alert, known_dialog_text_actions)
-                if not _accept_alert(port, session["id"], button or None):
-                    break
-                page_source["value"] = None  # 弹窗已变化，作废 source 缓存
+            _clear_system_alerts()
+        return True
+
+    def handle_known_dialogs(step: dict) -> bool:
+        if ensure_session():
+            _clear_system_alerts()
         source = read_page_source(force_refresh=True)
         action_text = _known_dialog_action_text(source, known_dialog_text_actions)
         if action_text and not tap_text(action_text):
@@ -369,6 +380,7 @@ def script_runtime_context(
     runtime["route"] = route
     runtime["prepare_state"] = prepare_state
     runtime["handle_known_dialogs"] = handle_known_dialogs
+    runtime["dismiss_system_alert"] = dismiss_system_alert
     runtime["tap"] = tap
     runtime["input"] = input_text
     runtime["tap_text"] = tap_text
