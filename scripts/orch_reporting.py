@@ -162,6 +162,8 @@ def generate_reports(
         if data in ("timeout", "failed"):
             continue
         for case in (data if isinstance(data, list) else []):
+            if version:
+                case.setdefault("app_version", version)
             platform = case.get("platform", "").lower()
             if platform == "android":
                 android_cases.append(case)

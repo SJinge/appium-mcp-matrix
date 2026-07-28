@@ -79,6 +79,7 @@ def write_results_to_table(
     coerce_number_field_fn,
     lowconf_review_steps_fn,
     log,
+    version: str = None,
 ):
     cfg = result_tables.get(app_id)
     table_id = cfg.get(platform.lower()) if cfg else None
@@ -109,6 +110,7 @@ def write_results_to_table(
 
         fields = {
             "编号": coerce_number_field_fn(case.get("order", "")),
+            "执行版本": version or case.get("app_version", ""),
             "状态组": case.get("state_group", ""),
             "执行设备": case.get("device", ""),
             "用例名称": case.get("name", ""),

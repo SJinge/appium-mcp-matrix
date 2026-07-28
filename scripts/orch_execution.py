@@ -26,6 +26,14 @@ def append_jsonl(path: str, cases: list):
             file_obj.write(json.dumps(case, ensure_ascii=False) + "\n")
 
 
+def attach_execution_version(cases: list, version: str = None) -> list:
+    if not version:
+        return cases
+    for case in cases:
+        case.setdefault("app_version", version)
+    return cases
+
+
 def hydrate_batch_cases(batch_cases: list, entries: list) -> list:
     if not batch_cases:
         return batch_cases
@@ -210,6 +218,7 @@ def execute_device_batches(
             if isinstance(batch_data, list):
                 batch_cases = load_jsonl_fn(batch_result_path_fn(result_dir, udid, batch_idx)) or batch_data
                 batch_cases = hydrate_batch_cases_fn(batch_cases, batch)
+                attach_execution_version(batch_cases, version)
                 for case in batch_cases:
                     if case.get("passed"):
                         generate_case_script_fn(app_id, group["platform"].lower(), case)
@@ -248,6 +257,7 @@ def execute_device_batches(
             )
             current_account = result.pop("_current_account", current_account) or current_account
             batch_cases.append(result)
+        attach_execution_version(batch_cases, version)
         append_jsonl_fn(aggregate_path, batch_cases)
         aggregate_cases.extend(batch_cases)
         if batch_cases:

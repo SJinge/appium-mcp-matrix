@@ -2774,6 +2774,39 @@ def test_write_results_to_table_uses_order_and_state_group_fields(monkeypatch):
     assert fields["执行结果"] == "通过"
 
 
+def test_write_results_to_table_writes_execution_version(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+        def read(self):
+            return _json.dumps(self.payload, ensure_ascii=False).encode()
+
+    def fake_urlopen(req):
+        url = req.full_url
+        if "batch_create" in url:
+            captured["body"] = _json.loads(req.data.decode("utf-8"))
+            return _Resp({"code": 0})
+        return _Resp({"code": 0, "data": {"obj_token": "obj-token"}})
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate, "_resolve_obj_token", lambda app_token: "obj-token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", fake_urlopen)
+
+    orchestrate.write_results_to_table("gaotu", "android", [{
+        "record_id": "rec_case1",
+        "device": "a1",
+        "name": "case1",
+        "passed": True,
+        "steps": [],
+        "screenshots": [],
+    }], version="5.91.92")
+
+    fields = captured["body"]["records"][0]["fields"]
+    assert fields["执行版本"] == "5.91.92"
+
+
 def test_write_results_to_table_coerces_numeric_order_for_number_field(monkeypatch):
     captured = {}
 

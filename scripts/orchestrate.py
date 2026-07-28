@@ -1836,6 +1836,7 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
                             # 固化是 best-effort 副产物，任何异常都不许拖垮本批/整轮执行
                             log.warning(f"用例脚本固化失败(已忽略): "
                                         f"record_id={case.get('record_id')!r} err={e}")
+                _attach_execution_version(batch_cases, version)
                 _append_jsonl(aggregate_path, batch_cases)
                 aggregate_cases.extend(batch_cases)
                 if batch_cases:
@@ -1869,6 +1870,7 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
             )
             current_account = result.pop("_current_account", current_account) or current_account
             batch_cases.append(result)
+        _attach_execution_version(batch_cases, version)
         _append_jsonl(aggregate_path, batch_cases)
         aggregate_cases.extend(batch_cases)
         if batch_cases:
@@ -1921,7 +1923,15 @@ def _coerce_number_field(value):
     return orch_result_table.coerce_number_field(value, _text_field)
 
 
-def write_results_to_table(app_id: str, platform: str, cases: list):
+def _attach_execution_version(cases: list, version: str = None) -> list:
+    if not version:
+        return cases
+    for case in cases:
+        case.setdefault("app_version", version)
+    return cases
+
+
+def write_results_to_table(app_id: str, platform: str, cases: list, version: str = None):
     """把某平台的执行结果 batch_create 写入对应结果表，含截图上传。"""
     cfg = RESULT_TABLES.get(app_id)
     table_id = cfg.get(platform.lower()) if cfg else None
@@ -1934,6 +1944,7 @@ def write_results_to_table(app_id: str, platform: str, cases: list):
 
     records = []
     for c in cases:
+        execution_version = version or c.get("app_version", "")
         failed = [
             s for s in c.get("steps", [])
             if not (s.get("passed") if "passed" in s else s.get("pass", True))
@@ -1956,6 +1967,7 @@ def write_results_to_table(app_id: str, platform: str, cases: list):
 
         fields = {
             "编号":     _coerce_number_field(c.get("order", "")),
+            "执行版本": execution_version,
             "状态组":   c.get("state_group", ""),
             "执行设备": c.get("device", ""),
             "用例名称": c.get("name", ""),
