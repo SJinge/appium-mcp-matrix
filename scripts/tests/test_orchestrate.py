@@ -253,6 +253,104 @@ def test_load_runner_secrets_ignores_comments_and_blank_lines(tmp_path):
     assert env["KEY"] == "value"
 
 
+def test_agent_failure_503_no_available_accounts_is_retryable():
+    tail = "API Error: 503 No available accounts: this group only allows Claude Code clients"
+    assert orchestrate._agent_failure_is_retryable_503(tail) is True
+
+
+def test_agent_failure_503_overloaded_is_retryable():
+    assert orchestrate._agent_failure_is_retryable_503("Error 503: Overloaded") is True
+
+
+def test_agent_failure_429_quota_is_not_retryable():
+    assert orchestrate._agent_failure_is_retryable_503("429 api key 日限额已用完") is False
+    assert orchestrate._agent_failure_is_retryable_503("Too Many Requests") is False
+
+
+def test_agent_failure_empty_or_generic_is_not_retryable():
+    assert orchestrate._agent_failure_is_retryable_503("") is False
+    assert orchestrate._agent_failure_is_retryable_503(None) is False
+    assert orchestrate._agent_failure_is_retryable_503("timeout killing device") is False
+
+
+def test_execute_case_via_agent_retries_on_503_then_succeeds(monkeypatch):
+    entry = {"record_id": "rec1", "name": "用例A", "module": "m"}
+    calls = {"n": 0}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *a, **k: object())
+    monkeypatch.setattr(orchestrate, "_batch_result_dir", lambda *a, **k: "/tmp/x")
+    monkeypatch.setattr(orchestrate, "_batch_result_path", lambda *a, **k: "/tmp/x/r.jsonl")
+    monkeypatch.setattr(orchestrate, "_batch_account_path", lambda *a, **k: "/tmp/x/acc")
+    monkeypatch.setattr(orchestrate, "_read_account_state", lambda *a, **k: "12300000000")
+    monkeypatch.setattr(orchestrate.shutil, "rmtree", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate.os, "makedirs", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *a, **k: None)
+
+    def fake_collect(procs, **kwargs):
+        calls["n"] += 1
+        # 前两次无结果(将被判 503 重试),第三次成功
+        return {list(procs)[0]: [{"passed": True, "record_id": "rec1"}] if calls["n"] == 3 else "failed"}
+
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect)
+    monkeypatch.setattr(orchestrate, "_load_jsonl", lambda *a, **k: [{"passed": True, "record_id": "rec1"}])
+    monkeypatch.setattr(orchestrate, "_tail_file", lambda *a, **k: "503 No available accounts")
+
+    result = orchestrate.execute_case_via_agent("gaotu", "android", "dev1", entry)
+    assert result["passed"] is True
+    assert calls["n"] == 3
+
+
+def test_execute_case_via_agent_no_retry_on_429(monkeypatch):
+    entry = {"record_id": "rec1", "name": "用例A", "module": "m"}
+    calls = {"n": 0}
+    notified = []
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *a, **k: object())
+    monkeypatch.setattr(orchestrate, "_batch_result_dir", lambda *a, **k: "/tmp/x")
+    monkeypatch.setattr(orchestrate, "_batch_result_path", lambda *a, **k: "/tmp/x/r.jsonl")
+    monkeypatch.setattr(orchestrate, "_batch_account_path", lambda *a, **k: "/tmp/x/acc")
+    monkeypatch.setattr(orchestrate.shutil, "rmtree", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate.os, "makedirs", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate, "_notify", lambda *a, **k: notified.append(a))
+
+    def fake_collect(procs, **kwargs):
+        calls["n"] += 1
+        return {list(procs)[0]: "failed"}
+
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect)
+    monkeypatch.setattr(orchestrate, "_tail_file", lambda *a, **k: "429 api key 日限额已用完")
+
+    result = orchestrate.execute_case_via_agent("gaotu", "android", "dev1", entry, version="1.0")
+    assert result["passed"] is False
+    assert calls["n"] == 1  # 429 不重试,只跑一次
+    assert len(notified) == 1  # 最终失败统一报警一次
+
+
+def test_execute_case_via_agent_backfills_record_id_from_entry(monkeypatch):
+    # agent 结果 schema 不含 record_id;单条路径必须从 entry 回填,否则固化被跳过
+    entry = {"record_id": "recX", "name": "用例B", "module": "登录", "order": "3", "state_group": "已登录"}
+
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *a, **k: object())
+    monkeypatch.setattr(orchestrate, "_batch_result_dir", lambda *a, **k: "/tmp/x")
+    monkeypatch.setattr(orchestrate, "_batch_result_path", lambda *a, **k: "/tmp/x/r.jsonl")
+    monkeypatch.setattr(orchestrate, "_batch_account_path", lambda *a, **k: "/tmp/x/acc")
+    monkeypatch.setattr(orchestrate, "_read_account_state", lambda *a, **k: "")
+    monkeypatch.setattr(orchestrate.shutil, "rmtree", lambda *a, **k: None)
+    monkeypatch.setattr(orchestrate.os, "makedirs", lambda *a, **k: None)
+    # agent 只写 passed/steps,无 record_id/name/module
+    monkeypatch.setattr(orchestrate, "collect_results",
+                        lambda procs, **k: {list(procs)[0]: [{"passed": True, "steps": []}]})
+    monkeypatch.setattr(orchestrate, "_load_jsonl", lambda *a, **k: [{"passed": True, "steps": []}])
+
+    result = orchestrate.execute_case_via_agent("gaotu", "android", "dev1", entry)
+    assert result["record_id"] == "recX"
+    assert result["name"] == "用例B"
+    assert result["module"] == "登录"
+    assert result["order"] == "3"
+    assert result["state_group"] == "已登录"
+
+
 def test_resolve_max_concurrent_agent_procs_defaults_to_20(monkeypatch):
     monkeypatch.delenv("ORCH_MAX_CONCURRENT_AGENT_PROCS", raising=False)
     assert orchestrate.resolve_max_concurrent_agent_procs() == 20

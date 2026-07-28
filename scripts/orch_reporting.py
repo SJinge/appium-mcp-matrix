@@ -5,8 +5,10 @@ import time
 
 
 def tail_file(path: str, n: int = 200) -> str:
+    # agent 日志可能含非法 utf-8 字节(claude 输出截断的多字节字符),严格解码会抛
+    # UnicodeDecodeError 冒泡到 _run 未捕获 → 整轮 orchestrate 崩溃。errors="replace" 兜底。
     try:
-        with open(path) as file_obj:
+        with open(path, encoding="utf-8", errors="replace") as file_obj:
             return file_obj.read()[-n:].strip().replace("\n", " ")
     except OSError:
         return ""
@@ -15,7 +17,7 @@ def tail_file(path: str, n: int = 200) -> str:
 def load_jsonl(path: str) -> list:
     out = []
     try:
-        with open(path) as file_obj:
+        with open(path, encoding="utf-8", errors="replace") as file_obj:
             for line in file_obj:
                 line = line.strip()
                 if not line:

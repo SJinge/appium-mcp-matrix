@@ -1336,36 +1336,77 @@ def run_case_script(app_id: str, platform: str, udid: str, script_path: str):
     return result
 
 
+# 503「No available accounts」是网关瞬时并发/容量问题,agent 在动作前就被拒、设备现场未变,
+# 可原样退避重试;429(日限额/限流)是硬墙,当天重试纯白烧,直接失败不重试。
+AGENT_503_MAX_ATTEMPTS = 3            # 含首次,最多尝试 3 次
+AGENT_503_BACKOFF_SECONDS = 30       # 退避基数,按尝试次线性放大(30/60s)
+
+
+def _agent_failure_is_retryable_503(tail: str) -> bool:
+    """从 agent 日志末尾判断本次失败是否为可重试的网关 503。
+    仅 503「No available accounts」重试;429/日限额/限流一律不重试。"""
+    t = (tail or "").lower()
+    if "no available accounts" in t:
+        return True
+    return "503" in t and "overloaded" in t
+
+
 def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
                            version: str = None, current_account: str = "",
                            wda_port: int = None, result_dir: str = "/tmp",
                            timeout: int = 90 * 60):
     case_dir = os.path.join(result_dir, "case_results", udid, entry["record_id"])
-    shutil.rmtree(case_dir, ignore_errors=True)
-    os.makedirs(case_dir, exist_ok=True)
-    proc = launch_agent_batch(
-        app_id, udid, platform.capitalize(), [entry],
-        wda_port=wda_port, version=version,
-        current_account=current_account,
-        batch_idx=0, batch_count=1,
-        is_last_batch=True,
-        result_dir=case_dir,
+    last_data = None
+    last_tail = ""
+    for attempt in range(1, AGENT_503_MAX_ATTEMPTS + 1):
+        shutil.rmtree(case_dir, ignore_errors=True)
+        os.makedirs(case_dir, exist_ok=True)
+        proc = launch_agent_batch(
+            app_id, udid, platform.capitalize(), [entry],
+            wda_port=wda_port, version=version,
+            current_account=current_account,
+            batch_idx=0, batch_count=1,
+            is_last_batch=True,
+            result_dir=case_dir,
+        )
+        batch_results = collect_results(
+            {udid: proc},
+            result_dir=_batch_result_dir(case_dir, udid, 0),
+            timeout=timeout,
+            # 单用例内部收集静默(app_id/version=None → 不触发飞书报警),
+            # 是否报警/重试由本函数依失败类型统一决定,避免重试中的 503 误报。
+            app_id=None,
+            version=None,
+            poll_interval=10,
+            device_totals={udid: {"total": 1, "platform": platform.capitalize()}},
+        )
+        data = batch_results.get(udid)
+        if isinstance(data, list) and data:
+            case = _load_jsonl(_batch_result_path(case_dir, udid, 0)) or data
+            result = case[0]
+            # agent 结果 schema 不含 record_id(prompt 只要 name/passed/steps…),
+            # 单条路径必须像整批 hydrate 一样从 entry 回填 record_id/name/module/…,
+            # 否则下游 generate_case_script 因缺 record_id 跳过固化、写表也丢 record_id。
+            _hydrate_batch_cases([result], [entry])
+            result["_current_account"] = _read_account_state(_batch_account_path(case_dir, udid, 0)) or current_account
+            return result
+
+        last_data = data
+        last_tail = _tail_file(agent_log_path(udid))
+        if _agent_failure_is_retryable_503(last_tail) and attempt < AGENT_503_MAX_ATTEMPTS:
+            backoff = AGENT_503_BACKOFF_SECONDS * attempt
+            log.warning(
+                f"[{udid}] 网关 503 无可用账号,{backoff}s 后重试用例 "
+                f"{entry['record_id']}(第 {attempt}/{AGENT_503_MAX_ATTEMPTS - 1} 次重试)"
+            )
+            time.sleep(backoff)
+            continue
+        break
+
+    _notify(
+        app_id, version,
+        f"⚠️ 设备 {udid} 用例 {entry['name']} agent 执行失败({last_data})。日志末尾：{last_tail}",
     )
-    batch_results = collect_results(
-        {udid: proc},
-        result_dir=_batch_result_dir(case_dir, udid, 0),
-        timeout=timeout,
-        app_id=app_id,
-        version=version,
-        poll_interval=10,
-        device_totals={udid: {"total": 1, "platform": platform.capitalize()}},
-    )
-    data = batch_results.get(udid)
-    if isinstance(data, list) and data:
-        case = _load_jsonl(_batch_result_path(case_dir, udid, 0)) or data
-        result = case[0]
-        result["_current_account"] = _read_account_state(_batch_account_path(case_dir, udid, 0)) or current_account
-        return result
     return {
         "record_id": entry["record_id"],
         "name": entry["name"],
@@ -1373,7 +1414,7 @@ def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
         "platform": platform.capitalize(),
         "device": udid,
         "passed": False,
-        "note": f"agent execution failed: {data}",
+        "note": f"agent execution failed: {last_data} | {last_tail[-200:]}",
         "steps": [],
         "_current_account": current_account,
     }
