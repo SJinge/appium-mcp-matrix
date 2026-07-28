@@ -954,11 +954,15 @@ def grant_ios_network_permission_in_settings(udid: str, app_display_name: str,
 
 def ensure_ios_network_permission_ready(app_id: str, udid: str, bundle_id: str,
                                         port: int) -> bool:
-    if prepare_ios_network_permission(udid, bundle_id, port):
-        return True
+    # 主动进设置授权:iOS 装完 App 后,设置里的「无线数据/无线局域网与蜂窝数据」入口装后即在
+    # (无需先启动)。故装后先主动进「设置→App→无线数据→无线局域网与蜂窝数据」勾选,让 App
+    # 首次启动的第一个联网请求就已带权限;再做一次 prepare 弹窗预热(启动 App、清理首启网络/
+    # 通知类弹窗),不再依赖首启弹窗是否恰好在 10s 窗口内出现(旧逻辑会把"窗口内没弹窗"误判为
+    # 已授权,导致 App 无网仍跑)。设备可用性以 prepare 能否建起 session 为准。
     app_display_name = APP_DISPLAY_NAMES.get(app_id, app_id)
     if not grant_ios_network_permission_in_settings(udid, app_display_name, port):
-        return False
+        log.warning(
+            f"iOS 设置主动授权网络权限未完成: {udid}, app={app_display_name}，改由弹窗预热兜底")
     return prepare_ios_network_permission(udid, bundle_id, port)
 
 

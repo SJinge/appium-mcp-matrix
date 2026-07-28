@@ -1795,29 +1795,67 @@ def test_grant_ios_network_permission_in_settings_taps_app_wireless_data_path(mo
     assert stopped == [("i1", "com.apple.Preferences")]
 
 
-def test_ensure_ios_network_permission_ready_falls_back_to_settings(monkeypatch):
+def test_ensure_ios_network_permission_ready_grants_via_settings_first(monkeypatch):
+    # 主动进设置授权:先跑设置授权,再做弹窗预热,不再依赖首启弹窗是否在窗口内出现。
     calls = []
-    prepare_results = iter([False, True])
 
-    monkeypatch.setattr(
-        orchestrate,
-        "prepare_ios_network_permission",
-        lambda udid, bundle_id, port: calls.append(("prepare", udid, bundle_id, port)) or next(prepare_results),
-    )
     monkeypatch.setattr(
         orchestrate,
         "grant_ios_network_permission_in_settings",
         lambda udid, app_name, port: calls.append(("settings", udid, app_name, port)) or True,
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "prepare_ios_network_permission",
+        lambda udid, bundle_id, port: calls.append(("prepare", udid, bundle_id, port)) or True,
     )
 
     assert orchestrate.ensure_ios_network_permission_ready(
         "gaotu", "i1", "com.gaotu100.superclass", 8100
     ) is True
     assert calls == [
-        ("prepare", "i1", "com.gaotu100.superclass", 8100),
         ("settings", "i1", "高途", 8100),
         ("prepare", "i1", "com.gaotu100.superclass", 8100),
     ]
+
+
+def test_ensure_ios_network_permission_ready_prewarms_even_if_settings_fails(monkeypatch):
+    # 设置授权没找到入口(失败)也不硬失败:仍做弹窗预热,设备可用性以 prepare 结果为准。
+    calls = []
+
+    monkeypatch.setattr(
+        orchestrate,
+        "grant_ios_network_permission_in_settings",
+        lambda udid, app_name, port: calls.append("settings") or False,
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "prepare_ios_network_permission",
+        lambda udid, bundle_id, port: calls.append("prepare") or True,
+    )
+
+    assert orchestrate.ensure_ios_network_permission_ready(
+        "gaotu", "i1", "com.gaotu100.superclass", 8100
+    ) is True
+    assert calls == ["settings", "prepare"]
+
+
+def test_ensure_ios_network_permission_ready_skips_device_when_prewarm_fails(monkeypatch):
+    # prepare 建 session 失败 → 返回 False → 上层 _run 跳过该 iOS 设备。
+    monkeypatch.setattr(
+        orchestrate,
+        "grant_ios_network_permission_in_settings",
+        lambda udid, app_name, port: True,
+    )
+    monkeypatch.setattr(
+        orchestrate,
+        "prepare_ios_network_permission",
+        lambda udid, bundle_id, port: False,
+    )
+
+    assert orchestrate.ensure_ios_network_permission_ready(
+        "gaotu", "i1", "com.gaotu100.superclass", 8100
+    ) is False
 
 
 def test_ios_script_runtime_route_creates_session(monkeypatch):
