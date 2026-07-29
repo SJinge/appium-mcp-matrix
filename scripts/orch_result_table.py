@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -68,6 +69,12 @@ def coerce_number_field(value, text_field_fn):
     return text
 
 
+def coerce_datetime_field(value=None, time_fn=time.time):
+    if isinstance(value, (int, float)) and value:
+        return int(value if value > 10_000_000_000 else value * 1000)
+    return int(time_fn() * 1000)
+
+
 def write_results_to_table(
     app_id: str,
     platform: str,
@@ -111,6 +118,7 @@ def write_results_to_table(
         fields = {
             "编号": coerce_number_field_fn(case.get("order", "")),
             "执行版本": version or case.get("app_version", ""),
+            "执行时间": coerce_datetime_field(case.get("execution_time")),
             "状态组": case.get("state_group", ""),
             "执行设备": case.get("device", ""),
             "用例名称": case.get("name", ""),

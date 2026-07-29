@@ -1923,6 +1923,10 @@ def _coerce_number_field(value):
     return orch_result_table.coerce_number_field(value, _text_field)
 
 
+def _coerce_datetime_field(value=None):
+    return orch_result_table.coerce_datetime_field(value, time.time)
+
+
 def _attach_execution_version(cases: list, version: str = None) -> list:
     if not version:
         return cases
@@ -1968,6 +1972,7 @@ def write_results_to_table(app_id: str, platform: str, cases: list, version: str
         fields = {
             "编号":     _coerce_number_field(c.get("order", "")),
             "执行版本": execution_version,
+            "执行时间": _coerce_datetime_field(c.get("execution_time")),
             "状态组":   c.get("state_group", ""),
             "执行设备": c.get("device", ""),
             "用例名称": c.get("name", ""),
