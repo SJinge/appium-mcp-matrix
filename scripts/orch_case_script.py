@@ -418,6 +418,20 @@ def ui_audit_flow_step(anchor_text: str = "") -> dict:
     }
 
 
+def _insert_dismiss_system_alert_before_first_assert(flow: list) -> None:
+    # 冷启(重装)后系统权限弹窗(iOS 使用无线数据/本地网络、Android 权限授权框)会盖在
+    # 首启协议/隐私弹窗之上拦截点击,致首个断言误判(见 memory: ios_startup_network_alert_blocker)。
+    # 弹窗在 app 拉起(reinstall_app / 首个 route 动作)之后才出现,故插在首个断言前——
+    # 此刻 app 必已启动。step 幂等:无弹窗/已授权都安全跳过,不改变其余流程。
+    for index, item in enumerate(flow):
+        if str(item.get("type", "")).startswith("assert_"):
+            flow.insert(index, {
+                "type": "dismiss_system_alert",
+                "text": "清除系统网络权限弹窗(无则跳过)",
+            })
+            return
+
+
 def build_case_flow(case: dict, entry_account_key, text_field, ui_audit_enabled: bool = False) -> list:
     flow = []
     preconds = [
@@ -425,7 +439,8 @@ def build_case_flow(case: dict, entry_account_key, text_field, ui_audit_enabled:
         for step in case.get("steps", [])
         if step.get("type") == "PRECOND" and step.get("text")
     ]
-    if needs_reinstall_from_preconditions(preconds):
+    did_reinstall = needs_reinstall_from_preconditions(preconds)
+    if did_reinstall:
         flow.append({"type": "reinstall_app"})
     prepare_state = prepare_state_from_case(case, entry_account_key)
     if prepare_state:
@@ -457,4 +472,6 @@ def build_case_flow(case: dict, entry_account_key, text_field, ui_audit_enabled:
                 and not item.get("soft_assert")
             ):
                 flow.append(ui_audit_flow_step(item.get("text", "")))
+    if did_reinstall:
+        _insert_dismiss_system_alert_before_first_assert(flow)
     return flow

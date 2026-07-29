@@ -929,6 +929,66 @@ def test_generate_case_script_adds_reinstall_for_startup_preconditions(tmp_path,
     assert "'target': 'login'" in content
 
 
+def test_generate_case_script_inserts_dismiss_system_alert_before_first_assert(tmp_path, monkeypatch):
+    # 重装(冷启)用例:生成侧应自动在首个断言前补幂等的 dismiss_system_alert,
+    # 清系统网络权限弹窗,免手动插入被重新生成覆盖。
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_alert",
+        "name": "首启隐私弹窗",
+        "module": "启动弹窗",
+        "platform": "iOS",
+        "device": "i1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "卸载重装APP，未启动"},
+            {"type": "ACTION", "text": "打开app", "action": "route", "by": "bundleId",
+             "value": "com.gaotu100.superclass"},
+            {"type": "ASSERT", "text": "隐私弹窗正常弹出", "verify_method": "id",
+             "evidence": "同意", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "ios", case)
+
+    ns = {}
+    exec(open(path).read().split("def execute")[0], ns)
+    flow = ns["FLOW"]
+    types = [s.get("type") for s in flow]
+    assert types.count("dismiss_system_alert") == 1
+    dismiss_at = types.index("dismiss_system_alert")
+    first_assert = next(i for i, t in enumerate(types) if str(t).startswith("assert_"))
+    # 紧邻首个断言之前,且位于 app 拉起动作(reinstall_app/route)之后
+    assert dismiss_at == first_assert - 1
+    assert types[:dismiss_at] and all(t != "dismiss_system_alert" for t in types[:dismiss_at])
+    assert "reinstall_app" in types[:dismiss_at]
+
+
+def test_generate_case_script_no_dismiss_alert_when_no_reinstall(tmp_path, monkeypatch):
+    # 非重装用例:app 已授权网络权限,不会弹系统框,不该插 dismiss_system_alert。
+    monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
+    case = {
+        "record_id": "rec_noalert",
+        "name": "普通用例",
+        "module": "首页",
+        "platform": "iOS",
+        "device": "i1",
+        "passed": True,
+        "steps": [
+            {"type": "PRECOND", "text": "当前在首页"},
+            {"type": "ASSERT", "text": "看到首页", "verify_method": "id",
+             "evidence": "首页", "confidence": "high", "passed": True},
+        ],
+    }
+
+    path = orchestrate.generate_case_script("gaotu", "ios", case)
+
+    ns = {}
+    exec(open(path).read().split("def execute")[0], ns)
+    types = [s.get("type") for s in ns["FLOW"]]
+    assert "dismiss_system_alert" not in types
+
+
 def test_generate_case_script_accepts_assert_pass_field_from_result_jsonl(tmp_path, monkeypatch):
     monkeypatch.setattr(orchestrate, "PROJECT_ROOT", str(tmp_path))
     case = {
@@ -1387,7 +1447,8 @@ def test_run_prepare_state_noop_when_already_on_target():
     assert orchestrate._run_prepare_state("a1", {"target": "home"}, runtime) is True
 
 
-def test_run_prepare_state_routes_to_my_tab_when_needed():
+def test_run_prepare_state_routes_to_my_tab_when_needed(monkeypatch):
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
     taps = []
     page_sources = iter([
         'text="首页" text="上课"',
@@ -1401,6 +1462,65 @@ def test_run_prepare_state_routes_to_my_tab_when_needed():
 
     assert orchestrate._run_prepare_state("a1", {"target": "my_tab"}, runtime) is True
     assert taps == ["我的"]
+
+
+def test_run_prepare_state_polls_until_target_settles(monkeypatch):
+    # 冷启后前几次读页还没渲染出目标态,poll 到 settle 才命中(不再单次误判失败回退 agent)。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    reads = []
+    page_sources = iter([
+        "启动中...",
+        "启动中...",
+        'text="首页" text="发现"',
+    ])
+
+    def read(force_refresh=False):
+        s = next(page_sources)
+        reads.append(s)
+        return s
+
+    runtime = {
+        "read_page_source": read,
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "home"}, runtime) is True
+    assert len(reads) == 3  # 前两次未 settle,第三次命中
+
+
+def test_run_prepare_state_fails_after_exhausting_polls(monkeypatch):
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    attempts = {"n": 0}
+
+    def read(force_refresh=False):
+        attempts["n"] += 1
+        return "白屏加载中"
+
+    runtime = {
+        "read_page_source": read,
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "home"}, runtime) is False
+    assert attempts["n"] == orchestrate.PREPARE_STATE_POLL_ATTEMPTS
+
+
+def test_run_prepare_state_login_target_matches_on_poll(monkeypatch):
+    # target=login 无 route,靠 poll 等登录页渲染出"手机号登录/获取验证码"即命中。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    page_sources = iter([
+        "启动中...",
+        'text="手机号登录" text="获取验证码"',
+    ])
+    runtime = {
+        "read_page_source": lambda force_refresh=False: next(page_sources),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: (_ for _ in ()).throw(AssertionError("login 不应 route")),
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "login"}, runtime) is True
 
 
 def test_resolve_route_component_prefers_explicit_component():
@@ -1967,6 +2087,95 @@ def test_grant_ios_network_permission_in_settings_taps_app_wireless_data_path(mo
     assert stopped == [("i1", "com.apple.Preferences")]
 
 
+def test_create_ios_session_resilient_recovers_after_transient_failure(monkeypatch):
+    # 8100 首次建 session 空(WDA 刚重启未 settle) → ensure_wda_ready 自愈 → 重试成功。
+    ios = orchestrate.orch_case_runtime_ios
+    results = iter(["", "sid-2"])
+    recovered = []
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: next(results))
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+
+    session_id = orchestrate._create_ios_session_resilient(
+        8100, "com.gaotu100.superclass",
+        wda_recover=lambda: recovered.append(True) or True,
+    )
+    assert session_id == "sid-2"
+    assert recovered == [True]  # 失败一次后自愈一次
+
+
+def test_create_ios_session_resilient_returns_empty_after_all_attempts(monkeypatch):
+    ios = orchestrate.orch_case_runtime_ios
+    recovered = []
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "")
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+
+    session_id = orchestrate._create_ios_session_resilient(
+        8100, "com.apple.Preferences",
+        wda_recover=lambda: recovered.append(True) or True,
+        attempts=3,
+    )
+    assert session_id == ""
+    assert recovered == [True, True]  # attempts=3 → 失败重试之间自愈 2 次,最后一次不再自愈
+
+
+def test_create_ios_session_resilient_no_recover_when_first_attempt_ok(monkeypatch):
+    ios = orchestrate.orch_case_runtime_ios
+    recovered = []
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "sid-1")
+
+    session_id = orchestrate._create_ios_session_resilient(
+        8100, "com.gaotu100.superclass",
+        wda_recover=lambda: recovered.append(True) or True,
+    )
+    assert session_id == "sid-1"
+    assert recovered == []  # 首次即成功,健康路径零自愈开销
+
+
+def test_create_ios_session_resilient_swallows_recover_exception(monkeypatch):
+    ios = orchestrate.orch_case_runtime_ios
+    results = iter(["", "sid-2"])
+
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: next(results))
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+
+    def boom():
+        raise RuntimeError("wda restart failed")
+
+    # 自愈回调抛异常不应中断重试。
+    session_id = orchestrate._create_ios_session_resilient(
+        8100, "com.gaotu100.superclass", wda_recover=boom,
+    )
+    assert session_id == "sid-2"
+
+
+def test_ensure_ios_network_permission_ready_threads_wda_recover(monkeypatch):
+    # ensure_ios_network_permission_ready 须把可自愈的 wda_recover 传给 settings/prepare。
+    seen = {}
+
+    monkeypatch.setattr(
+        orchestrate, "_resolve_ios_device_wda_config",
+        lambda app_id, udid: {"team": "T", "bundle_id": "wda.b", "port": 8100},
+    )
+    monkeypatch.setattr(
+        orchestrate, "grant_ios_network_permission_in_settings",
+        lambda udid, app_name, port, wda_recover=None: seen.__setitem__("grant", wda_recover) or True,
+    )
+    monkeypatch.setattr(
+        orchestrate, "prepare_ios_network_permission",
+        lambda udid, bundle_id, port, wda_recover=None: seen.__setitem__("prepare", wda_recover) or True,
+    )
+
+    assert orchestrate.ensure_ios_network_permission_ready(
+        "gaotu", "i1", "com.gaotu100.superclass", 8100
+    ) is True
+    assert callable(seen["grant"])
+    assert callable(seen["prepare"])
+    assert seen["grant"] is seen["prepare"]
+
+
 def test_ensure_ios_network_permission_ready_grants_via_settings_first(monkeypatch):
     # 主动进设置授权:先跑设置授权,再做弹窗预热,不再依赖首启弹窗是否在窗口内出现。
     calls = []
@@ -1974,12 +2183,12 @@ def test_ensure_ios_network_permission_ready_grants_via_settings_first(monkeypat
     monkeypatch.setattr(
         orchestrate,
         "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port: calls.append(("settings", udid, app_name, port)) or True,
+        lambda udid, app_name, port, wda_recover=None: calls.append(("settings", udid, app_name, port)) or True,
     )
     monkeypatch.setattr(
         orchestrate,
         "prepare_ios_network_permission",
-        lambda udid, bundle_id, port: calls.append(("prepare", udid, bundle_id, port)) or True,
+        lambda udid, bundle_id, port, wda_recover=None: calls.append(("prepare", udid, bundle_id, port)) or True,
     )
 
     assert orchestrate.ensure_ios_network_permission_ready(
@@ -1998,12 +2207,12 @@ def test_ensure_ios_network_permission_ready_prewarms_even_if_settings_fails(mon
     monkeypatch.setattr(
         orchestrate,
         "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port: calls.append("settings") or False,
+        lambda udid, app_name, port, wda_recover=None: calls.append("settings") or False,
     )
     monkeypatch.setattr(
         orchestrate,
         "prepare_ios_network_permission",
-        lambda udid, bundle_id, port: calls.append("prepare") or True,
+        lambda udid, bundle_id, port, wda_recover=None: calls.append("prepare") or True,
     )
 
     assert orchestrate.ensure_ios_network_permission_ready(
@@ -2017,12 +2226,12 @@ def test_ensure_ios_network_permission_ready_skips_device_when_prewarm_fails(mon
     monkeypatch.setattr(
         orchestrate,
         "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port: True,
+        lambda udid, app_name, port, wda_recover=None: True,
     )
     monkeypatch.setattr(
         orchestrate,
         "prepare_ios_network_permission",
-        lambda udid, bundle_id, port: False,
+        lambda udid, bundle_id, port, wda_recover=None: False,
     )
 
     assert orchestrate.ensure_ios_network_permission_ready(

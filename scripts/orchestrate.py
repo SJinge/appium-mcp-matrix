@@ -972,27 +972,38 @@ def _page_matches_target(page_source: str, target: str) -> bool:
     return bool(groups) and any(all(needle in page_source for needle in group) for group in groups)
 
 
+# prepare_state 冷启后页面还没渲染完就读，会把"未到目标态"误判成失败→整条用例回退慢
+# agent（本轮 8/9 回退皆源于此）。失败路径按此节奏重读/重路由若干次；已在目标态的用例
+# 首轮即命中返回，零新增延迟。
+PREPARE_STATE_POLL_ATTEMPTS = 6
+PREPARE_STATE_POLL_INTERVAL = 2.0
+
+
 def _run_prepare_state(udid: str, step: dict, runtime: dict) -> bool:
     target = step.get("target", "")
     if not target:
-        return True
-    if callable(runtime.get("handle_known_dialogs")) and not runtime["handle_known_dialogs"]({}):
-        return False
-    source = runtime["read_page_source"](True)
-    if _page_matches_target(source, target):
         return True
     route_text = {
         "home": "首页",
         "my_tab": "我的",
         "class_tab": "上课",
     }.get(target)
-    if route_text and callable(runtime.get("tap_text")):
-        if not runtime["tap_text"](route_text):
-            return False
+    handle_known_dialogs = runtime.get("handle_known_dialogs")
+    tap_text = runtime.get("tap_text")
+    for attempt in range(PREPARE_STATE_POLL_ATTEMPTS):
+        if callable(handle_known_dialogs):
+            handle_known_dialogs({})
         source = runtime["read_page_source"](True)
         if _page_matches_target(source, target):
             return True
-    return target == "login" and "登录" in source
+        if target == "login" and "登录" in source:
+            return True
+        # 目标态未就绪：尝试路由后等页面 settle，下一轮重读（冷启动/弹层消失需要时间）。
+        if route_text and callable(tap_text):
+            tap_text(route_text)
+        if attempt + 1 < PREPARE_STATE_POLL_ATTEMPTS:
+            time.sleep(PREPARE_STATE_POLL_INTERVAL)
+    return False
 
 
 def _stop_ios_app(udid: str, bundle_id: str) -> bool:
@@ -1049,8 +1060,31 @@ def grant_ios_network_permission(udid: str, bundle_id: str) -> bool:
     return False
 
 
+def _create_ios_session_resilient(port: int, bundle_id: str, wda_recover=None,
+                                  attempts: int = 3, backoff: float = 1.5) -> str:
+    """在 8100 上建 WDA session，失败即用 ensure_wda_ready 自愈后重试。
+
+    重装期 WDA/proxy 刚重启未 settle 时，单次 POST /session 会 60s 超时返回空，
+    直接硬跳过预热。此处失败先调 wda_recover(健康则秒返、僵尸则重启 proxy/WDA)，
+    退避后再试，把瞬时 WDA-down 变成自愈重试而非硬失败。wda_recover 为空则退化为纯重试。"""
+    for attempt in range(attempts):
+        session_id = orch_case_runtime_ios._create_session(port, bundle_id)
+        if session_id:
+            return session_id
+        if attempt + 1 >= attempts:
+            break
+        if callable(wda_recover):
+            try:
+                wda_recover()
+            except Exception as exc:
+                log.warning(f"iOS 建 session 前 WDA 自愈异常: port={port}, err={exc}")
+        time.sleep(backoff)
+    return ""
+
+
 def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
-                                   timeout: int = 10, interval: float = 1.0) -> bool:
+                                   timeout: int = 10, interval: float = 1.0,
+                                   wda_recover=None) -> bool:
     """启动 App 并前置处理会阻断首启的 iOS 网络类系统弹窗。"""
     if not bundle_id:
         log.warning(f"iOS 网络权限预热缺少 bundleId: {udid}")
@@ -1058,7 +1092,7 @@ def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
     if not grant_ios_network_permission(udid, bundle_id):
         log.warning(f"iOS {udid} 外部网络权限预授权失败，改用 WDA alert 兜底")
 
-    session_id = orch_case_runtime_ios._create_session(port, bundle_id)
+    session_id = _create_ios_session_resilient(port, bundle_id, wda_recover)
     if not session_id:
         log.warning(f"iOS 网络权限预热建 session 失败: {udid}, port={port}")
         return False
@@ -1124,9 +1158,9 @@ def _ios_tap_text_with_scroll(port: int, session_id: str, texts,
 
 
 def grant_ios_network_permission_in_settings(udid: str, app_display_name: str,
-                                             port: int) -> bool:
+                                             port: int, wda_recover=None) -> bool:
     """设置 -> App -> <App> -> 无线数据 -> 无线局域网与蜂窝数据。"""
-    session_id = orch_case_runtime_ios._create_session(port, "com.apple.Preferences")
+    session_id = _create_ios_session_resilient(port, "com.apple.Preferences", wda_recover)
     if not session_id:
         log.warning(f"iOS 设置网络权限建 session 失败: {udid}, port={port}")
         return False
@@ -1163,10 +1197,18 @@ def ensure_ios_network_permission_ready(app_id: str, udid: str, bundle_id: str,
     # 通知类弹窗),不再依赖首启弹窗是否恰好在 10s 窗口内出现(旧逻辑会把"窗口内没弹窗"误判为
     # 已授权,导致 App 无网仍跑)。设备可用性以 prepare 能否建起 session 为准。
     app_display_name = APP_DISPLAY_NAMES.get(app_id, app_id)
-    if not grant_ios_network_permission_in_settings(udid, app_display_name, port):
+    wda = _resolve_ios_device_wda_config(app_id, udid)
+    wda_recover = lambda: ios_wda.ensure_wda_ready(
+        udid,
+        wda.get("team", DEFAULT_WDA_TEAM),
+        wda.get("bundle_id", DEFAULT_WDA_BUNDLE),
+        port,
+    )
+    if not grant_ios_network_permission_in_settings(
+            udid, app_display_name, port, wda_recover=wda_recover):
         log.warning(
             f"iOS 设置主动授权网络权限未完成: {udid}, app={app_display_name}，改由弹窗预热兜底")
-    return prepare_ios_network_permission(udid, bundle_id, port)
+    return prepare_ios_network_permission(udid, bundle_id, port, wda_recover=wda_recover)
 
 
 def _resolve_ios_device_wda_config(app_id: str, udid: str) -> dict:
