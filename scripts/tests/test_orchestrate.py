@@ -3403,6 +3403,40 @@ def test_write_results_to_table_omits_record_id_for_failed_cases(monkeypatch):
     assert fields["执行结果"] == "失败"
 
 
+def test_write_results_to_table_uses_case_note_when_failed_without_steps(monkeypatch):
+    captured = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+        def read(self):
+            return _json.dumps(self.payload, ensure_ascii=False).encode()
+
+    def fake_urlopen(req):
+        url = req.full_url
+        if "batch_create" in url:
+            captured["body"] = _json.loads(req.data.decode("utf-8"))
+            return _Resp({"code": 0})
+        return _Resp({"code": 0, "data": {"obj_token": "obj-token"}})
+
+    monkeypatch.setattr(orchestrate, "_get_token", lambda: "token")
+    monkeypatch.setattr(orchestrate, "_resolve_obj_token", lambda app_token: "obj-token")
+    monkeypatch.setattr(orchestrate.urllib.request, "urlopen", fake_urlopen)
+
+    orchestrate.write_results_to_table("gaotu", "ios", [{
+        "record_id": "rec_failed",
+        "device": "i1",
+        "name": "agent failed case",
+        "passed": False,
+        "note": "agent execution failed: failed | API Error: 429 quota exceeded",
+        "steps": [],
+        "screenshots": [],
+    }])
+
+    fields = captured["body"]["records"][0]["fields"]
+    assert fields["执行详情"] == "agent execution failed: failed | API Error: 429 quota exceeded"
+
+
 class _FakeProc:
     """poll() 依次返回 poll_seq 的值(最后一个值粘住);None=存活,int=已退出。"""
     def __init__(self, poll_seq, returncode=0):

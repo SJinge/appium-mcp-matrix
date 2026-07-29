@@ -2234,7 +2234,8 @@ def write_results_to_table(app_id: str, platform: str, cases: list, version: str
         if review:
             review_note = "⚠️ 视觉判定待复核：\n" + "\n".join(
                 f"・[{s.get('type','')}] {s.get('text','')}" for s in review)
-        full_detail = "\n".join(x for x in (detail, review_note) if x) \
+        case_note = (c.get("note") or "").strip() if not passed else ""
+        full_detail = "\n".join(x for x in (detail, case_note, review_note) if x) \
             or ("全部通过" if passed else "")
 
         fields = {
