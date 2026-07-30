@@ -85,6 +85,10 @@ WDA 排障（最常见）：
 3. WDA 端口占用 → `lsof -i :8100 && kill -9 <pid>`
 4. WDA 卡死 → `tidevice -u <udid> kill com.facebook.WebDriverAgentRunner.xctrunner`
 
+> 本项目真实执行走的是自建链路（tunneld LaunchDaemon + wda_proxy.py + ensure_wda_ready 保活/僵尸自愈），
+> 不是 `tidevice wdaproxy`。四层架构 / 就绪握手 / 端口坑 / 首启 alert / 排障速查见
+> [docs/ios-wda-runtime.md](../../../docs/ios-wda-runtime.md)。
+
 ## Session 创建诊断 {#session}
 
 ```bash
