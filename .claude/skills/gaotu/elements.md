@@ -369,9 +369,9 @@ adb -s <UDID> shell "input tap $((W/2)) $((H*43/100)); input tap $((W*94/100)) $
 >
 > | 需要什么 | 去哪取 |
 > |---------|--------|
-> | id 是否存在 / 全集校验 | `apps/gaotu/{版本}/elements.truth.json`(id 全集) |
-> | 步骤意图 → selector 映射 | `locator_cache.py`(按版本校验+继承) |
-> | id 的 module / layout 归属 | `apps/gaotu/{版本}/elements.enriched.json` |
+> | id 是否存在 / 全集校验 | `apps/gaotu/elements.truth.json`(id 全集,app 级一份) |
+> | 步骤意图 → selector 映射 | `locator_cache.py`(app 级一份,get 时按真相源复校自愈) |
+> | id 的 module / layout 归属 | `apps/gaotu/elements.enriched.json` |
 > | 业务语义名 / ai_instruction / iOS / 导航 | 本文件上文各分节表 |
 
 ---

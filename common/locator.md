@@ -8,7 +8,8 @@
 
 ## 前置:确定当前版本
 
-会话开始时取一次,后续复用(缓存/真相源都按版本隔离):
+会话开始时取一次,后续复用。**缓存/真相源都是 app 级一份、不按版本分目录**;
+版本号只用于 `put` 时给条目盖 `verified_version` 戳(记录哪一版验证过,便于溯源):
 
 ```bash
 adb -s <UDID> shell dumpsys package com.gaotu100.superclass | grep -m1 versionName
@@ -16,10 +17,13 @@ adb -s <UDID> shell dumpsys package com.gaotu100.superclass | grep -m1 versionNa
 ```
 
 依赖文件(由发版流程产出,见 scripts/scan_apk_ids.py / scan_source_ids.py):
-- `apps/{app_id}/{VERSION}/elements.truth.json`   【Android】元素 id 全集(真相源)
-- `apps/{app_id}/{VERSION}/elements.enriched.json` 【Android】带页面归属(可选)
-- `apps/{app_id}/{VERSION}/elements.ios.json`      【iOS】运行时探索真相源(见下方 iOS 分支)
-- `apps/{app_id}/{VERSION}/locator_cache.json`     步骤→selector 缓存(跨平台,自动累积)
+- `apps/{app_id}/elements.truth.json`   【Android】元素 id 全集(真相源)
+- `apps/{app_id}/elements.enriched.json` 【Android】带页面归属(可选)
+- `apps/{app_id}/elements.ios.json`      【iOS】运行时探索真相源(见下方 iOS 分支)
+- `apps/{app_id}/locator_cache.json`     步骤→selector 缓存(跨平台,自动累积)
+
+> 升版不重开目录:同一份 truth 由 `scan_apk_ids` 合并新版 id、标记废弃;同一份缓存靠
+> 第 0 档 `get` 的真相源复校自愈(见文末「发版后」)。
 
 > ⚠️ **平台差异**:Android 真相源是静态扫 APK 的 resource-id 全集(strategy=id);iOS 无 resource-id、
 > 也无可扫的静态来源(已证伪,见记忆 project_element_truth_source),真相源只能靠**运行时探索**累积,
@@ -34,11 +38,11 @@ adb -s <UDID> shell dumpsys package com.gaotu100.superclass | grep -m1 versionNa
 ### 第 0 档 · 缓存命中(0 AI / 0 截图 / 0 page_source)
 
 ```bash
-python3 scripts/locator_cache.py get --app-id {app_id} --version {VERSION} \
+python3 scripts/locator_cache.py get --app-id {app_id} \
     --step "<步骤里的元素意图,如 点击登录按钮>" [--page <已知页面类>]
 ```
 - exit 0 + 返回 `{selector, strategy}` → 直接 `appium_find_element strategy=<strategy> selector=<selector>` 执行,**本档结束**。
-- exit 1(`{}`)→ 未命中,进第 1 档。
+- exit 1(`{}`)→ 未命中(或命中但 id 已不在真相源、被自动剔除),进第 1 档。
 
 > 第二轮起绝大多数步骤都在这一档命中,不产生任何视觉/上下文开销。
 
@@ -145,16 +149,16 @@ ASSERT **判失败前**,在同一页面内 `appium_get_page_source` 短轮询等
 
 ---
 
-## 发版后:继承上一版缓存(增量)
+## 发版后:同一份缓存自愈(无需手动继承)
 
-新版本目录首跑会全 miss。发版流程在 `scan_apk_ids` 出 `elements.diff.json` 后,执行一次继承:
+缓存是 app 级一份、跨版本长期累积,不再按版本重开目录,因此**无需 seed-from-diff 继承**:
 
-```bash
-python3 scripts/locator_cache.py seed-from-diff --app-id {app_id} --from <旧版本> --to <新版本>
-# id 仍在新真相源 → 继承(标记待复验);id 已删除/改名 → 丢弃,只这些要重新解析
-```
+1. `scan_apk_ids` 用新 APK 刷新同一份 `elements.truth.json`(合并新增 id、把消失的 id 标 `deprecated`)。
+2. 下一轮执行时,第 0 档 `get` 命中后按当前真相源复校:`strategy=id` 的条目其 id 若已不在
+   真相源(改名/删除),当场按 miss 处理并从缓存**剔除**,回到第 1 档重新解析、以新 id 回填。
+3. 未变更的页面继续命中缓存(0 AI / 0 截图);只有真正变动的元素回第 1 档重学。
 
-通常两周发版只动几个页面,90%+ 缓存可继承,只有变更页面回到第 1 档重学。
+即"90%+ 缓存自动沿用、只有变更页重学"由 get 的真相源复校自动达成,不需要发版流程额外跑继承命令。
 
 ---
 

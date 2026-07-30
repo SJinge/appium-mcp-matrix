@@ -406,7 +406,9 @@ def test_build_agent_command_for_claude_includes_add_dir(tmp_path):
         skill_dir=skill_dir,
         common_dir=common_dir,
     )
-    assert cmd[:5] == ["claude", "--add-dir", skill_dir, "--add-dir", common_dir]
+    assert cmd[0] == "claude"
+    assert cmd[1] == "--dangerously-skip-permissions"
+    assert cmd[2:6] == ["--add-dir", skill_dir, "--add-dir", common_dir]
     assert cmd[-2:] == ["--print", "run cases"]
 
 

@@ -46,9 +46,10 @@ def _run(args, root):
                           env=env)
 
 
-def _setup_truth(tmp_path, app="gaotu", ver="5.91.80", ids=None):
-    d = tmp_path / "apps" / app / ver
-    d.mkdir(parents=True)
+def _setup_truth(tmp_path, app="gaotu", ids=None):
+    """app 级真相源:apps/{app}/elements.truth.json(不再按版本分目录)。"""
+    d = tmp_path / "apps" / app
+    d.mkdir(parents=True, exist_ok=True)
     (d / "elements.truth.json").write_text(json.dumps({"ids": ids or ["account_sign_btn"]}))
     return d
 
@@ -59,9 +60,10 @@ def test_put_then_get_roundtrip(tmp_path, monkeypatch):
     lc.cmd_put(type("A", (), dict(app_id="gaotu", version="5.91.80", step="点击登录按钮",
                page=None, selector="com.gaotu100.superclass:id/account_sign_btn",
                strategy="id", module="account", no_verify=False))())
-    cache = lc.load_cache("gaotu", "5.91.80")
+    cache = lc.load_cache("gaotu")
     assert "点击登录按钮" in cache
     assert cache["点击登录按钮"]["selector"].endswith("account_sign_btn")
+    assert cache["点击登录按钮"]["verified_version"] == "5.91.80"
 
 
 def test_put_rejects_dirty_id(tmp_path, monkeypatch):
@@ -77,24 +79,35 @@ def test_put_rejects_dirty_id(tmp_path, monkeypatch):
         assert e.code == 2
 
 
-def test_seed_from_diff_keeps_valid_drops_removed(tmp_path, monkeypatch):
+def test_get_evicts_entry_stale_vs_truth(tmp_path, monkeypatch):
+    """升版后 id 已不在真相源:get 命中也按 miss 处理并剔除脏条目。"""
     monkeypatch.setattr(lc, "PROJECT_ROOT", str(tmp_path))
-    # 旧版缓存:一个仍有效、一个被删
-    _setup_truth(tmp_path, ver="5.91.70", ids=["keep_btn", "drop_btn"])
-    _setup_truth(tmp_path, ver="5.91.80", ids=["keep_btn"])  # drop_btn 在新版没了
-    lc.save_cache("gaotu", "5.91.70", {
-        "保留步骤": {"selector": "p:id/keep_btn", "strategy": "id"},
-        "丢弃步骤": {"selector": "p:id/drop_btn", "strategy": "id"},
+    _setup_truth(tmp_path, ids=["still_here"])  # gone_btn 已不在真相源
+    lc.save_cache("gaotu", {
+        "还在": {"selector": "p:id/still_here", "strategy": "id"},
+        "没了": {"selector": "p:id/gone_btn", "strategy": "id"},
     })
-    a = type("A", (), {})()
-    setattr(a, "app_id", "gaotu"); setattr(a, "from", "5.91.70"); setattr(a, "to", "5.91.80")
-    lc.cmd_seed_from_diff(a)
-    new = lc.load_cache("gaotu", "5.91.80")
-    assert "保留步骤" in new
-    assert "丢弃步骤" not in new
+    a = type("A", (), dict(app_id="gaotu", version=None, step="没了", page=None))()
+    try:
+        lc.cmd_get(a)
+        assert False, "stale 条目应按 miss 退出 1"
+    except SystemExit as e:
+        assert e.code == 1
+    cache = lc.load_cache("gaotu")
+    assert "没了" not in cache  # 脏条目已被剔除
+    assert "还在" in cache      # 有效条目保留
 
 
-def test_truth_ids_falls_back_to_stable_truth_file(tmp_path, monkeypatch):
+def test_get_hit_survives_when_id_in_truth(tmp_path, monkeypatch):
+    monkeypatch.setattr(lc, "PROJECT_ROOT", str(tmp_path))
+    _setup_truth(tmp_path, ids=["still_here"])
+    lc.save_cache("gaotu", {"还在": {"selector": "p:id/still_here", "strategy": "id"}})
+    a = type("A", (), dict(app_id="gaotu", version=None, step="还在", page=None))()
+    lc.cmd_get(a)  # 不应抛出
+    assert lc.load_cache("gaotu")["还在"]["hit_count"] == 1
+
+
+def test_truth_ids_from_app_level_active_entries(tmp_path, monkeypatch):
     monkeypatch.setattr(lc, "PROJECT_ROOT", str(tmp_path))
     d = tmp_path / "apps" / "gaotu"
     d.mkdir(parents=True)
@@ -104,4 +117,4 @@ def test_truth_ids_falls_back_to_stable_truth_file(tmp_path, monkeypatch):
             {"id": "old_btn", "deprecated": True},
         ]
     }))
-    assert lc._truth_ids("gaotu", "5.91.90") == {"keep_btn"}
+    assert lc._truth_ids("gaotu") == {"keep_btn"}
