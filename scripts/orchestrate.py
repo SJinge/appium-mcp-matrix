@@ -646,6 +646,13 @@ def _id_evidence_tokens(evidence: str) -> list:
     text = str(evidence or "").strip()
     if not text:
         return []
+    # 复合 id(pkg:id/a|b|c)先展开为空格分隔的完整 id。否则下方 findall 会被 | 截断,
+    # 只抓到第一个 id、丢弃其余 → 多 id 断言只校验首个、其余静默假通过。
+    text = re.sub(
+        r"[A-Za-z0-9_.]+:id/[A-Za-z0-9_]+(?:\|[A-Za-z0-9_]+)+",
+        lambda m: " ".join(_expand_compound_id_tokens([m.group(0)])),
+        text,
+    )
     full_ids = re.findall(r"[A-Za-z0-9_.]+:id/[A-Za-z0-9_]+", text)
     if full_ids:
         tokens = list(full_ids)

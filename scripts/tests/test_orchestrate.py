@@ -292,7 +292,10 @@ def test_execute_case_via_agent_retries_on_503_then_succeeds(monkeypatch):
         return {list(procs)[0]: [{"passed": True, "record_id": "rec1"}] if calls["n"] == 3 else "failed"}
 
     monkeypatch.setattr(orchestrate, "collect_results", fake_collect)
-    monkeypatch.setattr(orchestrate, "_load_jsonl", lambda *a, **k: [{"passed": True, "record_id": "rec1"}])
+    # 503 崩溃时 agent 未落盘 → jsonl 为空,兜底读取拿不到结果才会触发重试;
+    # 第 3 次(与 fake_collect 同步)才写出通过结果。
+    monkeypatch.setattr(orchestrate, "_load_jsonl",
+                        lambda *a, **k: [{"passed": True, "record_id": "rec1"}] if calls["n"] == 3 else [])
     monkeypatch.setattr(orchestrate, "_tail_file", lambda *a, **k: "503 No available accounts")
 
     result = orchestrate.execute_case_via_agent("gaotu", "android", "dev1", entry)
