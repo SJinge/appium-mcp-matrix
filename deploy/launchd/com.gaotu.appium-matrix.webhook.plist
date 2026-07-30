@@ -23,6 +23,16 @@
     <string>gaotu</string>
     <key>ORCH_AGENT_CLI</key>
     <string>claude</string>
+    <!-- 仅 ORCH_AGENT_CLI=claude 回退时需要：
+         中转 API(ANTHROPIC_BASE_URL=baijia)按 CLAUDE_CODE_ENTRYPOINT 白名单识别
+         "Claude Code 客户端"，缺此值或值非 claude-vscode 会 403 Forbidden(全用例判失败)。
+         交互式 VSCode 会话天然带此变量，launchd 无头环境必须显式补。 -->
+    <key>CLAUDE_CODE_ENTRYPOINT</key>
+    <string>claude-vscode</string>
+    <!-- launchd 最小 PATH 不含 codex/claude/node/appium(~/.local/bin)与 adb(platform-tools)，
+         不补会报 No such file or directory。 -->
+    <key>PATH</key>
+    <string>/Applications/ChatGPT.app/Contents/Resources:/Users/mac/.local/bin:/Users/mac/Library/Android/sdk/platform-tools:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>PORT</key>
     <string>10086</string>
     <!-- 完整安装包(大小严格 == 远端 Content-Length)跨轮复用，跳过重复下载；

@@ -83,7 +83,12 @@ def agent_log_path(udid: str) -> str:
 
 def build_agent_command(runner: str, prompt: str, skill_dir: str, common_dir: str) -> list:
     if runner == "claude":
-        return ["claude", "--add-dir", skill_dir, "--add-dir", common_dir, "--print", prompt]
+        # --dangerously-skip-permissions：headless(--print)无人应答，缺此标志时 claude
+        # 对每个工具调用(appium MCP)都要权限确认、并因 workspace 未被 trust 而拒用工具，
+        # 于是只描述计划反问"要不要继续"就退出 → 每条用例判失败。等价 codex 的
+        # --dangerously-bypass-approvals-and-sandbox。此标志同时跳过 trust 对话框。
+        return ["claude", "--dangerously-skip-permissions",
+                "--add-dir", skill_dir, "--add-dir", common_dir, "--print", prompt]
     if runner == "codex":
         # codex exec 默认 approval=never，会把 appium-mcp 的非只读工具直接取消。
         # 编排执行只依赖 appium-mcp；显式关闭无关 MCP，避免启动握手卡在 feishu/lark-mcp。
@@ -1186,10 +1191,16 @@ def _assert_ui_checkpoints_via_agent(app_id: str, platform: str, udid: str,
             ]
             if assert_steps:
                 step = assert_steps[0]
+                # UI 审计子 agent 常把整体结论放在 case 级 passed + note，而 step 级
+                # passed 留空(null)。此处 step 级为 None 时回退 case 级判定，否则
+                # bool(None)=False 会把"UI 正常"的审计误判为 assert_ui failed。
+                step_passed = step.get("passed", step.get("pass"))
+                if step_passed is None:
+                    step_passed = last_case.get("passed")
                 results.append({
                     "checkpoint_index": checkpoint.get("index", 0),
                     "text": checkpoint.get("text", ""),
-                    "passed": bool(step.get("passed", step.get("pass", False))),
+                    "passed": bool(step_passed),
                     "verify_method": step.get("verify_method", "vision"),
                     "evidence": step.get("evidence", checkpoint.get("screenshot", "")),
                     "confidence": step.get("confidence", "low"),
