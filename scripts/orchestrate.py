@@ -1083,9 +1083,14 @@ def _create_ios_session_resilient(port: int, bundle_id: str, wda_recover=None,
 
 
 def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
-                                   timeout: int = 10, interval: float = 1.0,
+                                   timeout: int = 30, interval: float = 1.0,
                                    wda_recover=None) -> bool:
-    """启动 App 并前置处理会阻断首启的 iOS 网络类系统弹窗。"""
+    """启动 App 并接受盖在隐私弹窗上的 iOS「无线数据」系统 alert。
+
+    首启第一个联网请求会弹「允许"高途"使用无线数据?」三选一 alert,盖住隐私弹窗的
+    「同意」键;必须点「无线局域网与蜂窝网络」放行(点「不允许」会连 WiFi 一起断,App 落到
+    网络错误页,首个 ASSERT 失败)。alert 出现时机随冷启动快慢浮动,故轮询到出现再接、接住
+    即返回,而非固定窗口盲等。窗口内始终没弹(通常=已授权)也不硬失败。"""
     if not bundle_id:
         log.warning(f"iOS 网络权限预热缺少 bundleId: {udid}")
         return False
@@ -1098,6 +1103,7 @@ def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
         return False
 
     deadline = time.monotonic() + timeout
+    accepted_network = False
     try:
         while time.monotonic() < deadline:
             alert = orch_case_runtime_ios._alert_text(port, session_id)
@@ -1107,96 +1113,28 @@ def prepare_ios_network_permission(udid: str, bundle_id: str, port: int,
                 if not orch_case_runtime_ios._accept_alert(port, session_id, button or None):
                     log.warning(f"iOS 网络权限弹窗处理失败: {udid}, alert={alert[:120]}")
                     return False
+                if "无线数据" in alert:
+                    # 关键 alert 已放行,隐私弹窗已暴露,无需再等
+                    accepted_network = True
+                    break
                 continue
             time.sleep(interval)
+        if not accepted_network:
+            log.info(f"iOS 首启无线数据 alert 未在 {timeout}s 内出现: {udid}(可能已授权)")
         return True
     finally:
         orch_case_runtime_ios._delete_session(port, session_id)
         _stop_ios_app(udid, bundle_id)
 
 
-def _ios_wda_scroll_down(port: int, session_id: str) -> bool:
-    try:
-        size_body = orch_case_runtime_ios._wda_request(
-            port, "GET", f"/session/{session_id}/window/size", timeout=10)
-        size = size_body.get("value") or {}
-        width = int(size.get("width") or 390)
-        height = int(size.get("height") or 844)
-        orch_case_runtime_ios._wda_request(
-            port,
-            "POST",
-            f"/session/{session_id}/wda/dragfromtoforduration",
-            payload={
-                "duration": 0.2,
-                "fromX": width // 2,
-                "fromY": int(height * 0.78),
-                "toX": width // 2,
-                "toY": int(height * 0.28),
-            },
-            timeout=15,
-        )
-        return True
-    except Exception:
-        return False
-
-
-def _ios_tap_text_with_scroll(port: int, session_id: str, texts,
-                              max_scrolls: int = 8) -> bool:
-    candidates = [texts] if isinstance(texts, str) else list(texts)
-    for idx in range(max_scrolls + 1):
-        for text in candidates:
-            try:
-                element_id = orch_case_runtime_ios._find_element(port, session_id, "text", text)
-                if element_id and orch_case_runtime_ios._click_element(port, session_id, element_id):
-                    return True
-            except Exception:
-                pass
-        if idx >= max_scrolls or not _ios_wda_scroll_down(port, session_id):
-            break
-        time.sleep(0.5)
-    return False
-
-
-def grant_ios_network_permission_in_settings(udid: str, app_display_name: str,
-                                             port: int, wda_recover=None) -> bool:
-    """设置 -> App -> <App> -> 无线数据 -> 无线局域网与蜂窝数据。"""
-    session_id = _create_ios_session_resilient(port, "com.apple.Preferences", wda_recover)
-    if not session_id:
-        log.warning(f"iOS 设置网络权限建 session 失败: {udid}, port={port}")
-        return False
-    try:
-        source = orch_case_runtime_ios._get_source(port, session_id)
-        if app_display_name not in source:
-            _ios_tap_text_with_scroll(port, session_id, ("App", "应用"), max_scrolls=6)
-            time.sleep(0.8)
-        if not _ios_tap_text_with_scroll(port, session_id, app_display_name, max_scrolls=12):
-            log.warning(f"iOS 设置页未找到 App: {udid}, app={app_display_name}")
-            return False
-        time.sleep(0.8)
-        if not _ios_tap_text_with_scroll(port, session_id, "无线数据", max_scrolls=6):
-            log.warning(f"iOS App 设置页未找到无线数据入口: {udid}, app={app_display_name}")
-            return False
-        time.sleep(0.8)
-        if not _ios_tap_text_with_scroll(
-                port, session_id,
-                ("无线局域网与蜂窝数据", "无线局域网与蜂窝网络"),
-                max_scrolls=2):
-            log.warning(f"iOS 无线数据页未找到无线局域网与蜂窝数据选项: {udid}, app={app_display_name}")
-            return False
-        return True
-    finally:
-        orch_case_runtime_ios._delete_session(port, session_id)
-        _stop_ios_app(udid, "com.apple.Preferences")
-
-
 def ensure_ios_network_permission_ready(app_id: str, udid: str, bundle_id: str,
                                         port: int) -> bool:
-    # 主动进设置授权:iOS 装完 App 后,设置里的「无线数据/无线局域网与蜂窝数据」入口装后即在
-    # (无需先启动)。故装后先主动进「设置→App→无线数据→无线局域网与蜂窝数据」勾选,让 App
-    # 首次启动的第一个联网请求就已带权限;再做一次 prepare 弹窗预热(启动 App、清理首启网络/
-    # 通知类弹窗),不再依赖首启弹窗是否恰好在 10s 窗口内出现(旧逻辑会把"窗口内没弹窗"误判为
-    # 已授权,导致 App 无网仍跑)。设备可用性以 prepare 能否建起 session 为准。
-    app_display_name = APP_DISPLAY_NAMES.get(app_id, app_id)
+    # iOS 首启第一个联网请求会弹「允许"高途"使用无线数据?」系统 alert,盖在隐私弹窗上、挡住
+    # 「同意」键(点「不允许」会连 WiFi 一起断,App 落到网络错误页)。真机验证:唯一稳的授权方式
+    # 是启动 App、轮询到该 alert 出现后用 WDA 点「无线局域网与蜂窝网络」放行(见 prepare)。
+    # (曾试过"先进设置主动勾选":该 per-App「无线数据」入口在首启请求前根本不存在,且 WDA 起
+    #  com.apple.Preferences 的 session 极不稳、每条用例白烧 60s,纯累赘,已移除。)设备可用性
+    # 以 prepare 能否建起 session 为准。
     wda = _resolve_ios_device_wda_config(app_id, udid)
     wda_recover = lambda: ios_wda.ensure_wda_ready(
         udid,
@@ -1204,10 +1142,6 @@ def ensure_ios_network_permission_ready(app_id: str, udid: str, bundle_id: str,
         wda.get("bundle_id", DEFAULT_WDA_BUNDLE),
         port,
     )
-    if not grant_ios_network_permission_in_settings(
-            udid, app_display_name, port, wda_recover=wda_recover):
-        log.warning(
-            f"iOS 设置主动授权网络权限未完成: {udid}, app={app_display_name}，改由弹窗预热兜底")
     return prepare_ios_network_permission(udid, bundle_id, port, wda_recover=wda_recover)
 
 

@@ -2068,23 +2068,24 @@ def test_prepare_ios_network_permission_accepts_wireless_alert(monkeypatch):
     assert stopped == [("i1", "com.gaotu100.superclass")]
 
 
-def test_grant_ios_network_permission_in_settings_taps_app_wireless_data_path(monkeypatch):
+def test_prepare_ios_network_permission_returns_ok_when_no_alert(monkeypatch):
+    # 窗口内始终没弹无线数据 alert(通常=已授权)不硬失败,仍返回 True。
     ios = orchestrate.orch_case_runtime_ios
-    sources = iter(["设置", "App 列表 高途", "高途 无线数据", "无线局域网与蜂窝数据"])
-    taps = []
     stopped = []
 
-    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "settings-sid")
-    monkeypatch.setattr(ios, "_get_source", lambda port, sid: next(sources))
-    monkeypatch.setattr(orchestrate, "_ios_wda_scroll_down", lambda port, sid: True)
-    monkeypatch.setattr(ios, "_find_element", lambda port, sid, by, value: f"el-{value}")
-    monkeypatch.setattr(ios, "_click_element", lambda port, sid, element_id: taps.append(element_id[3:]) or True)
+    monkeypatch.setattr(orchestrate, "grant_ios_network_permission", lambda udid, bundle_id: True)
+    monkeypatch.setattr(ios, "_create_session", lambda port, bundle_id: "sid")
+    monkeypatch.setattr(ios, "_alert_text", lambda port, sid: "")
+    monkeypatch.setattr(ios, "_accept_alert", lambda port, sid, name=None: True)
     monkeypatch.setattr(ios, "_delete_session", lambda port, sid: True)
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(orchestrate.time, "monotonic", iter([0, 0.05, 1]).__next__)
     monkeypatch.setattr(orchestrate, "_stop_ios_app", lambda udid, bundle_id: stopped.append((udid, bundle_id)) or True)
 
-    assert orchestrate.grant_ios_network_permission_in_settings("i1", "高途", 8100) is True
-    assert taps == ["App", "高途", "无线数据", "无线局域网与蜂窝数据"]
-    assert stopped == [("i1", "com.apple.Preferences")]
+    assert orchestrate.prepare_ios_network_permission(
+        "i1", "com.gaotu100.superclass", 8100, timeout=0.1, interval=0
+    ) is True
+    assert stopped == [("i1", "com.gaotu100.superclass")]
 
 
 def test_create_ios_session_resilient_recovers_after_transient_failure(monkeypatch):
@@ -2152,16 +2153,12 @@ def test_create_ios_session_resilient_swallows_recover_exception(monkeypatch):
 
 
 def test_ensure_ios_network_permission_ready_threads_wda_recover(monkeypatch):
-    # ensure_ios_network_permission_ready 须把可自愈的 wda_recover 传给 settings/prepare。
+    # ensure_ios_network_permission_ready 须把可自愈的 wda_recover 传给 prepare。
     seen = {}
 
     monkeypatch.setattr(
         orchestrate, "_resolve_ios_device_wda_config",
         lambda app_id, udid: {"team": "T", "bundle_id": "wda.b", "port": 8100},
-    )
-    monkeypatch.setattr(
-        orchestrate, "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port, wda_recover=None: seen.__setitem__("grant", wda_recover) or True,
     )
     monkeypatch.setattr(
         orchestrate, "prepare_ios_network_permission",
@@ -2171,20 +2168,13 @@ def test_ensure_ios_network_permission_ready_threads_wda_recover(monkeypatch):
     assert orchestrate.ensure_ios_network_permission_ready(
         "gaotu", "i1", "com.gaotu100.superclass", 8100
     ) is True
-    assert callable(seen["grant"])
     assert callable(seen["prepare"])
-    assert seen["grant"] is seen["prepare"]
 
 
-def test_ensure_ios_network_permission_ready_grants_via_settings_first(monkeypatch):
-    # 主动进设置授权:先跑设置授权,再做弹窗预热,不再依赖首启弹窗是否在窗口内出现。
+def test_ensure_ios_network_permission_ready_delegates_to_prewarm(monkeypatch):
+    # 设置授权分支已移除:唯一动作是弹窗预热接 alert,直接透传其结果。
     calls = []
 
-    monkeypatch.setattr(
-        orchestrate,
-        "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port, wda_recover=None: calls.append(("settings", udid, app_name, port)) or True,
-    )
     monkeypatch.setattr(
         orchestrate,
         "prepare_ios_network_permission",
@@ -2194,40 +2184,11 @@ def test_ensure_ios_network_permission_ready_grants_via_settings_first(monkeypat
     assert orchestrate.ensure_ios_network_permission_ready(
         "gaotu", "i1", "com.gaotu100.superclass", 8100
     ) is True
-    assert calls == [
-        ("settings", "i1", "高途", 8100),
-        ("prepare", "i1", "com.gaotu100.superclass", 8100),
-    ]
-
-
-def test_ensure_ios_network_permission_ready_prewarms_even_if_settings_fails(monkeypatch):
-    # 设置授权没找到入口(失败)也不硬失败:仍做弹窗预热,设备可用性以 prepare 结果为准。
-    calls = []
-
-    monkeypatch.setattr(
-        orchestrate,
-        "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port, wda_recover=None: calls.append("settings") or False,
-    )
-    monkeypatch.setattr(
-        orchestrate,
-        "prepare_ios_network_permission",
-        lambda udid, bundle_id, port, wda_recover=None: calls.append("prepare") or True,
-    )
-
-    assert orchestrate.ensure_ios_network_permission_ready(
-        "gaotu", "i1", "com.gaotu100.superclass", 8100
-    ) is True
-    assert calls == ["settings", "prepare"]
+    assert calls == [("prepare", "i1", "com.gaotu100.superclass", 8100)]
 
 
 def test_ensure_ios_network_permission_ready_skips_device_when_prewarm_fails(monkeypatch):
     # prepare 建 session 失败 → 返回 False → 上层 _run 跳过该 iOS 设备。
-    monkeypatch.setattr(
-        orchestrate,
-        "grant_ios_network_permission_in_settings",
-        lambda udid, app_name, port, wda_recover=None: True,
-    )
     monkeypatch.setattr(
         orchestrate,
         "prepare_ios_network_permission",
