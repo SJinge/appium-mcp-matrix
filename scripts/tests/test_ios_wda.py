@@ -95,6 +95,7 @@ def test_ensure_ready_kills_stale_proxy_before_restart():
     with patch("ios_wda.health_check", side_effect=lambda p: health_seq.pop(0)), \
          patch("ios_wda.tunnel_ready", return_value=True), \
          patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda._wda_log_age", return_value=10.0), \
          patch("ios_wda.proxy_listening", return_value=True), \
          patch("ios_wda._kill_proxy") as kill, \
          patch("ios_wda._start_proxy") as start_proxy, \
@@ -110,6 +111,7 @@ def test_ensure_ready_times_out():
     with patch("ios_wda.health_check", return_value=False), \
          patch("ios_wda.tunnel_ready", return_value=True), \
          patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda._wda_log_age", return_value=10.0), \
          patch("ios_wda.proxy_listening", return_value=True), \
          patch("ios_wda._kill_proxy"), \
          patch("ios_wda.subprocess.Popen"), \
@@ -117,3 +119,65 @@ def test_ensure_ready_times_out():
          patch("ios_wda.time.monotonic", side_effect=[0, 1, 200]):
         ok = ios_wda.ensure_wda_ready("udid", "TEAM", "bundle", 8100, timeout=180)
     assert ok is False
+
+
+def test_ensure_ready_kills_zombie_when_build_log_stale():
+    # xcodebuild 进程活着但 WDA 不健康、构建日志已停 => 判僵尸,杀掉重建(而非只重启 proxy 干等)
+    health_seq = [False, True]
+    with patch("ios_wda.health_check", side_effect=lambda p: health_seq.pop(0)), \
+         patch("ios_wda.tunnel_ready", return_value=True), \
+         patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda._wda_log_age", return_value=9999.0), \
+         patch("ios_wda.proxy_listening", return_value=True), \
+         patch("ios_wda._kill_wda") as kill_wda, \
+         patch("ios_wda._start_wda") as start_wda, \
+         patch("ios_wda._kill_proxy"), \
+         patch("ios_wda._start_proxy"), \
+         patch("ios_wda.time.sleep"):
+        ok = ios_wda.ensure_wda_ready("udid", "TEAM", "bundle", 8100, timeout=30)
+    assert ok is True
+    kill_wda.assert_called_once()
+    start_wda.assert_called_once()
+
+
+def test_ensure_ready_missing_log_treated_as_zombie():
+    # 进程在但没有我方构建日志(=别处遗留的野 xcodebuild),同样判僵尸杀掉重建
+    health_seq = [False, True]
+    with patch("ios_wda.health_check", side_effect=lambda p: health_seq.pop(0)), \
+         patch("ios_wda.tunnel_ready", return_value=True), \
+         patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda._wda_log_age", return_value=None), \
+         patch("ios_wda.proxy_listening", return_value=True), \
+         patch("ios_wda._kill_wda") as kill_wda, \
+         patch("ios_wda._start_wda") as start_wda, \
+         patch("ios_wda._kill_proxy"), \
+         patch("ios_wda._start_proxy"), \
+         patch("ios_wda.time.sleep"):
+        ok = ios_wda.ensure_wda_ready("udid", "TEAM", "bundle", 8100, timeout=30)
+    assert ok is True
+    kill_wda.assert_called_once()
+    start_wda.assert_called_once()
+
+
+def test_ensure_ready_waits_when_build_log_fresh():
+    # 日志还在动 => 构建/启动进行中,不杀不重建,继续等到健康
+    health_seq = [False, True]
+    with patch("ios_wda.health_check", side_effect=lambda p: health_seq.pop(0)), \
+         patch("ios_wda.tunnel_ready", return_value=True), \
+         patch("ios_wda.wda_running", return_value=True), \
+         patch("ios_wda._wda_log_age", return_value=10.0), \
+         patch("ios_wda.proxy_listening", return_value=True), \
+         patch("ios_wda._kill_wda") as kill_wda, \
+         patch("ios_wda._start_wda") as start_wda, \
+         patch("ios_wda._kill_proxy"), \
+         patch("ios_wda._start_proxy"), \
+         patch("ios_wda.time.sleep"):
+        ok = ios_wda.ensure_wda_ready("udid", "TEAM", "bundle", 8100, timeout=30)
+    assert ok is True
+    kill_wda.assert_not_called()
+    start_wda.assert_not_called()
+
+
+def test_wda_log_age_none_when_missing():
+    with patch("ios_wda.os.path.getmtime", side_effect=OSError("no file")):
+        assert ios_wda._wda_log_age("udid") is None

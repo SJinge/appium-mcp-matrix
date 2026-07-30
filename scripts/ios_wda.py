@@ -13,6 +13,10 @@ DERIVED_DATA_ROOT = "/tmp/wda_derived"
 # 最新的一份,避免为了免重签反而触发全量 clean build(clean build 会重签 + 撞
 # /usr/local/include 交叉编译坑)。
 DEFAULT_DERIVED_DATA = os.path.expanduser("~/Library/Developer/Xcode/DerivedData")
+# xcodebuild 进程活着 ≠ WDA 健康:runner 可能已死但进程不退(隧道断/锁屏/证书弹窗)。
+# 用构建日志的更新时效区分「构建/服务进行中」与「僵尸」:日志超过此秒数没动且 WDA 不健康
+# → 判僵尸,杀掉重建,否则永远卡在 wda_running=True 分支自愈不了。
+WDA_LOG_STALE_SECS = 150
 
 
 def _dd_dir(udid: str) -> str:
@@ -127,6 +131,18 @@ def _kill_proxy(port: int):
             pass
 
 
+def _kill_wda(udid: str):
+    subprocess.run(["pkill", "-f", f"xcodebuild.*id={udid}"], capture_output=True)
+
+
+def _wda_log_age(udid: str):
+    """WDA 构建日志距今多少秒没更新;文件不存在返回 None(视作无进行中构建)。"""
+    try:
+        return time.time() - os.path.getmtime(f"/tmp/wda_build_{udid}.log")
+    except OSError:
+        return None
+
+
 def _start_proxy(udid: str, port: int, device_port: int = 8100):
     logf = open(f"/tmp/wda_proxy_{udid}.log", "w")
     cmd = [sys.executable, os.path.join(PROJECT_ROOT, "scripts", "wda_proxy.py"),
@@ -145,7 +161,19 @@ def ensure_wda_ready(udid: str, team: str, bundle_id: str,
         log.warning(f"[{udid}] tunnel 未就绪,检查 tunneld LaunchDaemon")
         return False
     xctestrun = _xctestrun_path(udid)
-    if not wda_running(udid):
+    need_start = not wda_running(udid)
+    if not need_start:
+        # 进程活着但(顶部已判)WDA 不健康。日志还在动 → 构建/启动进行中,继续等;
+        # 日志已停(或没有我方日志=别处遗留的野进程)→ 判僵尸,杀掉重建,否则永远卡。
+        age = _wda_log_age(udid)
+        if age is None or age > WDA_LOG_STALE_SECS:
+            log.info(f"[{udid}] xcodebuild 存活但 WDA 不健康、构建日志 "
+                     f"{'缺失' if age is None else str(int(age)) + 's 未更新'} => 判僵尸,杀掉重建")
+            _kill_wda(udid)
+            need_start = True
+        else:
+            log.info(f"[{udid}] WDA 构建/启动疑似进行中(日志 {int(age)}s 前更新),继续等待")
+    if need_start:
         # 已构建过(有 .xctestrun)→ 免重编复用已信任产物重启;否则首次全量构建。
         _start_wda(udid, team, bundle_id, rebuild=not xctestrun)
     if proxy_listening(port):
