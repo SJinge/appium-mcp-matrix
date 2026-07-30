@@ -1,9 +1,129 @@
 {
+  "关闭登录页@登录页": {
+    "hit_count": 0,
+    "module": "登录",
+    "page": "登录页",
+    "selector": "com.gaotu100.superclass:id/login_view_close_iv",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "底部我的tab@底部导航": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "底部导航",
+    "selector": "//*[@resource-id='com.gaotu100.superclass:id/tab_title'][@text='我的']",
+    "strategy": "xpath",
+    "verified_version": "5.91.93"
+  },
+  "我的tab@底部导航": {
+    "hit_count": 0,
+    "module": "公共导航",
+    "page": "底部导航",
+    "selector": "//*[@resource-id=\"com.gaotu100.superclass:id/tab_title\"][@text=\"我的\"]",
+    "strategy": "xpath",
+    "verified_version": "5.91.93"
+  },
   "拒绝剪切板授权弹窗": {
     "hit_count": 1,
     "module": "启动弹窗",
     "page": "",
     "selector": "com.gaotu100.superclass:id/customer_dialog_cancel",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "点击首页tab@首页tab": {
+    "hit_count": 0,
+    "module": "首页",
+    "page": "首页tab",
+    "selector": "//*[@resource-id='com.gaotu100.superclass:id/tab_title'][@text='首页']",
+    "strategy": "xpath",
+    "verified_version": "5.91.93"
+  },
+  "登录协议勾选容器@登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "登录页",
+    "selector": "com.gaotu100.superclass:id/accept_login_agreement_layout",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "登录协议弹窗同意按钮@登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "登录页",
+    "selector": "com.gaotu100.superclass:id/customer_dialog_ok",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "登录页手机号输入框@登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "登录页",
+    "selector": "com.gaotu100.superclass:id/account_enter_et",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "登录页获取验证码按钮@登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "登录页",
+    "selector": "com.gaotu100.superclass:id/account_sign_btn",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "设置icon@我的页": {
+    "hit_count": 0,
+    "module": "我的",
+    "page": "我的页",
+    "selector": "com.gaotu100.superclass:id/setting",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "设置页标题@设置页": {
+    "hit_count": 0,
+    "module": "我的",
+    "page": "设置页",
+    "selector": "com.gaotu100.superclass:id/setting_title_tv",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "设置项右侧文本@设置页": {
+    "hit_count": 0,
+    "module": "我的",
+    "page": "设置页",
+    "selector": "com.gaotu100.superclass:id/setting_right_text",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "首次启动协议同意按钮@启动弹窗": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "启动弹窗",
+    "selector": "com.gaotu100.superclass:id/tvConfirm",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "验证码输入框@验证码页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码页",
+    "selector": "com.gaotu100.superclass:id/passcode_login_passcode_et",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "验证码页倒计时@验证码页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码页",
+    "selector": "com.gaotu100.superclass:id/account_passcode_refetch",
+    "strategy": "id",
+    "verified_version": "5.91.93"
+  },
+  "验证码页手机号显示@验证码页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码页",
+    "selector": "com.gaotu100.superclass:id/passcode_login_phone_et",
     "strategy": "id",
     "verified_version": "5.91.93"
   }

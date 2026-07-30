@@ -193,8 +193,9 @@ def _do_trigger(app_id: str, version: str, platform: str, url: str):
 def health():
     """存活探针：launchd KeepAlive 负责重启进程，外部/监控用此确认 webhook 在听。
     顺带回 enabled_apps 和当前在跑的 run 数(phase 非终态)。"""
+    terminal = {"done", "failed", "interrupted"}
     active = [r for r in run_status.load_all()
-              if r.get("phase") not in ("done", "failed")]
+              if r.get("phase") not in terminal]
     return jsonify({
         "status":       "ok",
         "enabled_apps": sorted(ENABLED_APPS),

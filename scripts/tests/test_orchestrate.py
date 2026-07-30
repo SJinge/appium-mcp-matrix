@@ -427,6 +427,7 @@ def test_build_shared_execution_context_contains_common_rules():
     context = orchestrate.build_shared_execution_context("gaotu")
     assert "common/elements/login.md" in context
     assert "common/device.md" in context
+    assert "/tmp/result_<udid>.jsonl" not in context
 
 
 def test_build_prompt_includes_shared_execution_context(monkeypatch):
@@ -445,20 +446,42 @@ def test_build_prompt_includes_ui_audit_rules_when_enabled(monkeypatch):
     assert "文本是否截断" in prompt
 
 
+def test_build_prompt_prevents_codex_mcp_session_spin(monkeypatch):
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt("gaotu", "a1", "Android", entries)
+    assert "Appium MCP 调用纪律" in prompt
+    assert "不得用 `true`、空 shell" in prompt
+    assert "`pwd/date/echo`" in prompt
+    assert "MCP session 创建未发起" in prompt
+    assert "MCP 工具调用未发起" in prompt
+
+
+def test_build_prompt_for_batch_forbids_legacy_result_path(monkeypatch):
+    monkeypatch.setattr(orchestrate, "resolve_ui_audit_enabled", lambda: False)
+    entries = [{"record_id": "r1", "name": "c1", "module": "m", "steps": []}]
+    prompt = orchestrate.build_prompt(
+        "gaotu",
+        "a1",
+        "Android",
+        entries,
+        result_path="/tmp/case_results/a1/r1/batch_results/batch_a1_0/result_a1.jsonl",
+    )
+    assert "本批只允许写入 /tmp/case_results/a1/r1/batch_results/batch_a1_0/result_a1.jsonl" in prompt
+    assert "不得另写 /tmp/result_a1.jsonl" in prompt
+
+
 def test_build_agent_command_codex_enables_noninteractive_mcp_tools():
     cmd = orchestrate.build_agent_command("codex", "prompt", "/tmp/skill", "/tmp/common")
-    assert cmd == [
-        "codex",
-        "exec",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "-c",
-        "mcp_servers.feishu.enabled=false",
-        "-c",
-        "mcp_servers.feishu-docx-blocks.enabled=false",
-        "-c",
-        "mcp_servers.Banshan.enabled=false",
-        "prompt",
-    ]
+    assert cmd[:3] == ["codex", "exec", "--ignore-user-config"]
+    assert "--ephemeral" in cmd
+    assert "--dangerously-bypass-approvals-and-sandbox" in cmd
+    assert "model_provider=\"custom\"" in cmd
+    assert "mcp_servers.appium-mcp.type=\"stdio\"" in cmd
+    assert "mcp_servers.appium-mcp.command=\"appium-mcp\"" in cmd
+    assert "mcp_servers.feishu.enabled=false" not in cmd
+    assert "mcp_servers.feishu-docx-blocks.enabled=false" not in cmd
+    assert cmd[-1] == "prompt"
 
 
 def test_launch_agent_per_device_uses_resolved_runner(monkeypatch, tmp_path):
@@ -481,7 +504,8 @@ def test_launch_agent_per_device_uses_resolved_runner(monkeypatch, tmp_path):
     orchestrate.launch_agent_per_device("gaotu", entries, version="5.91.90")
     assert popen_calls[0][0] == "codex"
     assert "--dangerously-bypass-approvals-and-sandbox" in popen_calls[0]
-    assert "mcp_servers.feishu.enabled=false" in popen_calls[0]
+    assert "--ignore-user-config" in popen_calls[0]
+    assert "mcp_servers.appium-mcp.command=\"appium-mcp\"" in popen_calls[0]
 
 
 def test_launch_agent_per_device_preserves_claude_add_dir(monkeypatch, tmp_path):
@@ -1249,6 +1273,68 @@ def test_run_flow_dispatches_prepare_tap_input_and_assert():
         "input",
         "handle_known_dialogs",
     ]
+
+
+def test_run_flow_dispatches_appium_lifecycle_activate_string():
+    calls = []
+    runtime = {
+        "appium_app_lifecycle": lambda step: calls.append(step) or step.get("action") == "activate",
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "appium_app_lifecycle activate com.gaotu100.superclass"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert calls[0]["type"] == "appium_app_lifecycle"
+    assert calls[0]["action"] == "activate"
+    assert calls[0]["value"] == "com.gaotu100.superclass"
+
+
+def test_run_flow_appium_lifecycle_overrides_placeholder_value():
+    calls = []
+    runtime = {
+        "appium_app_lifecycle": lambda step: calls.append(step) or step.get("value") == "com.gaotu100.superclass",
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "appium_app_lifecycle activate com.gaotu100.superclass", "value": "-"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert calls[0]["value"] == "com.gaotu100.superclass"
+
+
+def test_run_flow_normalizes_legacy_tap_id_action():
+    calls = []
+    runtime = {
+        "tap": lambda step: calls.append(step) or step.get("value") == "com.gaotu100.superclass:id/tvConfirm",
+    }
+
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页", "bundle_id": "com.gaotu100.superclass"},
+        [{"type": "tap tvConfirm(同意)", "by": "text", "value": "id/tvConfirm"}],
+        runtime,
+    )
+
+    assert result["passed"] is True
+    assert calls[0]["type"] == "tap"
+    assert calls[0]["by"] == "id"
+
+
+def test_run_flow_skips_legacy_clickable_span_action():
+    result = orchestrate._run_flow(
+        {"record_id": "rec1", "name": "case", "module": "首页"},
+        [{"type": "clickable-span 坐标点击", "value": "coordinate(clickable span)"}],
+        {},
+    )
+
+    assert result["passed"] is True
+    assert "legacy clickable-span action skipped" in result["steps"][0]["note"]
 
 
 def test_run_flow_dispatches_assert_ui_and_preserves_structured_result():
@@ -2116,6 +2202,118 @@ def test_run_flow_assert_id_uses_aux_text_as_advisory_check():
     assert result["passed"] is True
     assert "aux_missing=['简单浏览模式']" in result["steps"][0]["note"]
     assert "aux_matched=['同意']" in result["steps"][0]["note"]
+
+
+def test_assert_id_accepts_id_text_contains_evidence():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'resource-id="com.gaotu100.superclass:id/tvMessage" '
+            "text='感谢您下载并使用高途！'"
+        ),
+    }
+
+    detail = orchestrate._assert_evidence_detail(
+        runtime,
+        "id",
+        "tvMessage text 含 '感谢您下载并使用高途！'",
+    )
+
+    assert detail["passed"] is True
+    assert detail["matched"] == [":id/tvMessage", "感谢您下载并使用高途！"]
+
+
+def test_assert_id_accepts_id_label_evidence():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'resource-id="com.gaotu100.superclass:id/tvConfirm" text="同意" '
+            'resource-id="com.gaotu100.superclass:id/tvCancel" text="不同意"'
+        ),
+    }
+
+    detail = orchestrate._assert_evidence_detail(
+        runtime,
+        "id",
+        "tvConfirm(同意) / tvCancel(不同意)",
+    )
+
+    assert detail["passed"] is True
+    assert detail["matched"] == [":id/tvConfirm", "同意", ":id/tvCancel", "不同意"]
+
+
+def test_assert_id_accepts_clickable_span_text_evidence():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'resource-id="com.gaotu100.superclass:id/tvMessage" '
+            "《高途用户服务协议》《高途隐私政策》《儿童隐私保护声明》"
+        ),
+    }
+
+    detail = orchestrate._assert_evidence_detail(
+        runtime,
+        "id",
+        "tvMessage text-has-clickable-span=true,含《高途用户服务协议》《高途隐私政策》《儿童隐私保护声明》",
+    )
+
+    assert detail["passed"] is True
+    assert detail["matched"] == [
+        ":id/tvMessage",
+        "高途用户服务协议",
+        "高途隐私政策",
+        "儿童隐私保护声明",
+    ]
+
+
+def test_assert_id_accepts_id_text_equals_evidence():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'resource-id="com.gaotu100.superclass:id/tvTitle" text="青少年守护"'
+        ),
+    }
+
+    detail = orchestrate._assert_evidence_detail(runtime, "id", "tvTitle text='青少年守护'")
+
+    assert detail["passed"] is True
+    assert detail["matched"] == [":id/tvTitle", "青少年守护"]
+
+
+def test_assert_id_accepts_semicolon_full_resource_ids():
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'resource-id="com.gaotu100.superclass:id/account_enter_et" '
+            'resource-id="com.gaotu100.superclass:id/account_sign_btn"'
+        ),
+    }
+
+    detail = orchestrate._assert_evidence_detail(
+        runtime,
+        "id",
+        "com.gaotu100.superclass:id/account_enter_et; "
+        "com.gaotu100.superclass:id/account_sign_btn; /tmp/gaotu_final2.xml",
+    )
+
+    assert detail["passed"] is True
+    assert detail["matched"] == [
+        "com.gaotu100.superclass:id/account_enter_et",
+        "com.gaotu100.superclass:id/account_sign_btn",
+    ]
+
+
+def test_tap_with_locator_supports_coordinate(monkeypatch):
+    taps = []
+    monkeypatch.setattr(orchestrate, "_adb_tap", lambda udid, x, y: taps.append((udid, x, y)) or True)
+
+    assert orchestrate._tap_with_locator("a1", {"by": "coordinate", "value": "612,2630"}, "") is True
+    assert taps == [("a1", 612, 2630)]
+
+
+def test_runtime_route_component_normalizes_activity_prefix():
+    component = orchestrate.orch_case_runtime.resolve_route_component(
+        "a1",
+        {"value": "activity=com.gaotu100.superclass/.ui.activity.SplashActivity"},
+        subprocess_module=orchestrate.subprocess,
+    )
+
+    assert component == "com.gaotu100.superclass/.ui.activity.SplashActivity"
 
 
 def test_run_flow_polls_assertion_until_page_stabilizes(monkeypatch):
@@ -3310,6 +3508,146 @@ def test_execute_device_batches_writes_each_batch(monkeypatch, tmp_path):
     assert [c["name"] for c in merged] == ["c1", "c2", "c3"]
 
 
+def test_execute_device_batches_recovers_legacy_agent_result_path(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"record_id": "r1", "name": "c1", "module": "首页"},
+            {"record_id": "r2", "name": "c2", "module": "首页"},
+        ],
+    }
+    payload = [
+        {"record_id": "r1", "name": "c1", "platform": "Android", "device": udid, "passed": False, "steps": []},
+        {"record_id": "r2", "name": "c2", "platform": "Android", "device": udid, "passed": True, "steps": []},
+    ]
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        _write_jsonl(tmp_path / f"result_{udid}.jsonl", payload)
+        return {udid: "failed"}
+
+    writes = []
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *args, **kwargs: _Proc())
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table",
+                        lambda app_id, platform, cases: writes.append([c["name"] for c in cases]))
+
+    results = orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert [c["name"] for c in results] == ["c1", "c2"]
+    assert writes == [["c1", "c2"]]
+
+
+def test_resolve_agent_timeout_shortens_codex_only(monkeypatch):
+    monkeypatch.delenv("ORCH_AGENT_TIMEOUT_SECONDS", raising=False)
+
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "codex")
+    assert orchestrate._resolve_agent_timeout_seconds(90 * 60) == 15 * 60
+
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "claude")
+    assert orchestrate._resolve_agent_timeout_seconds(90 * 60) == 90 * 60
+
+    monkeypatch.setenv("ORCH_AGENT_TIMEOUT_SECONDS", "120")
+    assert orchestrate._resolve_agent_timeout_seconds(90 * 60) == 120
+
+
+def test_execute_device_batches_synthesizes_failures_when_agent_writes_no_results(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [
+            {"record_id": "r1", "name": "c1", "module": "启动"},
+            {"record_id": "r2", "name": "c2", "module": "启动"},
+        ],
+    }
+
+    class _Proc:
+        returncode = 1
+        def poll(self):
+            return 1
+
+    writes = []
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "claude")
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *args, **kwargs: _Proc())
+    monkeypatch.setattr(orchestrate, "collect_results", lambda *args, **kwargs: {udid: "timeout"})
+    monkeypatch.setattr(orchestrate, "write_results_to_table",
+                        lambda app_id, platform, cases: writes.append([c["name"] for c in cases]))
+
+    results = orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert [c["record_id"] for c in results] == ["r1", "r2"]
+    assert all(c["passed"] is False for c in results)
+    assert all(c["exec_source"] == "agent_timeout" for c in results)
+    assert writes == [["c1", "c2"]]
+    merged = orchestrate._load_jsonl(tmp_path / f"result_{udid}.jsonl")
+    assert [c["record_id"] for c in merged] == ["r1", "r2"]
+
+
+def test_execute_device_batches_dedupes_duplicate_agent_results(monkeypatch, tmp_path):
+    udid = "a1"
+    group = {
+        "platform": "Android",
+        "entries": [{"record_id": "r1", "name": "c1", "module": "启动"}],
+    }
+    payload = [
+        {"record_id": "r1", "name": "c1", "platform": "Android", "device": udid,
+         "passed": False, "steps": [{"note": "early"}]},
+        {"record_id": "r1", "name": "c1", "platform": "Android", "device": udid,
+         "passed": True, "steps": [{"note": "latest"}]},
+    ]
+
+    class _Proc:
+        returncode = 0
+        def poll(self):
+            return 0
+
+    seen_run_ids = []
+
+    def fake_collect_results(procs, result_dir="/tmp", **kwargs):
+        seen_run_ids.append(kwargs.get("run_id"))
+        result_path = tmp_path / "batch_results" / f"batch_{udid}_0" / f"result_{udid}.jsonl"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_jsonl(result_path, payload)
+        return {udid: payload}
+
+    monkeypatch.setattr(orchestrate, "resolve_agent_runner", lambda: "claude")
+    monkeypatch.setattr(orchestrate, "launch_agent_batch", lambda *args, **kwargs: _Proc())
+    monkeypatch.setattr(orchestrate, "collect_results", fake_collect_results)
+    monkeypatch.setattr(orchestrate, "write_results_to_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(orchestrate, "generate_case_script", lambda *args, **kwargs: None)
+
+    results = orchestrate.execute_device_batches(
+        app_id="gaotu",
+        udid=udid,
+        group=group,
+        run_id="run1",
+        result_dir=str(tmp_path),
+        batch_size=20,
+    )
+
+    assert seen_run_ids == ["run1"]
+    assert len(results) == 1
+    assert results[0]["passed"] is True
+    assert results[0]["steps"][0]["note"] == "latest"
+
+
 def test_execute_device_batches_uses_script_first_results(monkeypatch, tmp_path):
     group = {
         "platform": "Android",
@@ -3694,6 +4032,13 @@ def test_run_clears_result_tables_once_before_batched_execution(monkeypatch):
                         lambda app_id, platforms: cleared.append((app_id, tuple(sorted(platforms)))))
     monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
                         lambda app_id, groups, **kwargs: {"a1": []})
+    monkeypatch.setattr(
+        orchestrate,
+        "launch_claude_per_device",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy per-device agent must not be launched")
+        ),
+    )
 
     with patch("orchestrate.run_status"), patch("orchestrate._notify"):
         orchestrate._run(

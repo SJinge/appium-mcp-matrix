@@ -81,6 +81,10 @@ def agent_log_path(udid: str) -> str:
     return f"/tmp/agent_{udid}.log"
 
 
+def _codex_config_arg(key: str, value) -> str:
+    return f"{key}={json.dumps(value)}"
+
+
 def build_agent_command(runner: str, prompt: str, skill_dir: str, common_dir: str) -> list:
     if runner == "claude":
         # --dangerously-skip-permissions：headless(--print)无人应答，缺此标志时 claude
@@ -91,17 +95,44 @@ def build_agent_command(runner: str, prompt: str, skill_dir: str, common_dir: st
                 "--add-dir", skill_dir, "--add-dir", common_dir, "--print", prompt]
     if runner == "codex":
         # codex exec 默认 approval=never，会把 appium-mcp 的非只读工具直接取消。
-        # 编排执行只依赖 appium-mcp；显式关闭无关 MCP，避免启动握手卡在 feishu/lark-mcp。
+        # 编排执行只依赖 appium-mcp；忽略用户全局 config，避免无关 MCP 配置解析失败
+        # 阻断设备 agent 启动，再显式注入最小可运行配置。
         return [
             "codex",
             "exec",
+            "--ignore-user-config",
+            "--ephemeral",
             "--dangerously-bypass-approvals-and-sandbox",
+            "-C",
+            os.path.dirname(common_dir),
             "-c",
-            "mcp_servers.feishu.enabled=false",
+            _codex_config_arg("model_provider", "custom"),
             "-c",
-            "mcp_servers.feishu-docx-blocks.enabled=false",
+            _codex_config_arg("model", "gpt-5.5"),
             "-c",
-            "mcp_servers.Banshan.enabled=false",
+            _codex_config_arg("model_providers.custom.name", "OpenAI"),
+            "-c",
+            _codex_config_arg("model_providers.custom.wire_api", "responses"),
+            "-c",
+            "model_providers.custom.requires_openai_auth=true",
+            "-c",
+            _codex_config_arg("model_providers.custom.base_url", "https://sub2api7.baijia.com"),
+            "-c",
+            "disable_response_storage=true",
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.type", "stdio"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.command", "appium-mcp"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.env.NO_UI", "true"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.env.SCREENSHOT_QUALITY", "50"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.env.CACHE_TTL", "300000"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.env.LOG_LEVEL", "warn"),
+            "-c",
+            _codex_config_arg("mcp_servers.appium-mcp.env.ANDROID_HOME", "/Users/mac/Library/Android/sdk"),
             prompt,
         ]
     raise ValueError(f"Unsupported runner: {runner}")
@@ -117,7 +148,7 @@ def build_shared_execution_context(app_id: str) -> str:
         "- common/device.md",
         "- common/locator.md",
         "遇到无法自动化或环境不满足的用例，不要提问等待确认，直接判失败并在 note 说明原因后继续下一条。",
-        "每跑完一条用例，必须立即增量 append 到对应 /tmp/result_<udid>.jsonl，不能等全部结束再统一写入。",
+        "每跑完一条用例，必须立即增量 append 到本轮提示【结果落盘】指定的唯一 JSONL 绝对路径，不能等全部结束再统一写入。",
     ]
     if app_id == "gaotu":
         parts.append("- .claude/skills/gaotu/elements.md")
@@ -461,6 +492,93 @@ def _hydrate_batch_cases(batch_cases: list, entries: list) -> list:
     return orch_execution.hydrate_batch_cases(batch_cases, entries)
 
 
+def _select_legacy_batch_cases(legacy_cases: list, entries: list, already_done: int = 0) -> list:
+    if not legacy_cases:
+        return []
+    record_ids = {entry.get("record_id") for entry in entries if entry.get("record_id")}
+    if record_ids:
+        matched = [case for case in legacy_cases if case.get("record_id") in record_ids]
+        if matched:
+            return matched
+    if len(legacy_cases) == len(entries):
+        return legacy_cases
+    if len(legacy_cases) > already_done:
+        return legacy_cases[already_done:already_done + len(entries)]
+    return []
+
+
+def _load_batch_cases_with_legacy(result_dir: str, udid: str, batch_idx: int,
+                                  entries: list, batch_data=None,
+                                  already_done: int = 0) -> list:
+    batch_cases = _load_jsonl(_batch_result_path(result_dir, udid, batch_idx))
+    if batch_cases:
+        return batch_cases
+    if isinstance(batch_data, list) and batch_data:
+        return batch_data
+    legacy_path = os.path.join(result_dir, f"result_{udid}.jsonl")
+    legacy_cases = _select_legacy_batch_cases(_load_jsonl(legacy_path), entries, already_done)
+    if legacy_cases:
+        log.warning(
+            f"{udid} batch {batch_idx + 1} 未写入批结果文件，"
+            f"已从 legacy 结果文件兜底读取 {len(legacy_cases)} 条: {legacy_path}"
+        )
+    return legacy_cases
+
+
+def _build_agent_failure_cases(entries: list, udid: str, platform: str, reason: str) -> list:
+    cases = []
+    for entry in entries:
+        cases.append({
+            "record_id": entry.get("record_id", ""),
+            "name": entry.get("name", ""),
+            "module": entry.get("module", ""),
+            "order": entry.get("order", ""),
+            "state_group": entry.get("state_group", ""),
+            "platform": platform,
+            "device": udid,
+            "passed": False,
+            "duration": 0,
+            "screenshots": [],
+            "exec_source": "agent_timeout" if "超时" in reason else "agent_failed",
+            "note": reason,
+            "steps": [{
+                "type": "ASSERT",
+                "text": "agent 执行结果落盘",
+                "passed": False,
+                "verify_method": "runtime",
+                "evidence": "",
+                "confidence": "high",
+                "note": reason,
+            }],
+        })
+    return cases
+
+
+def _dedupe_batch_cases(batch_cases: list, entries: list) -> list:
+    if not batch_cases:
+        return batch_cases
+    entry_keys = []
+    for entry in entries:
+        key = entry.get("record_id") or entry.get("name")
+        if key:
+            entry_keys.append(key)
+    if not entry_keys:
+        return batch_cases
+
+    latest = {}
+    extras = []
+    for case in batch_cases:
+        key = case.get("record_id") or case.get("source_record_id") or case.get("name")
+        if key in entry_keys:
+            latest[key] = case
+        else:
+            extras.append(case)
+
+    ordered = [latest[key] for key in entry_keys if key in latest]
+    remaining = max(0, len(entries) - len(ordered))
+    return ordered + extras[:remaining]
+
+
 def case_script_path(app_id: str, platform: str, record_id: str) -> str:
     return os.path.join(PROJECT_ROOT, "apps", app_id, "cases", platform.lower(), f"{record_id}.py")
 
@@ -524,6 +642,79 @@ def _expand_compound_id_tokens(tokens: list) -> list:
     return expanded
 
 
+def _id_evidence_tokens(evidence: str) -> list:
+    text = str(evidence or "").strip()
+    if not text:
+        return []
+    full_ids = re.findall(r"[A-Za-z0-9_.]+:id/[A-Za-z0-9_]+", text)
+    if full_ids:
+        tokens = list(full_ids)
+        tokens.extend(
+            label.strip()
+            for label in re.findall(r":id/[A-Za-z0-9_]+\(([^)]*)\)", text)
+            if label.strip()
+        )
+        for quoted in re.findall(r"text\s*(?:=|contains|含)\s*[\"'“‘]?([^\"'”’；;]+)[\"'”’]?", text):
+            text_token = quoted.strip()
+            if text_token and ":id/" not in text_token:
+                tokens.append(text_token)
+        tokens.extend(re.findall(r"《([^》]+)》", text))
+        return tokens
+    parsed = []
+    pieces = re.split(r"[；;|/、,，]+", text)
+    for piece in pieces:
+        part = piece.strip()
+        if not part:
+            continue
+        full_ids = re.findall(r"[A-Za-z0-9_.]+:id/[A-Za-z0-9_]+", part)
+        if full_ids:
+            parsed.extend(full_ids)
+            for quoted in re.findall(r"text\s*(?:=|contains|含)\s*[\"'“‘]?([^\"'”’；;]+)[\"'”’]?", part):
+                text_token = quoted.strip()
+                if text_token and ":id/" not in text_token:
+                    parsed.append(text_token)
+            continue
+        if part.startswith("/tmp/") or part.startswith("screenshot="):
+            continue
+        ident_match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", part)
+        if ident_match:
+            ident = ident_match.group(1)
+            if ident and ident not in {"text", "hint"}:
+                parsed.append(f":id/{ident}")
+            paren = re.search(r"\(([^)]*)\)", part)
+            if paren:
+                label = re.sub(r"^(?:hint|text)\s+", "", paren.group(1).strip())
+                if label:
+                    parsed.append(label)
+        for quoted in re.findall(r"(?:text|含)\s*(?:=|含)?\s*[\"'“‘]([^\"'”’]+)[\"'”’]", part):
+            parsed.append(quoted)
+        parsed.extend(re.findall(r"《([^》]+)》", part))
+    if parsed:
+        return parsed
+    if re.search(r"\btext\s*含\b", text):
+        tokens = []
+        for ident in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s+text\s*含", text):
+            tokens.append(f":id/{ident}")
+        for quoted in re.findall(r"[\"'“‘]([^\"'”’]+)[\"'”’]", text):
+            tokens.append(quoted)
+        if tokens:
+            return tokens
+    if re.search(r"[A-Za-z_][A-Za-z0-9_]*\s*\(", text):
+        pieces = re.split(r"[；;|/、,，]+", text)
+        tokens = []
+        for piece in pieces:
+            match = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(([^)]*)\))?", piece)
+            if not match:
+                continue
+            ident, label = match.groups()
+            tokens.append(f":id/{ident}")
+            if label:
+                tokens.append(label)
+        if tokens:
+            return tokens
+    return _expand_compound_id_tokens([text])
+
+
 def _assert_evidence_present(runtime: dict, verify_method: str, evidence: str) -> bool:
     return _assert_evidence_detail(runtime, verify_method, evidence)["passed"]
 
@@ -536,7 +727,7 @@ def _assert_evidence_detail(runtime: dict, verify_method: str, evidence: str) ->
     if verify_method not in {"id", "text"}:
         return {"passed": False, "tokens": [], "matched": [], "missing": [], "source": source}
     if verify_method == "id":
-        tokens = _expand_compound_id_tokens([evidence])
+        tokens = _id_evidence_tokens(evidence)
     else:
         tokens = _split_evidence_tokens(evidence)
         if not tokens:
@@ -980,60 +1171,17 @@ def _resolve_ios_device_wda_config(app_id: str, udid: str) -> dict:
 
 
 def _script_runtime_context(udid: str) -> dict:
-    page_source = {"value": None}
-
-    def _read_page_source(force_refresh: bool = False) -> str:
-        if page_source["value"] is not None and not force_refresh:
-            return page_source["value"]
-        try:
-            r = subprocess.run(
-                ["adb", "-s", udid, "exec-out", "uiautomator", "dump", "/dev/tty"],
-                capture_output=True, text=True, timeout=30
-            )
-            page_source["value"] = r.stdout or ""
-        except (subprocess.TimeoutExpired, OSError):
-            page_source["value"] = ""
-        return page_source["value"]
-
-    def assert_evidence_present(verify_method: str, evidence: str) -> bool:
-        return _assert_evidence_present(runtime, verify_method, evidence)
-
-    def prepare_state(step: dict) -> bool:
-        return _run_prepare_state(udid, step, runtime)
-
-    def handle_known_dialogs(step: dict) -> bool:
-        source = _read_page_source(force_refresh=True)
-        for marker, action_text in _KNOWN_DIALOG_TEXT_ACTIONS:
-            if marker not in source:
-                continue
-            if not _tap_by_text(udid, action_text):
-                return False
-            _read_page_source(force_refresh=True)
-        if "学习阶段" in source and "进入首页" in source:
-            if not _tap_by_text(udid, "进入首页"):
-                return False
-        return True
-
-    def tap(step: dict) -> bool:
-        return _tap_with_locator(udid, step, _read_page_source(force_refresh=True))
-
-    def input_text(step: dict) -> bool:
-        if not _tap_with_locator(udid, step, _read_page_source(force_refresh=True)):
-            return False
-        text = step.get("text", "")
-        if text == "":
-            return False
-        return _adb_input_text(udid, text)
-
-    runtime = {"assert_evidence_present": assert_evidence_present}
-    runtime["prepare_state"] = prepare_state
-    runtime["handle_known_dialogs"] = handle_known_dialogs
-    runtime["tap"] = tap
-    runtime["input"] = input_text
-    runtime["tap_text"] = lambda text: _tap_by_text(udid, text)
-    runtime["run_flow"] = lambda meta, flow: _run_flow(meta, flow, runtime)
-    runtime["read_page_source"] = _read_page_source
-    return runtime
+    return orch_case_runtime.script_runtime_context(
+        udid=udid,
+        subprocess_module=subprocess,
+        assert_evidence_present_fn=_assert_evidence_present,
+        run_prepare_state_fn=_run_prepare_state,
+        tap_with_locator_fn=lambda device_udid, step, source: _tap_with_locator(device_udid, step, source),
+        adb_input_text_fn=_adb_input_text,
+        tap_by_text_fn=lambda device_udid, text: _tap_by_text(device_udid, text),
+        run_flow_fn=_run_flow,
+        known_dialog_text_actions=_KNOWN_DIALOG_TEXT_ACTIONS,
+    )
 
 
 def _parse_bounds_center(bounds: str):
@@ -1045,11 +1193,27 @@ def _parse_bounds_center(bounds: str):
 
 
 def _find_bounds_by_locator(page_source: str, by: str, value: str):
-    if not page_source or not by or not value:
+    if not by or not value:
+        return None
+    if str(by).strip().lower() in {"coord", "coordinate", "coordinates"}:
+        match = re.search(r"(\d+)\s*,\s*(\d+)", str(value))
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    if not page_source:
         return None
     if by == "id":
         pattern = re.compile(rf'resource-id="{re.escape(value)}"[^>]*bounds="([^"]+)"')
     elif by == "text":
+        text_value = str(value)
+        xpath_text = re.search(r"@text\s*=\s*[\"']([^\"']+)[\"']", text_value)
+        if xpath_text:
+            text_value = xpath_text.group(1)
+        elif text_value.startswith("text="):
+            text_value = text_value.split("=", 1)[1].strip()
+        coord_match = re.match(r"coord(?:inate)?\s*=\s*(\d+)\s*,\s*(\d+)", text_value)
+        if coord_match:
+            return int(coord_match.group(1)), int(coord_match.group(2))
+        value = text_value
         pattern = re.compile(rf'text="{re.escape(value)}"[^>]*bounds="([^"]+)"')
     else:
         return None
@@ -1355,6 +1519,21 @@ def run_case_script(app_id: str, platform: str, udid: str, script_path: str):
 # 可原样退避重试;429(日限额/限流)是硬墙,当天重试纯白烧,直接失败不重试。
 AGENT_503_MAX_ATTEMPTS = 3            # 含首次,最多尝试 3 次
 AGENT_503_BACKOFF_SECONDS = 30       # 退避基数,按尝试次线性放大(30/60s)
+DEFAULT_CODEX_AGENT_TIMEOUT_SECONDS = 15 * 60
+
+
+def _resolve_agent_timeout_seconds(timeout: int = 90 * 60) -> int:
+    raw = os.environ.get("ORCH_AGENT_TIMEOUT_SECONDS", "").strip()
+    if raw:
+        try:
+            value = int(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            log.warning(f"忽略非法 ORCH_AGENT_TIMEOUT_SECONDS={raw!r}")
+    if resolve_agent_runner() == "codex":
+        return min(timeout, DEFAULT_CODEX_AGENT_TIMEOUT_SECONDS)
+    return timeout
 
 
 def _agent_failure_is_retryable_503(tail: str) -> bool:
@@ -1370,6 +1549,7 @@ def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
                            version: str = None, current_account: str = "",
                            wda_port: int = None, result_dir: str = "/tmp",
                            timeout: int = 90 * 60):
+    timeout = _resolve_agent_timeout_seconds(timeout)
     case_dir = os.path.join(result_dir, "case_results", udid, entry["record_id"])
     last_data = None
     last_tail = ""
@@ -1396,8 +1576,8 @@ def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
             device_totals={udid: {"total": 1, "platform": platform.capitalize()}},
         )
         data = batch_results.get(udid)
-        if isinstance(data, list) and data:
-            case = _load_jsonl(_batch_result_path(case_dir, udid, 0)) or data
+        case = _load_batch_cases_with_legacy(case_dir, udid, 0, [entry], data)
+        if case:
             result = case[0]
             # agent 结果 schema 不含 record_id(prompt 只要 name/passed/steps…),
             # 单条路径必须像整批 hydrate 一样从 entry 回填 record_id/name/module/…,
@@ -1679,6 +1859,14 @@ def build_prompt(app_id: str, udid: str, platform: str, entries: list,
                  account_state_path: str = None) -> str:
     shared_context = build_shared_execution_context(app_id)
     result_path = result_path or f"/tmp/result_{udid}.jsonl"
+    legacy_result_path = f"/tmp/result_{udid}.jsonl"
+    if os.path.realpath(result_path) == os.path.realpath(legacy_result_path):
+        result_scope_note = f"结果文件为 {result_path}。"
+    else:
+        result_scope_note = (
+            f"本批只允许写入 {result_path}；不得另写 {legacy_result_path}、"
+            f"/private/tmp/result_{udid}.jsonl 或任何自造结果文件。"
+        )
     cases_json = _prompt_cases_json(entries)
     batch_note = _prompt_batch_note(batch_idx, batch_count, current_account)
     handoff_note = _prompt_handoff_note(account_state_path)
@@ -1715,12 +1903,16 @@ def build_prompt(app_id: str, udid: str, platform: str, entries: list,
         f"6. 不要输出阶段性总结、进度汇报、单条结果汇报或向用户复述当前已完成条数；这些内容会让 --print 模式提前结束。除非全部用例都已执行完成，否则只继续执行下一条，不要输出总结性自然语言。\n"
         f"7. {batch_finish_note}"
         f"8. {handoff_note}"
+        f"9. Appium MCP 调用纪律：任何 Appium MCP 操作（创建/接管/删除 session、截图、取 page source、查找/点击/输入元素）"
+        f"都必须实际调用 appium-mcp 工具；不得用 `true`、空 shell、`pwd/date/echo`、自然语言“准备调用/马上调用”"
+        f"代替工具调用。需要创建/接管 session 时，连续 2 次无法发起 MCP 工具调用，立即把当前用例按 passed=false 写入 JSONL，"
+        f"note 写明 `MCP session 创建未发起`；其他 MCP 操作连续 2 次无法发起时，note 写明 `MCP 工具调用未发起`，然后继续下一条，禁止空转。\n"
         f"{startup_completion_note}"
         f"{reinstall_note}\n"
         f"{ui_audit_note}\n"
         f"请依次执行以下用例，记录每条的执行结果（通过/失败、失败步骤与原因）。\n"
         f"【结果落盘：务必增量写，抗中途崩溃】每跑完一条用例，立即把该条作为**一行 JSON** "
-        f"append 到 {result_path}（JSONL：一行一条、一行内不换行、不要包成数组、"
+        f"append 到 {result_path}（{result_scope_note} JSONL：一行一条、一行内不换行、不要包成数组、"
         f"更不要等全部跑完再一次性写）。每条含 name/platform/device/module/passed/duration/steps，"
         f"以及 screenshots（该用例截图的本地绝对路径数组，见 $SHOT_DIR），格式参考 common/parallel.md。"
         f"这样即使中途 429/进程崩溃，已跑完的用例也能被主流程回写。\n\n"
@@ -1787,6 +1979,7 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
                            run_id: str = None, result_dir: str = "/tmp",
                            batch_size: int = DEFAULT_BATCH_SIZE,
                            timeout: int = 90 * 60) -> list:
+    timeout = _resolve_agent_timeout_seconds(timeout)
     batches = build_execution_batches(group["entries"], batch_size=batch_size)
     aggregate_path = os.path.join(result_dir, f"result_{udid}.jsonl")
     if os.path.exists(aggregate_path):
@@ -1827,16 +2020,21 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
                 timeout=timeout,
                 app_id=app_id,
                 version=version,
+                run_id=run_id,
                 poll_interval=10,
                 device_totals={udid: {"total": len(batch), "platform": group["platform"]}},
             )
             batch_data = batch_results.get(udid)
-            if isinstance(batch_data, list):
-                batch_cases = _load_jsonl(_batch_result_path(result_dir, udid, batch_idx)) or batch_data
+            batch_cases = _load_batch_cases_with_legacy(
+                result_dir, udid, batch_idx, batch, batch_data,
+                already_done=len(aggregate_cases),
+            )
+            if batch_cases:
                 # agent 结果只写 source_record_id（见 skill 结果 schema）；按 entries
                 # backfill 出 record_id/name/module 等，否则下游固化与写表拿不到 record_id。
                 # launch_agent_per_device 路径已 hydrate，此 execute_device_batches 路径此前漏了。
                 batch_cases = _hydrate_batch_cases(batch_cases, batch)
+                batch_cases = _dedupe_batch_cases(batch_cases, batch)
                 for case in batch_cases:
                     # 本批无任何现成脚本(进入此分支的前提),全部从零跑 agent
                     case.setdefault("exec_source", "agent")
@@ -1854,16 +2052,26 @@ def execute_device_batches(app_id: str, udid: str, group: dict,
                     write_results_to_table(app_id, group["platform"].lower(), batch_cases)
                 current_account = _read_account_state(_batch_account_path(result_dir, udid, batch_idx)) or current_account
             else:
+                reason = (
+                    f"agent 执行超时未落盘结果: batch {batch_idx + 1}/{len(batches)}"
+                    if batch_data == "timeout"
+                    else f"agent 执行异常未落盘结果: batch {batch_idx + 1}/{len(batches)}"
+                )
+                log.warning(f"{udid} {reason}，本批 {len(batch)} 条用例合成失败后继续后续批次")
+                batch_cases = _build_agent_failure_cases(batch, udid, group["platform"], reason)
+                _attach_execution_version(batch_cases, version)
+                _append_jsonl(aggregate_path, batch_cases)
+                aggregate_cases.extend(batch_cases)
+                write_results_to_table(app_id, group["platform"].lower(), batch_cases)
                 if run_id:
                     run_status.update_device(run_id, udid, **{
-                        "state": "timeout" if batch_data == "timeout" else "crashed",
+                        "state": "running",
                         "total": total,
                         "done": len(aggregate_cases),
                         "pass": sum(1 for c in aggregate_cases if c.get("passed")),
                         "fail": sum(1 for c in aggregate_cases if not c.get("passed")),
                         "platform": group["platform"],
                     })
-                return aggregate_cases if aggregate_cases else batch_data
             continue
 
         batch_cases = []
@@ -2276,7 +2484,6 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     _notify(app_id, version, f"▶️ 开始执行：{total} 条用例 × {len(groups)} 台设备（{'/'.join(sorted(platforms))}）")
     start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
-    procs   = launch_claude_per_device(app_id, groups, wda_ports=wda_ports)
 
     # 登记存活跑状态，供信号/异常兜底做幂等收尾（崩溃/被杀也回写+发报告）
     global _INFLIGHT, _FINALIZED

@@ -64,6 +64,47 @@ def hydrate_batch_cases(batch_cases: list, entries: list) -> list:
     return batch_cases
 
 
+def select_legacy_batch_cases(legacy_cases: list, entries: list, already_done: int = 0) -> list:
+    if not legacy_cases:
+        return []
+    record_ids = {entry.get("record_id") for entry in entries if entry.get("record_id")}
+    if record_ids:
+        matched = [case for case in legacy_cases if case.get("record_id") in record_ids]
+        if matched:
+            return matched
+    if len(legacy_cases) == len(entries):
+        return legacy_cases
+    if len(legacy_cases) > already_done:
+        return legacy_cases[already_done:already_done + len(entries)]
+    return []
+
+
+def load_batch_cases_with_legacy(
+    result_dir: str,
+    udid: str,
+    batch_idx: int,
+    entries: list,
+    batch_data,
+    already_done: int,
+    batch_result_path_fn,
+    load_jsonl_fn,
+    log,
+) -> list:
+    batch_cases = load_jsonl_fn(batch_result_path_fn(result_dir, udid, batch_idx))
+    if batch_cases:
+        return batch_cases
+    if isinstance(batch_data, list) and batch_data:
+        return batch_data
+    legacy_path = os.path.join(result_dir, f"result_{udid}.jsonl")
+    legacy_cases = select_legacy_batch_cases(load_jsonl_fn(legacy_path), entries, already_done)
+    if legacy_cases:
+        log.warning(
+            f"{udid} batch {batch_idx + 1} 未写入批结果文件，"
+            f"已从 legacy 结果文件兜底读取 {len(legacy_cases)} 条: {legacy_path}"
+        )
+    return legacy_cases
+
+
 def launch_agent_per_device(
     app_id: str,
     groups: dict,
@@ -215,8 +256,18 @@ def execute_device_batches(
                 device_totals={udid: {"total": len(batch), "platform": group["platform"]}},
             )
             batch_data = batch_results.get(udid)
-            if isinstance(batch_data, list):
-                batch_cases = load_jsonl_fn(batch_result_path_fn(result_dir, udid, batch_idx)) or batch_data
+            batch_cases = load_batch_cases_with_legacy(
+                result_dir=result_dir,
+                udid=udid,
+                batch_idx=batch_idx,
+                entries=batch,
+                batch_data=batch_data,
+                already_done=len(aggregate_cases),
+                batch_result_path_fn=batch_result_path_fn,
+                load_jsonl_fn=load_jsonl_fn,
+                log=log,
+            )
+            if batch_cases:
                 batch_cases = hydrate_batch_cases_fn(batch_cases, batch)
                 attach_execution_version(batch_cases, version)
                 for case in batch_cases:

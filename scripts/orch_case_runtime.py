@@ -41,11 +41,28 @@ def parse_bounds_center(bounds: str):
 
 
 def find_bounds_by_locator(page_source: str, by: str, value: str):
-    if not page_source or not by or not value:
+    if not by or not value:
+        return None
+    normalized_by = str(by).strip().lower()
+    text_value = str(value or "").strip()
+    if normalized_by in {"coord", "coordinate", "coordinates"}:
+        match = re.search(r"(\d+)\s*,\s*(\d+)", text_value)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    if not page_source:
         return None
     if by == "id":
         pattern = re.compile(rf'resource-id="{re.escape(value)}"[^>]*bounds="([^"]+)"')
     elif by == "text":
+        xpath_text = re.search(r"@text=['\"]([^'\"]+)['\"]", text_value)
+        if xpath_text:
+            text_value = xpath_text.group(1)
+        elif text_value.startswith("text="):
+            text_value = text_value.split("=", 1)[1].strip()
+        coord_match = re.match(r"coord(?:inate)?\s*=\s*(\d+)\s*,\s*(\d+)", text_value)
+        if coord_match:
+            return int(coord_match.group(1)), int(coord_match.group(2))
+        value = text_value
         pattern = re.compile(rf'text="{re.escape(value)}"[^>]*bounds="([^"]+)"')
     elif by == "xpath":
         text_match = re.search(r"@text=['\"]([^'\"]+)['\"]", value)
@@ -126,8 +143,32 @@ def adb_input_text(udid: str, text: str, subprocess_module) -> bool:
 
 def resolve_route_component(udid: str, step: dict, subprocess_module) -> str:
     value = str(step.get("value") or "").strip()
+    if value.startswith("activity="):
+        value = value.split("=", 1)[1].strip()
+    elif "activity=" in value:
+        package_match = re.search(r"package=([^,\s]+)", value)
+        activity_match = re.search(r"activity=([^,\s]+)", value)
+        if package_match and activity_match:
+            package_name = package_match.group(1).strip()
+            activity_name = activity_match.group(1).strip()
+            value = f"{package_name}/{activity_name}" if activity_name.startswith(".") else activity_name
+    elif value == "adb am start":
+        value = str(step.get("package") or step.get("bundle_id") or "com.gaotu100.superclass")
     if "/" in value and " " not in value:
         return value
+    if re.match(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$", value):
+        try:
+            result = subprocess_module.run(
+                ["adb", "-s", udid, "shell", "cmd", "package", "resolve-activity", "--brief", value],
+                capture_output=True, text=True, timeout=15
+            )
+        except subprocess_module.TimeoutExpired:
+            result = None
+        if result is not None and result.returncode == 0:
+            for line in reversed((result.stdout or "").splitlines()):
+                resolved = line.strip()
+                if "/" in resolved and " " not in resolved:
+                    return resolved
     for fallback in step.get("fallbacks") or []:
         if not isinstance(fallback, dict):
             continue
@@ -166,6 +207,36 @@ def adb_route(udid: str, step: dict, subprocess_module) -> bool:
         return False
 
 
+def _lifecycle_package_from_step(step: dict) -> str:
+    for key in ("package", "bundleId", "app_id", "value"):
+        value = str(step.get(key) or "").strip()
+        if value:
+            if value.startswith("activate "):
+                value = value.split(None, 1)[1].strip()
+            return value.split("/", 1)[0].strip()
+    return ""
+
+
+def adb_activate_app(udid: str, step: dict, subprocess_module) -> bool:
+    package_name = _lifecycle_package_from_step(step)
+    if not package_name:
+        return False
+    commands = [
+        ["adb", "-s", udid, "shell", "monkey", "-p", package_name, "-c", "android.intent.category.LAUNCHER", "1"],
+    ]
+    component = resolve_route_component(udid, {"value": package_name}, subprocess_module)
+    if component:
+        commands.append(["adb", "-s", udid, "shell", "am", "start", "-n", component])
+    for command in commands:
+        try:
+            result = subprocess_module.run(command, capture_output=True, text=True, timeout=20)
+        except subprocess_module.TimeoutExpired:
+            continue
+        if result.returncode == 0:
+            return True
+    return False
+
+
 def page_matches_target(page_source: str, target: str) -> bool:
     if not page_source or not target:
         return False
@@ -177,6 +248,41 @@ def page_matches_target(page_source: str, target: str) -> bool:
     }
     groups = checks.get(target, ())
     return bool(groups) and any(all(needle in page_source for needle in group) for group in groups)
+
+
+def _full_android_id(meta: dict, raw: str) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    if value.startswith("id/"):
+        package_name = (meta or {}).get("bundle_id") or (meta or {}).get("package") or ""
+        return f"{package_name}:id/{value.split('/', 1)[1]}" if package_name else value
+    if value.startswith("/id/"):
+        package_name = (meta or {}).get("bundle_id") or (meta or {}).get("package") or ""
+        return f"{package_name}:id/{value.split('/id/', 1)[1]}" if package_name else value
+    return value
+
+
+def _normalize_legacy_flow_step(meta: dict, item: dict) -> dict:
+    step_type = str(item.get("type") or "").strip()
+    if not step_type:
+        return item
+    normalized = dict(item)
+    if step_type.startswith("tap "):
+        normalized["type"] = "tap"
+        raw_value = str(normalized.get("value") or "").strip()
+        id_match = re.search(r"(?:^|\b)(id/[A-Za-z0-9_]+)", raw_value)
+        if id_match:
+            normalized["by"] = "id"
+            normalized["value"] = _full_android_id(meta, id_match.group(1))
+            return normalized
+        label = step_type[4:].strip()
+        label = re.sub(r"\[[^\]]+\]", "", label)
+        label_match = re.search(r"\(([^)]*)\)", label)
+        normalized["by"] = "text"
+        normalized["value"] = label_match.group(1).strip() if label_match else label.strip()
+        return normalized
+    return normalized
 
 
 def run_prepare_state(udid: str, step: dict, runtime: dict, page_matches_target_fn) -> bool:
@@ -215,6 +321,29 @@ def run_flow(meta: dict, flow: list, runtime: dict) -> dict:
     awaiting_first_launch = False
     for item in flow:
         step_type = item.get("type", "")
+        if step_type.startswith("appium_app_lifecycle"):
+            parts = step_type.split()
+            item = dict(item)
+            item["type"] = "appium_app_lifecycle"
+            if len(parts) >= 2:
+                item.setdefault("action", parts[1])
+            if len(parts) >= 3:
+                current_value = str(item.get("value") or "").strip()
+                if current_value in {"", "-", "_", "N/A", "n/a"}:
+                    item["value"] = parts[2]
+                else:
+                    item.setdefault("value", parts[2])
+            step_type = item["type"]
+        item = _normalize_legacy_flow_step(meta, item)
+        step_type = item.get("type", "")
+        if str(step_type).startswith("clickable-span"):
+            results.append({
+                "type": "ACTION",
+                "text": item.get("text") or step_type,
+                "passed": True,
+                "note": "legacy clickable-span action skipped by script runtime",
+            })
+            continue
         if step_type == "assert_ui":
             action_handler = runtime.get(step_type)
             if not callable(action_handler):
@@ -531,6 +660,20 @@ def script_runtime_context(
             return handle_known_dialogs({})
         return ok
 
+    def appium_app_lifecycle(step: dict) -> bool:
+        action = str(step.get("action") or "").strip().lower()
+        if not action and str(step.get("value") or "").strip().startswith("activate "):
+            action = "activate"
+        if action != "activate":
+            return False
+        if not handle_known_dialogs({}):
+            return False
+        ok = adb_activate_app(udid, step, subprocess_module)
+        if ok:
+            read_page_source(force_refresh=True)
+            return handle_known_dialogs({})
+        return False
+
     def input_text(step: dict) -> bool:
         ok, _ = _locate_and_tap_polled(step)
         if not ok:
@@ -546,6 +689,7 @@ def script_runtime_context(
     runtime["handle_known_dialogs"] = handle_known_dialogs
     runtime["dismiss_system_alert"] = dismiss_system_alert
     runtime["route"] = route
+    runtime["appium_app_lifecycle"] = appium_app_lifecycle
     runtime["tap"] = tap
     runtime["input"] = input_text
     runtime["tap_text"] = lambda text: tap_by_text_fn(udid, text)
