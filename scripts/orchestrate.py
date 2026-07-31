@@ -978,10 +978,61 @@ def _page_matches_target(page_source: str, target: str) -> bool:
 PREPARE_STATE_POLL_ATTEMPTS = 6
 PREPARE_STATE_POLL_INTERVAL = 2.0
 
+# 脚本内自动登录(走查账号)轮询节奏:等协议弹窗/验证码框/登录回跳渲染。
+LOGIN_VERIFY_ATTEMPTS = 8
+LOGIN_VERIFY_INTERVAL = 1.5
+
+# 高途首启弹窗序列(隐私弹窗→青少年守护)不在 _KNOWN_DIALOG_TEXT_ACTIONS 通用表里——放进去会
+# 误伤"启动弹窗组"里自行断言/点击这些弹窗的用例(它们靠 assert+tap 走分支,不能被自动点掉)。
+# 但重装冷启后它们盖在登录页/首页之上,不主动点过就永远到不了目标态(本轮 prepare_state
+# failed 主因)。故仅在 prepare_state 内按 marker 主动点过一层:
+#   隐私弹窗:出现"不同意"按钮 → 点"同意"进入;青少年守护:点"已满14岁"走正常流(未满14岁是退出分支)。
+# marker 取"不同意"/"未满14岁"而非"同意/协议"——后者在登录页也有(《用户协议》链接),会误伤。
+_STARTUP_DIALOG_ACTIONS = (
+    ("不同意", "同意"),
+    ("未满14岁", "已满14岁"),
+)
+
+
+def _advance_startup_dialog(source: str, tap_text) -> bool:
+    """首启弹窗序列若在当前页,主动点过一层;返回是否点了(点了则本轮不判目标态,下轮重读)。"""
+    if not source or not callable(tap_text):
+        return False
+    for marker, action in _STARTUP_DIALOG_ACTIONS:
+        if marker in source:
+            tap_text(action)
+            return True
+    return False
+
+
+# prepare_state 的 account:<UNLOGIN>/<NONE>/空 都不是"要登进去的真实账号"——只有真实手机号才需登录。
+_LOGIN_ACCOUNT_SENTINELS = frozenset({"<UNLOGIN>", "<NONE>", ""})
+
+
+def _account_needs_login(account: str) -> bool:
+    return bool(account) and account not in _LOGIN_ACCOUNT_SENTINELS
+
+
+def _source_on_login_page(source: str) -> bool:
+    return bool(source) and (
+        "手机号登录" in source or "获取验证码" in source or "请输入手机号" in source
+    )
+
+
+def _source_logged_in(source: str) -> bool:
+    # 登录后底部 tab 出现即已登录:iOS 有"AI闪学"文案;Android uiautomator dump 里底部导航
+    # resource-id "tab_title" 字面出现(登录页是独立全屏 Activity,无底部导航,不会误判)。
+    return bool(source) and ("AI闪学" in source or "tab_title" in source)
+
 
 def _run_prepare_state(udid: str, step: dict, runtime: dict) -> bool:
     target = step.get("target", "")
-    if not target:
+    account = step.get("account", "")
+    login = runtime.get("login")
+    # 登录感知仅在平台提供 login 原语(当前仅 iOS)且账号是真实手机号时启用;
+    # Android 无 login 原语→needs_login 恒 False,完全保留旧行为(不改动、零回归)。
+    needs_login = callable(login) and _account_needs_login(account)
+    if not target and not needs_login:
         return True
     route_text = {
         "home": "首页",
@@ -994,10 +1045,29 @@ def _run_prepare_state(udid: str, step: dict, runtime: dict) -> bool:
         if callable(handle_known_dialogs):
             handle_known_dialogs({})
         source = runtime["read_page_source"](True)
-        if _page_matches_target(source, target):
-            return True
-        if target == "login" and "登录" in source:
-            return True
+        # 首启弹窗盖在目标页上时,即便底层已渲染出"登录/首页"文案也不算就绪——先点过弹窗再重读,
+        # 否则会把弹窗遮挡下的残留文案误判成已就绪。
+        if _advance_startup_dialog(source, tap_text):
+            if attempt + 1 < PREPARE_STATE_POLL_ATTEMPTS:
+                time.sleep(PREPARE_STATE_POLL_INTERVAL)
+            continue
+        if needs_login:
+            # 已登录且(无指定 target 或已到 target)→ 就绪。
+            if _source_logged_in(source) and (not target or _page_matches_target(source, target)):
+                return True
+            # 在登录页且平台提供 login 原语(仅 iOS)→ 脚本内登录,下轮重读验证。
+            # login 失败不在此处返回 False,继续轮询;耗尽后回退 agent(不硬拿未登录页断言)。
+            if callable(login) and _source_on_login_page(source):
+                login(account)
+                if attempt + 1 < PREPARE_STATE_POLL_ATTEMPTS:
+                    time.sleep(PREPARE_STATE_POLL_INTERVAL)
+                continue
+            # 已登录但还没到指定 target → 走下面的路由逻辑把 tab 切过去。
+        else:
+            if _page_matches_target(source, target):
+                return True
+            if target == "login" and "登录" in source:
+                return True
         # 目标态未就绪：尝试路由后等页面 settle，下一轮重读（冷启动/弹层消失需要时间）。
         if route_text and callable(tap_text):
             tap_text(route_text)
@@ -1153,8 +1223,56 @@ def _resolve_ios_device_wda_config(app_id: str, udid: str) -> dict:
     return {}
 
 
-def _script_runtime_context(udid: str) -> dict:
-    return orch_case_runtime.script_runtime_context(
+def _android_script_login(runtime: dict, package: str, account: str) -> bool:
+    """Android 未登录态用验证码登录(走查账号 12 开头,验证码固定 1000)。步骤取自设备实录
+    recvpYuTNMt9O6(android):输手机号→点获取验证码→协议弹窗点同意→输验证码→判底部 tab。
+    只在确认登录成功(tab_title 出现)时返 True;任一步失败/无法确认一律 False,回退 agent,
+    绝不伪装成功拿未登录页去断言。复用共享 runtime 的 tap/input/read_page_source 原语。"""
+    code = orch_case_runtime_ios.sms_code_for_account(account)
+    if not code or not package:
+        return False
+    read_page_source = runtime["read_page_source"]
+    handle_known_dialogs = runtime.get("handle_known_dialogs")
+    tap = runtime["tap"]
+    input_text = runtime["input"]
+    if callable(handle_known_dialogs):
+        handle_known_dialogs({})
+    source = read_page_source(True)
+    if not _source_on_login_page(source) and "account_enter_et" not in source:
+        return False  # 不在登录页,不硬来
+    # 1. 输入手机号
+    if not input_text({"by": "id", "value": f"{package}:id/account_enter_et", "text": account}):
+        return False
+    # 2. 获取验证码
+    if not tap({
+        "by": "id", "value": f"{package}:id/account_sign_btn",
+        "fallbacks": [{"by": "text", "value": "获取验证码"}],
+    }):
+        return False
+    # 3. 协议弹窗(请阅读并同意以下协议)点"同意",直到验证码框露出
+    for _ in range(LOGIN_VERIFY_ATTEMPTS):
+        src = read_page_source(True)
+        if "verify_code_edit_text" in src:
+            break
+        if "请阅读并同意" in src or "customer_dialog_ok" in src:
+            tap({
+                "by": "id", "value": f"{package}:id/customer_dialog_ok",
+                "fallbacks": [{"by": "text", "value": "同意"}],
+            })
+        time.sleep(LOGIN_VERIFY_INTERVAL)
+    # 4. 输入验证码(四个方框,焦点自动前进,输一次即可)
+    if not input_text({"by": "id", "value": f"{package}:id/verify_code_edit_text", "text": code}):
+        return False
+    # 5. 成功判据:轮询等登录回跳,底部 tab(tab_title)出现才算成功
+    for _ in range(LOGIN_VERIFY_ATTEMPTS):
+        if _source_logged_in(read_page_source(True)):
+            return True
+        time.sleep(LOGIN_VERIFY_INTERVAL)
+    return False
+
+
+def _script_runtime_context(udid: str, package: str = "") -> dict:
+    runtime = orch_case_runtime.script_runtime_context(
         udid=udid,
         subprocess_module=subprocess,
         assert_evidence_present_fn=_assert_evidence_present,
@@ -1165,6 +1283,9 @@ def _script_runtime_context(udid: str) -> dict:
         run_flow_fn=_run_flow,
         known_dialog_text_actions=_KNOWN_DIALOG_TEXT_ACTIONS,
     )
+    # 自动登录原语注入(定义留在 orchestrate,避免共享 runtime 反向依赖 ios 模块致循环导入)。
+    runtime["login"] = lambda account: _android_script_login(runtime, package, account)
+    return runtime
 
 
 def _parse_bounds_center(bounds: str):
@@ -1436,7 +1557,7 @@ def _script_runtime_context_for(app_id: str, platform: str, udid: str,
             ),
         )
     else:
-        ctx = _script_runtime_context(udid)
+        ctx = _script_runtime_context(udid, package=bundle_id)
         ctx.setdefault("route", lambda step: orch_case_runtime.adb_route(udid, step, subprocess))
         ctx.setdefault("assert_evidence_detail", lambda method, evidence: _assert_evidence_detail(ctx, method, evidence))
         ctx.setdefault("invalidate_state", lambda: True)

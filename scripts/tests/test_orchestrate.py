@@ -1218,7 +1218,7 @@ def test_generated_case_script_passes_when_only_toast_assert_misses(tmp_path, mo
     }
     path = orchestrate.generate_case_script("gaotu", "android", case)
     monkeypatch.setattr(orchestrate, "_script_runtime_context",
-                        lambda udid: {"assert_evidence_present": lambda method, evidence: False})
+                        lambda udid, package="": {"assert_evidence_present": lambda method, evidence: False})
 
     result = orchestrate.run_case_script("gaotu", "android", "a1", path)
 
@@ -1521,6 +1521,157 @@ def test_run_prepare_state_login_target_matches_on_poll(monkeypatch):
     }
 
     assert orchestrate._run_prepare_state("a1", {"target": "login"}, runtime) is True
+
+
+def test_run_prepare_state_login_clears_startup_dialogs(monkeypatch):
+    # 重装冷启后高途首启弹窗(隐私→青少年守护)盖在登录页上,prepare_state 必须主动点过
+    # "同意"→"已满14岁"才能露出登录页,而非被动等 poll(本轮 prepare_state failed 主因)。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    taps = []
+    page_sources = iter([
+        '《高途用户服务协议》 accessibility_id="同意" accessibility_id="不同意"',  # 隐私弹窗
+        "青少年守护 未满14岁 已满14岁",                                          # 青少年守护
+        'text="手机号登录" text="获取验证码"',                                    # 登录页
+    ])
+    runtime = {
+        "read_page_source": lambda force_refresh=False: next(page_sources),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: taps.append(text) or True,
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "login"}, runtime) is True
+    assert taps == ["同意", "已满14岁"]
+
+
+def test_run_prepare_state_startup_dialog_marker_not_triggered_by_login_links():
+    # 登录页含《用户协议》链接但无"不同意/未满14岁"按钮,不应被误判成首启弹窗而乱点。
+    taps = []
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            'text="手机号登录" text="获取验证码" Link《高途用户协议》《高途隐私政策》'
+        ),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: taps.append(text) or True,
+    }
+
+    assert orchestrate._run_prepare_state("a1", {"target": "login"}, runtime) is True
+    assert taps == []
+
+
+def test_account_needs_login_only_for_real_phone():
+    assert orchestrate._account_needs_login("12345679000") is True
+    for sentinel in ("<UNLOGIN>", "<NONE>", "", None):
+        assert orchestrate._account_needs_login(sentinel) is False
+
+
+def test_run_prepare_state_logs_in_on_login_page(monkeypatch):
+    # iOS 真实手机号账号:prepare_state 在登录页应调 login 原语登进去,登录后底部 tab
+    # (AI闪学)出现即就绪。login 原语只在 iOS runtime 提供。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    logins = []
+    page_sources = iter([
+        'text="手机号登录" text="获取验证码"',                # 登录页 → 触发 login
+        'AI闪学 首页 发现 上课 消息 我的',                     # 登录成功回到首页
+    ])
+    runtime = {
+        "read_page_source": lambda force_refresh=False: next(page_sources),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+        "login": lambda account: logins.append(account) or True,
+    }
+
+    step = {"target": "home", "account": "12345679000"}
+    assert orchestrate._run_prepare_state("i1", step, runtime) is True
+    assert logins == ["12345679000"]
+
+
+def test_run_prepare_state_account_already_logged_in_no_relogin(monkeypatch):
+    # 已登录态(AI闪学 可见)不应再调 login,首轮即就绪。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    logins = []
+    runtime = {
+        "read_page_source": lambda force_refresh=False: "AI闪学 首页 发现 我的",
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+        "login": lambda account: logins.append(account) or True,
+    }
+
+    step = {"target": "home", "account": "12345679000"}
+    assert orchestrate._run_prepare_state("i1", step, runtime) is True
+    assert logins == []
+
+
+def test_run_prepare_state_android_account_no_login_primitive_keeps_old_behavior(monkeypatch):
+    # Android runtime 无 login 原语:account+无 target 保留旧的"直接就绪"行为,零回归。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    runtime = {
+        "read_page_source": lambda force_refresh=False: "任意页面",
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+    }
+
+    step = {"account": "12345679000"}  # 无 target,无 login 原语
+    assert orchestrate._run_prepare_state("a1", step, runtime) is True
+
+
+def test_source_logged_in_recognizes_both_platforms():
+    assert orchestrate._source_logged_in("AI闪学 首页 我的") is True          # iOS
+    assert orchestrate._source_logged_in('resource-id="x:id/tab_title"') is True  # Android
+    assert orchestrate._source_logged_in('text="手机号登录" 获取验证码') is False  # 登录页
+    assert orchestrate._source_logged_in("") is False
+
+
+def test_run_prepare_state_android_logged_in_via_tab_title(monkeypatch):
+    # Android 首页 dump 里没有"AI闪学",靠底部导航 tab_title 认已登录。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    logins = []
+    runtime = {
+        "read_page_source": lambda force_refresh=False: (
+            '<node resource-id="com.gaotu100.superclass:id/tab_title" text="首页"/>'
+            '<node text="发现"/>'
+        ),
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+        "login": lambda account: logins.append(account) or True,
+    }
+    step = {"target": "home", "account": "12345679000"}
+    assert orchestrate._run_prepare_state("a1", step, runtime) is True
+    assert logins == []
+
+
+def test_android_runtime_exposes_login_primitive():
+    ctx = orchestrate._script_runtime_context("a1", package="com.gaotu100.superclass")
+    assert callable(ctx.get("login"))
+
+
+def test_android_login_fast_fails_without_walkthrough_account():
+    # 非走查账号(验证码取不到)/无包名 → 立即 False,不碰 adb。
+    ctx = orchestrate._script_runtime_context("a1", package="com.gaotu100.superclass")
+    assert ctx["login"]("13800138000") is False
+    ctx_nopkg = orchestrate._script_runtime_context("a1", package="")
+    assert ctx_nopkg["login"]("12345679000") is False
+
+
+def test_run_prepare_state_login_fails_falls_back(monkeypatch):
+    # login 原语一直失败(未登录)→ prepare_state 耗尽轮询返回 False,交上层回退 agent,
+    # 绝不伪装成功拿未登录页去断言。
+    monkeypatch.setattr(orchestrate.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+
+    def _login(account):
+        calls["n"] += 1
+        return False
+
+    runtime = {
+        "read_page_source": lambda force_refresh=False: 'text="手机号登录" text="获取验证码"',
+        "handle_known_dialogs": lambda step=None: True,
+        "tap_text": lambda text: True,
+        "login": _login,
+    }
+
+    step = {"target": "home", "account": "12345679000"}
+    assert orchestrate._run_prepare_state("i1", step, runtime) is False
+    assert calls["n"] == orchestrate.PREPARE_STATE_POLL_ATTEMPTS
 
 
 def test_resolve_route_component_prefers_explicit_component():

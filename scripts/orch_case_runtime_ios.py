@@ -186,6 +186,20 @@ def _tap_with_locator(port: int, session_id: str, step: dict) -> bool:
     return False
 
 
+_LOGIN_PAGE_MARKERS = ("手机号登录", "获取验证码", "请输入手机号")
+# 登录后底部 tab 特有("AI闪学"),登录页/未登录首页都没有 —— 作为"确已登录"判据。
+_LOGIN_SUCCESS_MARKER = "AI闪学"
+LOGIN_VERIFY_ATTEMPTS = 6
+LOGIN_VERIFY_INTERVAL = 1.0
+
+
+def sms_code_for_account(account: str) -> str:
+    """走查账号(手机号 12 开头)验证码固定 1000;其余账号无法脚本自动获取验证码,
+    返回空串表示"不能脚本登录"(交由上层回退 agent),绝不猜验证码。"""
+    digits = "".join(ch for ch in str(account or "") if ch.isdigit())
+    return "1000" if digits.startswith("12") else ""
+
+
 def _known_dialog_action_text(source: str, known_dialog_text_actions) -> str:
     if not source:
         return ""
@@ -371,6 +385,47 @@ def script_runtime_context(
                 return False
         return True
 
+    def login(account: str) -> bool:
+        """未登录态用验证码登录(走查账号 12 开头,验证码固定 1000)。
+        只在确认登录成功(底部 tab 出现 AI闪学)时返回 True;任一步失败或无法确认一律 False,
+        交由上层回退 agent —— 绝不伪装成功,避免拿未登录页去断言已登录内容(假 PASS/假 FAIL)。
+        登录步骤取自设备实录用例 recvpYuTNMt9O6。"""
+        code = sms_code_for_account(account)
+        if not code or not ensure_session():
+            return False
+        _clear_system_alerts()
+        if not any(m in read_page_source(True) for m in _LOGIN_PAGE_MARKERS):
+            return False  # 不在登录页,不硬来
+        # 1. 输入手机号
+        if not input_text({
+            "by": "predicate", "value": "type == 'XCUIElementTypeTextField'",
+            "fallbacks": [{"by": "name", "value": "请输入手机号"}], "text": account,
+        }):
+            return False
+        # 2. 获取验证码
+        if not tap({
+            "by": "accessibility_id", "value": "获取验证码",
+            "fallbacks": [{"by": "name", "value": "获取验证码"}],
+        }):
+            return False
+        # 3. 协议弹窗(请阅读并同意以下协议)+ 系统 alert,点"同意"
+        _clear_system_alerts()
+        if "请阅读并同意" in read_page_source(True):
+            tap_text("同意")
+            _clear_system_alerts()
+        # 4. 输入验证码(四个方框,焦点自动前进,输一次即可)
+        if not input_text({
+            "by": "predicate", "value": "type == 'XCUIElementTypeTextField'", "text": code,
+        }):
+            return False
+        # 5. 成功判据:轮询等回跳,底部 tab AI闪学 出现才算登录成功
+        for _ in range(LOGIN_VERIFY_ATTEMPTS):
+            _clear_system_alerts()
+            if _LOGIN_SUCCESS_MARKER in read_page_source(True):
+                return True
+            time.sleep(LOGIN_VERIFY_INTERVAL)
+        return False
+
     def close() -> bool:
         ok = _delete_session(port, session["id"])
         session["id"] = ""
@@ -384,6 +439,7 @@ def script_runtime_context(
     runtime["tap"] = tap
     runtime["input"] = input_text
     runtime["tap_text"] = tap_text
+    runtime["login"] = login
     runtime["run_flow"] = lambda meta, flow: run_flow_fn(meta, flow, runtime)
     runtime["read_page_source"] = read_page_source
     runtime["capture_screenshot"] = capture_screenshot
