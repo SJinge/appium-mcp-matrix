@@ -628,6 +628,48 @@ def test_run_exploration_force_reruns_when_index_exists(monkeypatch, tmp_path):
     assert run_calls, "expected forced exploration to rerun when index.md already exists"
 
 
+def test_refresh_element_truth_calls_scan(monkeypatch, tmp_path):
+    apk = tmp_path / "gaotu_5.91.90.apk"
+    apk.write_bytes(b"fake")
+    calls = {}
+
+    def fake_scan(app_id, apk=None, version=None):
+        calls.update(app_id=app_id, apk=apk, version=version)
+        return {
+            "truth": {"active_count": 120, "total": 130},
+            "diff": {"from_version": "5.91.80", "added_count": 5, "deprecated_count": 2},
+        }
+
+    monkeypatch.setattr(orchestrate.scan_apk_ids, "scan", fake_scan)
+    ok = orchestrate.refresh_element_truth("gaotu", str(apk), "5.91.90")
+
+    assert ok is True
+    assert calls == {"app_id": "gaotu", "apk": str(apk), "version": "5.91.90"}
+
+
+def test_refresh_element_truth_skips_missing_apk(monkeypatch):
+    called = []
+    monkeypatch.setattr(orchestrate.scan_apk_ids, "scan",
+                        lambda *a, **k: called.append(1))
+    ok = orchestrate.refresh_element_truth("gaotu", "/tmp/nope_9.9.9.apk", "9.9.9")
+
+    assert ok is False
+    assert called == []
+
+
+def test_refresh_element_truth_swallows_scan_error(monkeypatch, tmp_path):
+    apk = tmp_path / "gaotu_5.91.90.apk"
+    apk.write_bytes(b"fake")
+
+    def boom(*a, **k):
+        raise RuntimeError("aapt2 missing")
+
+    monkeypatch.setattr(orchestrate.scan_apk_ids, "scan", boom)
+    ok = orchestrate.refresh_element_truth("gaotu", str(apk), "5.91.90")
+
+    assert ok is False  # 扫描失败不抛，run 继续
+
+
 def test_reset_apps_after_exploration_calls_platform_stoppers(monkeypatch):
     calls = []
     monkeypatch.setattr(orchestrate, "_stop_android_app",

@@ -32,6 +32,7 @@ import orch_case_runtime_ios
 import orch_execution
 import orch_result_table
 import orch_reporting
+import scan_apk_ids
 import run_status
 import logging_setup
 import ios_wda
@@ -1831,6 +1832,29 @@ def execute_case_with_fallback(app_id: str, platform: str, udid: str, entry: dic
     return agent_result
 
 
+def refresh_element_truth(app_id: str, apk_path: str, version: str) -> bool:
+    """用下好的 APK 静态扫描刷新元素真相源（elements.truth.json + diff）。
+
+    每轮探索前调用，保证反幻觉校验的 id 全集与当前版本一致。失败（缺 aapt2、
+    解析异常等）只告警不中断执行：truth 保持上一版本，run 继续。
+    enriched.json 依赖 android 源码 checkout，runner 上不保证有，仍走手动。
+    """
+    if not apk_path or not os.path.exists(apk_path):
+        log.warning(f"刷新真相源跳过：APK 不存在 {apk_path}")
+        return False
+    try:
+        res = scan_apk_ids.scan(app_id, apk=apk_path, version=version)
+        truth = res["truth"]
+        diff = res["diff"]
+        log.info(
+            f"真相源已刷新 v{version}：有效 {truth['active_count']}/{truth['total']} id"
+            f"（vs {diff['from_version'] or '无'}：新增 {diff['added_count']}/废弃 {diff['deprecated_count']}）")
+        return True
+    except Exception as e:
+        log.warning(f"刷新真相源失败（保留旧 truth，继续执行）：{e}")
+        return False
+
+
 def run_exploration(app_id: str, version: str, android_udid: str):
     app_dir = os.path.join(PROJECT_ROOT, "apps", app_id)
     index_path = os.path.join(app_dir, "index.md")
@@ -2583,6 +2607,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     # 3. Explore (new version) —— 仅 Android 端触发
     if android_ok:
         run_status.set_phase(run_id, "exploring", "新版本探索建图")
+        refresh_element_truth(app_id, apk_path, version)
         run_exploration(app_id, version, android_ok[0]["udid"])
         reset_apps_after_exploration(
             app_id,
