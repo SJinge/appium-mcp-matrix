@@ -397,14 +397,16 @@ def _feishu_post(body: dict):
         log.warning(f"Feishu notify failed: {e}")
 
 
-def _notify(app_id: str, version: str, message: str):
+def _notify(app_id: str, version: str, message: str, header: str = None):
+    # header 为空时用默认 [app version] 前缀；传入则整体覆盖（如带平台的【Android】gaotu x.y.z）
+    hdr = header if header is not None else f"[{app_id} {version}]"
     if os.environ.get("ORCH_NO_NOTIFY"):
-        log.info(f"[群消息已静默 ORCH_NO_NOTIFY] [{app_id} {version}] {message}")
+        log.info(f"[群消息已静默 ORCH_NO_NOTIFY] {hdr} {message}")
         return
     _feishu_post({
         "receive_id": GROUP_CHAT_ID,
         "msg_type": "text",
-        "content": json.dumps({"text": f"[{app_id} {version}] {message}"})
+        "content": json.dumps({"text": f"{hdr} {message}"})
     })
 
 
@@ -2640,7 +2642,9 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
         run_status.update_device(run_id, udid, **{
             "state": "running", "total": len(g["entries"]),
             "done": 0, "pass": 0, "fail": 0, "platform": g["platform"]})
-    _notify(app_id, version, f"▶️ 开始执行：{total} 条用例 × {len(groups)} 台设备（{'/'.join(sorted(platforms))}）")
+    _plat = "Android" if "android" in platforms else "iOS"
+    _notify(app_id, version, f"▶️ 开始执行：{total} 条用例 × {len(groups)} 台设备",
+            header=f"【{_plat}】{app_id} {version}")
     start_time_str = datetime.datetime.now().strftime("%H:%M:%S")
     start_time = time.time()
 
