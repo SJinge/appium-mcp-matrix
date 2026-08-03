@@ -4,8 +4,32 @@ import glob, os, sys, time, json, plistlib, subprocess, urllib.request
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY = "http://127.0.0.1:49151/"
-WDA_DIR = ("/opt/homebrew/lib/node_modules/appium-mcp/node_modules/"
-           "appium-xcuitest-driver/node_modules/appium-webdriveragent")
+def _resolve_wda_dir() -> str:
+    """定位 WebDriverAgent 源码目录(含 WebDriverAgent.xcodeproj)。
+
+    换机后 appium-mcp 的 npm 前缀会变(brew 的 /opt/homebrew ↔ npm --prefix ~/.local),
+    写死单一路径会在另一台机上崩。按候选顺序探测第一个存在 xcodeproj 的目录;
+    可用 ORCH_WDA_DIR 显式覆盖。
+    """
+    override = os.environ.get("ORCH_WDA_DIR", "").strip()
+    suffix = ("node_modules/appium-mcp/node_modules/"
+              "appium-xcuitest-driver/node_modules/appium-webdriveragent")
+    candidates = []
+    if override:
+        candidates.append(override)
+    candidates += [
+        os.path.expanduser(f"~/.local/lib/{suffix}"),
+        f"/opt/homebrew/lib/{suffix}",
+        f"/usr/local/lib/{suffix}",
+    ]
+    for d in candidates:
+        if os.path.isdir(os.path.join(d, "WebDriverAgent.xcodeproj")):
+            return d
+    # 都没命中:返回首选(新机路径),让后续报错带出真实缺失路径
+    return candidates[0] if candidates else ""
+
+
+WDA_DIR = _resolve_wda_dir()
 # 固定 derivedDataPath(按 udid 隔离):首次全量构建落在这里并被设备信任一次;
 # 之后 WDA 死了用 test-without-building 复用同一份已签名产物重启,不重签 → 信任不失效。
 DERIVED_DATA_ROOT = "/tmp/wda_derived"
