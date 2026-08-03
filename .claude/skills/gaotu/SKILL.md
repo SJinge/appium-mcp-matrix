@@ -210,7 +210,8 @@ appium_app_lifecycle action=activate id=<bundleId>
 | 学习阶段选择弹窗 | 截图可见「一年级」「进入首页」 | 点「一年级」→「进入首页」 |
 | 发现新版本弹窗 | 截图可见「发现新版本」「取消」 | 点「取消」 |
 | 观看时长提醒弹窗 | 截图可见「我知道了」 | 点「我知道了」 |
-| 系统权限弹窗（iOS）| 截图可见"允许"/"好" | `appium_alert action=accept` |
+| 使用无线数据弹窗（iOS）| 截图可见"使用无线数据"/"无线局域网与蜂窝网络" | `appium_alert action=accept buttonLabel="无线局域网与蜂窝网络"`（**必须显式指定此按钮**：纯 accept 可能点成"仅无线局域网"或"关闭"，导致 App H5 联网页全部"网络连接失败"） |
+| 其他系统权限弹窗（iOS）| 截图可见"允许"/"好" | `appium_alert action=accept` |
 
 ```bash
 GAOTU_SETUP_END=$(date +%s)
@@ -273,6 +274,24 @@ CASE_START_TS = $(date +%s)
 ```
 
 禁止因账号切换而：重启 App（force-stop / am start）、重建 Appium Session、重走第一步~第五步。
+
+**⚠️ 微信登录用例处理（跨 App OAuth，必须真实执行，禁止判「环境不满足」跳过）：**
+
+设备已装微信且已登录测试微信号，「微信登录」是可自动化的正常流程，**必须真实驱动**：
+
+```
+1. App 登录页点「微信登录」入口（图标/按钮，AI 视觉：`WeChat login icon or button on login page`）
+2. 系统若弹「打开"微信"」alert → appium_alert action=accept 确认跳转微信
+3. 切到微信授权确认页后，appium_find_element 找底部主确认按钮
+   （文案通常「登录」/「允许」/「同意」，iOS `//XCUIElementTypeButton[@name='登录']` 兜底 AI 视觉
+   `bottom confirm/login button on WeChat authorization page`），点击完成授权
+4. 微信自动跳回高途 App，轮询等待落地页（最多 10s）
+5. 按用例预期分支 ASSERT：
+   - 「未绑定手机号」路径：回跳后应出现绑定/补充手机号引导页
+   - 「已绑定手机号」路径：直接进已登录态（首页/上课 tab）
+```
+
+仅当微信侧确实找不到授权按钮、或点「微信登录」后未拉起微信时，才 passed=false 并 note 注明具体卡点。已授权用测试微信号驱动生产写，属预期行为。
 
 **⚠️ NEED_RESTART 判断：**
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, glob, json, os, re, shlex, shutil, signal, subprocess, sys, time
+import argparse, glob, json, os, platform, re, shlex, shutil, signal, subprocess, sys, time
 import importlib.util
 import urllib.request, urllib.error, urllib.parse, datetime
 import plistlib
@@ -213,17 +213,34 @@ def install_android(apk_path: str, udid: str) -> bool:
     return r.returncode == 0
 
 
+def _tidevice_cmd(*args) -> list:
+    """构造 tidevice 子进程命令。
+
+    CLT python 是 universal 二进制，subprocess 起的子进程 slice 由内核按架构偏好挑，
+    不严格继承父进程；一旦落到 x86_64 slice，`from PIL import Image` 会因本机
+    Pillow 是 arm64-only 轮子而 ImportError 崩溃 → tidevice 一启动就死、install 秒失败。
+    在 Apple Silicon 上用 `arch -arm64` 把 tidevice 子进程钉死 arm64，匹配 arm64 的 PIL。
+    """
+    base = [sys.executable, "-m", "tidevice", *args]
+    if sys.platform == "darwin" and platform.machine() == "arm64":
+        return ["arch", "-arm64", *base]
+    return base
+
+
 def uninstall_ios(udid: str, bundle_id: str) -> bool:
     try:
         r = subprocess.run(
-            [sys.executable, "-m", "tidevice", "-u", udid, "uninstall", bundle_id],
+            _tidevice_cmd("-u", udid, "uninstall", bundle_id),
             capture_output=True, text=True, timeout=180
         )
     except subprocess.TimeoutExpired:
         log.warning(f"tidevice uninstall 超时(>180s)，判卸载失败: {udid}")
         return False
     out = ((r.stdout or "") + (r.stderr or "")).lower()
-    return r.returncode == 0 or "not installed" in out or "install lookup failed" in out
+    ok = r.returncode == 0 or "not installed" in out or "install lookup failed" in out
+    if not ok:
+        log.warning(f"tidevice uninstall 失败 rc={r.returncode}: {udid} :: {out.strip()[:500]}")
+    return ok
 
 
 def install_ios(ipa_path: str, udid: str) -> bool:
@@ -234,14 +251,18 @@ def install_ios(ipa_path: str, udid: str) -> bool:
         log.warning(f"tidevice uninstall 失败，继续尝试安装: {udid}")
     try:
         r = subprocess.run(
-            [sys.executable, "-m", "tidevice", "-u", udid, "install", ipa_path],
+            _tidevice_cmd("-u", udid, "install", ipa_path),
             capture_output=True, text=True, timeout=600
         )
     except subprocess.TimeoutExpired:
         log.warning(f"tidevice install 超时(>600s)，判安装失败: {udid}")
         return False
     out = (r.stdout or "") + (r.stderr or "")
-    return r.returncode == 0 or "Complete" in out
+    ok = r.returncode == 0 or "Complete" in out
+    if not ok:
+        # 吞掉 stderr 会让 PIL/架构崩溃这类"秒失败"完全隐形，故失败必落盘
+        log.warning(f"tidevice install 失败 rc={r.returncode}: {udid} :: {out.strip()[:800]}")
+    return ok
 
 
 def resolve_ios_ipa_url(url: str) -> str:
@@ -733,7 +754,14 @@ def _assert_evidence_detail(runtime: dict, verify_method: str, evidence: str) ->
         source = reader()
     if verify_method not in {"id", "text"}:
         return {"passed": False, "tokens": [], "matched": [], "missing": [], "source": source}
-    if verify_method == "id":
+    if runtime.get("platform") == "ios":
+        # iOS 无 resource-id:id/text 断言证据都是定位散文(XCUIElementType/name=/xpath 等),
+        # 用 Android 的 _id_evidence_tokens 会造出 :id/XCUIElementTypeButton 之类必失败垃圾 token。
+        # 统一提取屏显可见文案,与 iOS page_source 的 name/label 做子串命中。
+        tokens = orch_case_script.extract_ios_visible_tokens(evidence)
+        if not tokens:
+            tokens = [_normalize_evidence_token(evidence)]
+    elif verify_method == "id":
         tokens = _id_evidence_tokens(evidence)
     else:
         tokens = _split_evidence_tokens(evidence)
@@ -897,7 +925,7 @@ def _launch_app_after_reinstall_for_script(app_id: str, platform: str, udid: str
             app_id, udid, bundle_id, wda.get("port", DEFAULT_WDA_PORT))
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "tidevice", "-u", udid, "launch", bundle_id],
+                _tidevice_cmd("-u", udid, "launch", bundle_id),
                 capture_output=True, text=True, timeout=60
             )
         except subprocess.TimeoutExpired:
@@ -1079,7 +1107,7 @@ def _run_prepare_state(udid: str, step: dict, runtime: dict) -> bool:
 def _stop_ios_app(udid: str, bundle_id: str) -> bool:
     try:
         r = subprocess.run(
-            [sys.executable, "-m", "tidevice", "-u", udid, "kill", bundle_id],
+            _tidevice_cmd("-u", udid, "kill", bundle_id),
             capture_output=True, text=True, timeout=60
         )
         return r.returncode == 0
@@ -2001,7 +2029,8 @@ def build_prompt(app_id: str, udid: str, platform: str, entries: list,
         f"【执行纪律（无人值守模式，务必遵守）】\n"
         f"1. 严格按下方给定顺序逐条执行本批用例：不重排、不并行、不跳过。每条用例的前置状态依赖上一条执行后的结果，乱序即失效。\n"
         f"2. 严禁向用户提问或等待确认。你运行在无人值守（--print）模式，任何提问都无人应答，会导致进程空退、所有用例被判失败。遇到不确定项自行按最合理方案决策，并在该条 note 注明所做假设。\n"
-        f"3. 遇到无法自动化或环境不满足的用例（如微信授权/分享、真实语音辅导、依赖特定后台数据等），不要卡住或反问：直接把该条 passed=false、note 注明原因（如「环境不满足-未执行」「生产不可达-<原因>」），随即继续下一条。\n"
+        f"3. 遇到真正无法自动化或环境不满足的用例（如真实语音辅导、依赖特定后台数据、需人工介入的外部流程等），不要卡住或反问：直接把该条 passed=false、note 注明原因（如「环境不满足-未执行」「生产不可达-<原因>」），随即继续下一条。**注意：微信登录/微信授权不属于此类——设备上已装微信且已登录测试微信号，必须真实驱动执行，禁止直接判「环境不满足-未执行」跳过；具体操作见下方「微信登录用例」条。**\n"
+        f"3b. 【微信登录用例】App 内点「微信登录」后系统会拉起微信 App 的授权确认页：① 若弹出「打开微信」系统 alert，`appium_alert action=accept` 确认跳转；② 切到微信授权页后，用 appium_find_element 找并点确认按钮（文案通常为「登录」「允许」「同意」，底部主按钮），完成授权；③ 微信会自动跳回高途 App，等待并 ASSERT 登录后落地页（首页/绑定手机号页等，按用例预期）。若用例要求「未绑定手机号」路径，授权回跳后应出现绑定/补充手机号引导页；「已绑定手机号」路径则直接进已登录态。全程真实执行（已授权用测试号驱动生产写），不要跳过。若微信侧确实找不到授权按钮或未拉起微信，才按 passed=false、note 注明具体卡点。\n"
         f"4. 账号：多数用例 PRECOND 标了账号（格式「账号：<手机号>」）。执行该用例前，若设备当前登录账号 ≠ 标注账号，就先切换到标注账号（未登录→直接登录；已登录别的账号→先退出登录再登），用验证码登录（矩阵测试账号均为 12 开头，短信验证码一律 1000；个别用例步骤明确给了密码如 Gaotu@123 才用密码）；当前已是该账号则不切换（对应「不切换账号」）。PRECOND 未标账号的用例（登录/首启/未登录类）按其自身步骤执行，不要强行预登录。\n"
         f"5. 仅当遇到【非预期内】的线上业务弹窗（即该弹窗不在当前用例步骤/预期/验证点内）且它会改写生产数据时，才启用弹窗兜底策略：优先寻找并点击最小副作用出口，如 `关闭`、`取消`、`放弃`、`暂不`、`返回`。像“放弃讲义”这类放弃/取消型按钮允许点击；若弹窗本身就是当前用例要验证的对象，则严格按用例步骤执行，不要套用该兜底策略。只有在不存在这些安全出口、剩余按钮都会提交/确认/保存/下单/填写/领取时，才按「生产不可达-弹窗阻断」记失败并继续后续可执行用例。\n"
         f"6. 不要输出阶段性总结、进度汇报、单条结果汇报或向用户复述当前已完成条数；这些内容会让 --print 模式提前结束。除非全部用例都已执行完成，否则只继续执行下一条，不要输出总结性自然语言。\n"

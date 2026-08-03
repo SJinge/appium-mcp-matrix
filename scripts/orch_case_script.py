@@ -19,6 +19,30 @@ _EVIDENCE_PREFIX_PATTERNS = (
         r"includes?|page\s+title|title|buttons?|links?|labels?|texts?|elements?)\b[\s:：,，]*",
         re.IGNORECASE,
     ),
+    # UI 类型名 + 属性键前缀（agent 把断言写成 "TextView value含X" / "StaticText name=Y"）——
+    # 剥掉类型/属性壳,露出后面真正的屏显文案。
+    re.compile(
+        r"^(?:XCUIElementType\w+|TextView|StaticText|ImageView|EditText|Button|Cell|View|Label|Static)\s*"
+        r"(?:name|value|label|text|title)?\s*[=:：含]\s*",
+        re.IGNORECASE,
+    ),
+)
+
+# text 断言 value 里必然 miss 的"非屏显文本"整段:截图/文件路径(screenshot=/a/b.png 之类)。
+# 在切 token 前整段抹掉,避免路径被 / 拆成 Users;mac;… 这类残渣 token。
+_IMAGE_PATH_PATTERN = re.compile(
+    r"(?:screenshot|截图|图片|shot|path|file)\s*[=:：]\s*\S+"
+    r"|/\S+\.(?:png|jpe?g|webp|gif|bmp|xml|json)\b",
+    re.IGNORECASE,
+)
+
+# 图片/数据文件名后缀
+_IMAGE_EXT_PATTERN = re.compile(r"\.(?:png|jpe?g|webp|gif|bmp|xml|json)$", re.IGNORECASE)
+
+# UI 类型名(单独成 token 时)
+_UI_TYPE_TOKEN_PATTERN = re.compile(
+    r"^(?:XCUIElementType\w+|TextView|StaticText|ImageView|EditText|Button|Cell|View|Label)$",
+    re.IGNORECASE,
 )
 
 # 分隔符：中英文标点 + 英文连接词短语（and / after clicking … 等）。
@@ -90,29 +114,128 @@ def normalize_evidence_token(token: str) -> str:
         if stripped == text:
             break
         text = stripped
+    # 剥掉 token 内嵌的" 键=ascii值"属性片段(如"原节点 visible=false"→"原节点");
+    # 值为中文时不动,避免误删"name=温馨提示"里的真实文案。
+    text = re.sub(r"\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*[A-Za-z0-9_./\-]+", "", text)
     return text.strip("`\"'「」『』（）() ")
 
 
 def _is_scaffold_only_token(token: str) -> bool:
-    """判断 token 是否为纯英文脚手架残渣（如 'login agreement text'），应丢弃。
-    含中文 / 《》书名号 / 下划线或 :id/ 的 token(真实 ax-id 如 logo_gaotu)一律保留。"""
+    """判断 token 是否应从 text 断言里丢弃（非屏显文本）。
+
+    text 断言逐字匹配页面渲染文案(passed = 每个 token 都在 page_source 里)。因此只有
+    "用户能在屏幕上看到的文字"才是有效 token；元素 id / 属性键值 / 类型名 / 文件路径 / 坐标
+    这类标识符**永远 miss**,会把本该通过的断言拖成必失败(且因 matched 非空被判"真实失败"
+    不回退)。故:
+      - 含中文 / 书名号《》「」『』 = 真实文案,保留(即便夹带下划线);
+      - 纯 ASCII/数字 token 一律按"标识符/路径/脚手架"处理,按下列规则丢弃。
+    id 断言不走本函数(用 _id_evidence_tokens),故切下划线不会毁 resource-id。"""
     text = (token or "").strip()
     if not text:
         return True
+    # 含中文 / 书名号 → 真实屏显文案,保留
     if re.search(r"[一-鿿]", text):
         return False
-    if any(mark in text for mark in ("《", "》", "「", "」")):
+    if any(mark in text for mark in ("《", "》", "「", "」", "『", "』")):
         return False
-    if "_" in text or ":id/" in text or "/id/" in text:
-        return False
-    # 纯 ASCII：多词英文短语视为脚手架残渣丢弃；单个英文词(可能是真实按钮名)保留。
+    # 以下均为纯 ASCII/数字 token —— text 断言里几乎必为非屏显标识符,丢弃:
+    if _IMAGE_EXT_PATTERN.search(text):          # 文件名 01_privacy_dialog.png
+        return True
+    if re.search(r"[=:/._]", text):              # ax-id(logo_gaotu)、name=、路径片段、点分
+        return True
+    if text.isdigit():                           # 坐标/时间戳
+        return True
+    if _UI_TYPE_TOKEN_PATTERN.match(text):       # 裸 UI 类型名
+        return True
+    # 其余纯 ASCII：多词英文短语=脚手架残渣丢弃；单个英文词(可能是真实按钮名如 VIP/AI)保留。
     return len(text.split()) >= 2
 
 
 def split_evidence_tokens(evidence: str) -> list:
-    raw_tokens = _EVIDENCE_SPLIT_PATTERN.split(evidence or "")
+    # 先整段抹掉截图/文件路径(避免被 / 拆成 Users;mac;… 残渣);运行时/固化时都经此,
+    # 故已固化脚本存量脏 value 在断言取证时也会被重新清洗。
+    cleaned = _IMAGE_PATH_PATTERN.sub(" ", evidence or "")
+    raw_tokens = _EVIDENCE_SPLIT_PATTERN.split(cleaned)
     tokens = [normalize_evidence_token(token) for token in raw_tokens]
     return [token for token in tokens if token and not _is_scaffold_only_token(token)]
+
+
+# ── iOS 断言可见文本提取 ────────────────────────────────────────────────────
+# iOS 无 resource-id,agent 的 ASSERT 证据是自然语言定位串
+# (XCUIElementTypeButton name='同意' + name='不同意' / accessibility id=同意 & …
+#  / by=name,value=同意 / //XCUIElementTypeStaticText[@name='手机号登录'] 命中 …)。
+# 固化成 assert_id 后 runtime 拿整串当字面 id 找 → page_source 里没有 → 必失败(假失败)。
+# 这里把散文压回"能在 iOS page_source(XML,name/label 属性)里子串命中的可见文本 token":
+# 高精度优先(《》/引号/value=),仅当高精度全空才回退裸 CJK——token 越少越准,
+# 降低"任一 token miss 即整条断言失败"的风险。
+# traits='...' 是元素特征(Button/Selected 等),非屏显文案,提取前整段抹掉。
+_IOS_TRAITS_PATTERN = re.compile(r"traits\s*=\s*['\"][^'\"]*['\"]|traits\s*=\s*\S+", re.IGNORECASE)
+_IOS_QUOTE_PATTERN = re.compile(r"['\"‘’“”『「]([^'\"‘’“”』」]+?)['\"‘’“”』」]")
+# value= 取值到分隔符止,且排除引号/方括号(否则 name='确定'] 会把 ] 一起抓成 确定'])。
+_IOS_LOCATOR_VALUE_PATTERN = re.compile(
+    r"(?:accessibility[ _]?id|value|name|label|text)\s*=\s*"
+    r"([^\s+&,，、；;()（）'\"‘’“”『」\[\]]+)",
+    re.IGNORECASE,
+)
+_IOS_PAREN_PATTERN = re.compile(r"[（(][^）)]*[）)]")
+_IOS_SCAFFOLD_PATTERN = re.compile(
+    r"xpath\s*=\s*\S+|predicate\s*=\s*\S+|//[^\s]+|\bby\s*=\s*[\w,]+"
+    r"|XCUIElementType\w+"
+    r"|\baccessibility[ _]?id\b|\bby\b"
+    r"|TextView|StaticText|ImageView|EditText|Button|Cell|Label",
+    re.IGNORECASE,
+)
+_IOS_STRIP_CHARS = "`\"'「」『』（）()[]：:。.，,、~ →>"
+# 裸 CJK 回退时丢弃的纯描述性 stopword(非屏显文案,命中不了会拖垮断言)。
+_IOS_DESC_STOPWORDS = {
+    "命中", "存在", "出现", "含", "链接", "标题", "切换入口", "当前", "元素",
+    "文案", "显示", "可见", "选中", "状态", "底部", "标签页栏", "入口", "正常",
+}
+_IOS_FALLBACK_MAX_LEN = 15  # 裸 CJK 回退 token 长度上限:短标签保留,长描述丢弃
+
+
+def extract_ios_visible_tokens(evidence: str) -> list:
+    text = str(evidence or "")
+    if not text.strip():
+        return []
+    text = _IMAGE_PATH_PATTERN.sub(" ", text)
+    text = _IOS_TRAITS_PATTERN.sub(" ", text)
+    tokens, seen = [], set()
+
+    def add(tok: str):
+        tok = (tok or "").strip().strip(_IOS_STRIP_CHARS)
+        if not tok or tok in seen:
+            return
+        # 纯脚手架/标识符 token(如 'Button, Selected'、多词英文)丢弃,只留可见文案。
+        if _is_scaffold_only_token(tok):
+            return
+        seen.add(tok)
+        tokens.append(tok)
+
+    # 高精度层:书名号《》(带号) / 引号内容 / value=name=accessibility_id= 后的值
+    for m in re.findall(r"《[^》]+》", text):
+        add(m)
+    for m in _IOS_QUOTE_PATTERN.findall(text):
+        add(m)
+    for m in _IOS_LOCATOR_VALUE_PATTERN.findall(text):
+        add(m)
+
+    if tokens:
+        return tokens
+
+    # 回退层:抹掉括号描述 + 脚手架后,取短裸 CJK 片段
+    rem = _IOS_PAREN_PATTERN.sub(" ", text)
+    rem = _IOS_SCAFFOLD_PATTERN.sub(" ", rem)
+    for piece in re.split(r"[；;，,、/+&:：>→\s]+|\s+(?:and|with|plus)\s+", rem):
+        piece = re.sub(r"^[A-Za-z_][\w]*\s*=\s*", "", piece).strip(_IOS_STRIP_CHARS)
+        if not piece or not re.search(r"[一-鿿]", piece):
+            continue
+        if piece in _IOS_DESC_STOPWORDS or len(piece) > _IOS_FALLBACK_MAX_LEN:
+            continue
+        if _is_scaffold_only_token(piece):
+            continue
+        add(piece)
+    return tokens
 
 
 def infer_locator_strategy(value: str, platform: str = "") -> str:

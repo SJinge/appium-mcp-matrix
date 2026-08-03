@@ -432,6 +432,7 @@ def script_runtime_context(
         return ok
 
     runtime = {"assert_evidence_present": assert_evidence_present}
+    runtime["platform"] = "ios"  # 让 _assert_evidence_detail 对 iOS 走可见文本提取(iOS 无 resource-id)
     runtime["route"] = route
     runtime["prepare_state"] = prepare_state
     runtime["handle_known_dialogs"] = handle_known_dialogs
