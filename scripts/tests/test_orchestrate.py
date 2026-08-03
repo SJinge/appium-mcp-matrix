@@ -206,9 +206,9 @@ def test_group_by_device_keeps_multiple_entries_per_same_device():
     assert [entry["record_id"] for entry in groups["a1"]["entries"]] == ["r1", "r2"]
 
 
-def test_resolve_agent_runner_defaults_to_codex(monkeypatch):
+def test_resolve_agent_runner_defaults_to_claude(monkeypatch):
     monkeypatch.delenv("ORCH_AGENT_CLI", raising=False)
-    assert orchestrate.resolve_agent_runner() == "codex"
+    assert orchestrate.resolve_agent_runner() == "claude"
 
 
 def test_resolve_agent_runner_accepts_claude(monkeypatch):

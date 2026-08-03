@@ -60,7 +60,7 @@ def load_runner_secrets(environ=None) -> list:
 
 
 def resolve_agent_runner() -> str:
-    value = os.environ.get("ORCH_AGENT_CLI", "").strip().lower() or "codex"
+    value = os.environ.get("ORCH_AGENT_CLI", "").strip().lower() or "claude"
     if value not in {"codex", "claude"}:
         raise ValueError("ORCH_AGENT_CLI must be one of: codex, claude")
     return value
