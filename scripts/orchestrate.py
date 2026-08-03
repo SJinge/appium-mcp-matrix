@@ -98,7 +98,7 @@ def build_agent_command(runner: str, prompt: str, skill_dir: str, common_dir: st
         # codex exec 默认 approval=never，会把 appium-mcp 的非只读工具直接取消。
         # 编排执行只依赖 appium-mcp；忽略用户全局 config，避免无关 MCP 配置解析失败
         # 阻断设备 agent 启动，再显式注入最小可运行配置。
-        return [
+        cmd = [
             "codex",
             "exec",
             "--ignore-user-config",
@@ -134,8 +134,19 @@ def build_agent_command(runner: str, prompt: str, skill_dir: str, common_dir: st
             _codex_config_arg("mcp_servers.appium-mcp.env.LOG_LEVEL", "warn"),
             "-c",
             _codex_config_arg("mcp_servers.appium-mcp.env.ANDROID_HOME", "/Users/mac/Library/Android/sdk"),
-            prompt,
         ]
+        # --ignore-user-config 会绕过 ~/.claude.json 里给 appium-mcp 配的 AI 视觉凭据，
+        # 导致 codex runner 下 appium-mcp 不注册 appium_ai(ai_instruction 定位失效)，
+        # 与 claude runner 行为不对齐。这里从进程环境(由 runner.env 经 load_runner_secrets
+        # 注入)按需补齐——存在才注入，凭据不落代码/plist。留空则维持原样(无视觉)。
+        for key in ("AI_VISION_ENABLED", "AI_VISION_API_KEY",
+                    "AI_VISION_API_BASE_URL", "AI_VISION_MODEL"):
+            val = os.environ.get(key, "").strip()
+            if val:
+                cmd += ["-c", _codex_config_arg(
+                    f"mcp_servers.appium-mcp.env.{key}", val)]
+        cmd.append(prompt)
+        return cmd
     raise ValueError(f"Unsupported runner: {runner}")
 
 

@@ -487,6 +487,27 @@ def test_build_agent_command_codex_enables_noninteractive_mcp_tools():
     assert cmd[-1] == "prompt"
 
 
+def test_build_agent_command_codex_ai_vision_conditional(monkeypatch):
+    # 无 AI_VISION_* 时不注入(codex 默认无视觉，与历史行为一致)
+    for k in ("AI_VISION_ENABLED", "AI_VISION_API_KEY",
+              "AI_VISION_API_BASE_URL", "AI_VISION_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    cmd = orchestrate.build_agent_command("codex", "prompt", "/tmp/skill", "/tmp/common")
+    assert not any("AI_VISION" in a for a in cmd)
+    assert cmd[-1] == "prompt"
+    # 环境里有凭据时按需注入到 appium-mcp env，且 prompt 仍在末尾
+    monkeypatch.setenv("AI_VISION_ENABLED", "true")
+    monkeypatch.setenv("AI_VISION_API_KEY", "sk-test")
+    monkeypatch.setenv("AI_VISION_MODEL", "gpt-4o")
+    cmd = orchestrate.build_agent_command("codex", "prompt", "/tmp/skill", "/tmp/common")
+    assert 'mcp_servers.appium-mcp.env.AI_VISION_ENABLED="true"' in cmd
+    assert 'mcp_servers.appium-mcp.env.AI_VISION_API_KEY="sk-test"' in cmd
+    assert 'mcp_servers.appium-mcp.env.AI_VISION_MODEL="gpt-4o"' in cmd
+    # 未设置的键不注入
+    assert not any("AI_VISION_API_BASE_URL" in a for a in cmd)
+    assert cmd[-1] == "prompt"
+
+
 def test_launch_agent_per_device_uses_resolved_runner(monkeypatch, tmp_path):
     entries = {"a1": {"platform": "Android", "entries": []}}
     popen_calls = []
