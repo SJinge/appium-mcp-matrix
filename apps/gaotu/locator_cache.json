@@ -7,6 +7,14 @@
     "strategy": "id",
     "verified_version": "5.91.93"
   },
+  "协议弹窗同意按钮@登录协议弹窗": {
+    "hit_count": 0,
+    "module": "",
+    "page": "登录协议弹窗",
+    "selector": "com.gaotu100.superclass:id/customer_dialog_ok",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "底部我的tab@底部导航": {
     "hit_count": 0,
     "module": "启动登录",
@@ -23,6 +31,14 @@
     "strategy": "xpath",
     "verified_version": "5.91.93"
   },
+  "手机号输入框@验证码登录页": {
+    "hit_count": 0,
+    "module": "",
+    "page": "验证码登录页",
+    "selector": "com.gaotu100.superclass:id/account_enter_et",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "拒绝剪切板授权弹窗": {
     "hit_count": 1,
     "module": "启动弹窗",
@@ -30,6 +46,14 @@
     "selector": "com.gaotu100.superclass:id/customer_dialog_cancel",
     "strategy": "id",
     "verified_version": "5.91.93"
+  },
+  "点击获取验证码按钮@验证码登录页": {
+    "hit_count": 0,
+    "module": "",
+    "page": "验证码登录页",
+    "selector": "com.gaotu100.superclass:id/account_sign_btn",
+    "strategy": "id",
+    "verified_version": "5.92.10"
   },
   "点击首页tab@首页tab": {
     "hit_count": 0,
@@ -102,6 +126,14 @@
     "selector": "com.gaotu100.superclass:id/tvConfirm",
     "strategy": "id",
     "verified_version": "5.91.93"
+  },
+  "验证码输入框@请输入验证码页": {
+    "hit_count": 0,
+    "module": "",
+    "page": "请输入验证码页",
+    "selector": "com.gaotu100.superclass:id/verify_code_edit_text",
+    "strategy": "id",
+    "verified_version": "5.92.10"
   },
   "验证码输入框@验证码页": {
     "hit_count": 0,
