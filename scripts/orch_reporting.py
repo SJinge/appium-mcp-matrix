@@ -208,7 +208,8 @@ def generate_reports(
 
     prefix = "⚠️ 执行中断，部分结果\n" if interrupted else ""
     head = "自动化测试中断" if interrupted else "自动化测试完成"
-    lines = [f"{prefix}📱 {app_id} {version} {head}\n"]
+    lines = []
+    # CI 单端执行，一次只一个平台；每个平台块自带【平台】头
     for platform, cases in [("Android", android_cases), ("iOS", ios_cases)]:
         plan = planned.get(platform, 0)
         if not cases and not plan:
@@ -216,13 +217,12 @@ def generate_reports(
         done = len(cases)
         passed = sum(1 for c in cases if c.get("passed"))
         denom = plan or done
-        rate = int(passed / done * 100) if done else 0
+        # 分数与百分比同口径：均按计划数 denom（含未执行），避免 9/13 却显示 81%
+        rate = int(passed / denom * 100) if denom else 0
         unexec = max(0, plan - done)
         url = wiki_urls.get(platform, "")
         review = sum(1 for c in cases if c.get("passed") and lowconf_review_steps_fn(c))
-        parts = [f"{platform}：{passed}/{denom} 通过 ({rate}%)"]
-        if unexec:
-            parts.append(f"{unexec} 未执行")
+        parts = [f"通过率：{passed}/{denom} ({rate}%)"]
         if review:
             parts.append(f"⚠️{review}条待复核")
         # 脚本命中率:有脚本的用例中,脚本直接跑完(未回退 agent)的占比。
@@ -236,10 +236,12 @@ def generate_reports(
             if fell_back:
                 seg_script += f"，回退 {fell_back}"
             parts.append(seg_script)
-        seg = "，".join(parts)
+        if unexec:
+            parts.append(f"{unexec}条未执行")
+        lines.append(f"{prefix}【{platform}】📱 {app_id} {version} {head}\n")
+        lines.append("，".join(parts))
         if url:
-            seg += f"  📄 {url}"
-        lines.append(seg)
+            lines.append(f"执行报告 📄： {url}")
     lines.append(f"\n总耗时：{duration // 60}分{duration % 60}秒")
     notify_fn(app_id, version, "\n".join(lines))
 

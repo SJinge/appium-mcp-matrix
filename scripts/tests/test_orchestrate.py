@@ -3720,8 +3720,9 @@ def test_generate_reports_notifies_unexecuted_and_interrupt_prefix():
                                      device_totals=device_totals, interrupted=True)
         body = notify.call_args[0][2]
         assert "⚠️" in body            # 中断前缀
-        assert "8 未执行" in body       # 10 计划 - 2 完成
-        assert "1/10 通过" in body      # passed/planned
+        assert "【Android】" in body     # 平台头
+        assert "8条未执行" in body       # 10 计划 - 2 完成
+        assert "通过率：1/10 (10%)" in body  # 分数与百分比同口径：均按计划数 10（含未执行），非按执行数 2 的 50%
 
 
 def test_generate_reports_shows_script_hit_rate():
@@ -3770,7 +3771,7 @@ def test_generate_reports_zero_completion_still_notifies():
                                      interrupted=True)
         assert notify.called
         body = notify.call_args[0][2]
-        assert "7 未执行" in body
+        assert "7条未执行" in body
 
 
 def test_load_devices_parses_ios_wda(tmp_path):
@@ -4385,7 +4386,7 @@ def test_run_clears_result_tables_once_before_batched_execution(monkeypatch):
     monkeypatch.setattr(orchestrate, "finalize", lambda **kwargs: True)
 
     cleared = []
-    monkeypatch.setattr(orchestrate, "clear_result_tables",
+    monkeypatch.setattr(orchestrate, "archive_result_tables",
                         lambda app_id, platforms: cleared.append((app_id, tuple(sorted(platforms)))))
     monkeypatch.setattr(orchestrate, "execute_batches_for_groups",
                         lambda app_id, groups, **kwargs: {"a1": []})
@@ -4453,7 +4454,7 @@ def test_run_ios_executes_after_wda_ready(monkeypatch):
     monkeypatch.setattr(orchestrate, "fetch_cases", lambda app_id: [
         {"record_id": "r1", "name": "c1", "module": "首页", "steps": [], "android_device": "", "ios_device": "i1"},
     ])
-    monkeypatch.setattr(orchestrate, "clear_result_tables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(orchestrate, "archive_result_tables", lambda *args, **kwargs: None)
     monkeypatch.setattr(orchestrate, "finalize", lambda **kwargs: True)
 
     executed = []

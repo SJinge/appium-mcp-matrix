@@ -2367,8 +2367,8 @@ def write_results_to_table(app_id: str, platform: str, cases: list, version: str
     log.info(f"{platform} {written}/{len(records)} 条结果已写入结果表")
 
 
-def clear_result_table(app_id: str, platform: str):
-    return orch_result_table.clear_result_table(
+def archive_result_table(app_id: str, platform: str):
+    return orch_result_table.archive_result_table(
         app_id=app_id,
         platform=platform,
         result_tables=RESULT_TABLES,
@@ -2377,8 +2377,8 @@ def clear_result_table(app_id: str, platform: str):
     )
 
 
-def clear_result_tables(app_id: str, platforms: set):
-    return orch_result_table.clear_result_tables(app_id, platforms, clear_result_table)
+def archive_result_tables(app_id: str, platforms: set):
+    return orch_result_table.archive_result_tables(app_id, platforms, archive_result_table)
 
 
 def _tail_file(path: str, n: int = 200) -> str:
@@ -2607,7 +2607,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
     total = sum(len(g["entries"]) for g in groups.values())
     log.info(f"{total} cases across {len(groups)} devices")
 
-    clear_result_tables(app_id, platforms)
+    archive_result_tables(app_id, platforms)
 
     # 5. Parallel execution
     run_status.set_phase(run_id, "executing", f"{total} 条用例 × {len(groups)} 台设备执行中")

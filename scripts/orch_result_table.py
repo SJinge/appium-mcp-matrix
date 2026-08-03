@@ -160,16 +160,48 @@ def write_results_to_table(
     log.info(f"{platform} {written}/{len(records)} 条结果已写入结果表")
 
 
-def clear_result_table(app_id: str, platform: str, result_tables: dict, get_token_fn, log):
+ARCHIVED_FIELD = "已归档"
+
+
+def _ensure_archived_field(app_token: str, table_id: str, token: str, log):
+    """确保结果表存在「已归档」勾选字段；不存在则创建（幂等）。"""
+    url = (f"https://open.feishu.cn/open-apis/bitable/v1/apps/"
+           f"{app_token}/tables/{table_id}/fields?page_size=100")
+    req = urllib.request.Request(
+        url, headers={"Authorization": f"Bearer {token}"}, method="GET")
+    resp = json.load(urllib.request.urlopen(req))
+    names = {f.get("field_name") for f in resp.get("data", {}).get("items", [])}
+    if ARCHIVED_FIELD in names:
+        return
+    body = json.dumps(
+        {"field_name": ARCHIVED_FIELD, "type": 7},  # type 7 = Checkbox
+        ensure_ascii=False).encode("utf-8")
+    add_req = urllib.request.Request(
+        f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields",
+        data=body,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json; charset=utf-8"},
+        method="POST")
+    add_resp = json.load(urllib.request.urlopen(add_req))
+    if add_resp.get("code") != 0:
+        raise RuntimeError(
+            f"创建「{ARCHIVED_FIELD}」字段失败 code={add_resp.get('code')} msg={add_resp.get('msg')}")
+    log.info(f"结果表已创建「{ARCHIVED_FIELD}」勾选字段")
+
+
+def archive_result_table(app_id: str, platform: str, result_tables: dict, get_token_fn, log):
+    """执行前不再硬删旧结果：把现存未归档记录标记 已归档=true，保留历史（各记录自带执行版本可追溯）。"""
     cfg = result_tables.get(app_id)
     table_id = cfg.get(platform.lower()) if cfg else None
     if not cfg or not table_id:
-        log.warning(f"{app_id} 无 {platform} 结果表配置，跳过清空")
+        log.warning(f"{app_id} 无 {platform} 结果表配置，跳过归档")
         return
 
     token = get_token_fn()
+    _ensure_archived_field(cfg["app_token"], table_id, token, log)
+
     page_token = ""
-    deleted = 0
+    archived = 0
     while True:
         params = {"page_size": 500}
         if page_token:
@@ -182,25 +214,30 @@ def clear_result_table(app_id: str, platform: str, result_tables: dict, get_toke
         resp = json.load(urllib.request.urlopen(req))
         data = resp.get("data", {})
         items = data.get("items", [])
-        ids = [item.get("record_id") for item in items if item.get("record_id")]
-        if ids:
-            body = json.dumps({"records": ids}, ensure_ascii=False).encode("utf-8")
-            del_req = urllib.request.Request(
-                f"https://open.feishu.cn/open-apis/bitable/v1/apps/{cfg['app_token']}/tables/{table_id}/records/batch_delete",
+        # 仅标记尚未归档的记录，重复执行幂等
+        ids = [item.get("record_id") for item in items
+               if item.get("record_id") and not item.get("fields", {}).get(ARCHIVED_FIELD)]
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            body = json.dumps(
+                {"records": [{"record_id": rid, "fields": {ARCHIVED_FIELD: True}} for rid in chunk]},
+                ensure_ascii=False).encode("utf-8")
+            up_req = urllib.request.Request(
+                f"https://open.feishu.cn/open-apis/bitable/v1/apps/{cfg['app_token']}/tables/{table_id}/records/batch_update",
                 data=body,
                 headers={"Authorization": f"Bearer {token}",
                          "Content-Type": "application/json; charset=utf-8"},
                 method="POST")
-            del_resp = json.load(urllib.request.urlopen(del_req))
-            if del_resp.get("code") != 0:
-                raise RuntimeError(f"清空结果表失败 code={del_resp.get('code')} msg={del_resp.get('msg')}")
-            deleted += len(ids)
+            up_resp = json.load(urllib.request.urlopen(up_req))
+            if up_resp.get("code") != 0:
+                raise RuntimeError(f"归档结果表失败 code={up_resp.get('code')} msg={up_resp.get('msg')}")
+            archived += len(chunk)
         if not data.get("has_more"):
             break
         page_token = data.get("page_token", "")
-    log.info(f"{platform} 结果表已清空，共删除 {deleted} 条")
+    log.info(f"{platform} 结果表已归档 {archived} 条（标记 {ARCHIVED_FIELD}=true，保留历史）")
 
 
-def clear_result_tables(app_id: str, platforms: set, clear_result_table_fn):
+def archive_result_tables(app_id: str, platforms: set, archive_result_table_fn):
     for platform in sorted(platforms):
-        clear_result_table_fn(app_id, platform)
+        archive_result_table_fn(app_id, platform)
