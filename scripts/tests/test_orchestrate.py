@@ -65,10 +65,10 @@ def test_install_ios_uninstalls_before_install(mock_run):
     assert mock_run.call_count == 2
     uninstall_args = mock_run.call_args_list[0][0][0]
     install_args = mock_run.call_args_list[1][0][0]
-    assert uninstall_args == [sys.executable, "-m", "tidevice", "-u", "i1",
-                              "uninstall", "com.gaotu100.superclass"]
-    assert install_args == [sys.executable, "-m", "tidevice", "-u", "i1",
-                            "install", "/tmp/app.ipa"]
+    assert uninstall_args == orchestrate._tidevice_cmd(
+        "-u", "i1", "uninstall", "com.gaotu100.superclass")
+    assert install_args == orchestrate._tidevice_cmd(
+        "-u", "i1", "install", "/tmp/app.ipa")
 
 
 @patch("orchestrate.subprocess.run")
@@ -2183,9 +2183,8 @@ def test_launch_app_after_reinstall_for_script_ios_ensures_network_and_launches(
 
     assert ok is True
     assert ensures == [("gaotu", "i1", "com.gaotu100.superclass", 8101)]
-    assert mock_run.call_args[0][0] == [
-        sys.executable, "-m", "tidevice", "-u", "i1", "launch", "com.gaotu100.superclass"
-    ]
+    assert mock_run.call_args[0][0] == orchestrate._tidevice_cmd(
+        "-u", "i1", "launch", "com.gaotu100.superclass")
     assert sleep_calls == [4]
     assert invalidated == [True]
 
