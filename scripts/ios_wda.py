@@ -141,7 +141,16 @@ def _start_wda(udid: str, team: str, bundle_id: str, rebuild: bool = True):
                "-allowProvisioningUpdates",
                "CODE_SIGN_STYLE=Automatic",
                f"DEVELOPMENT_TEAM={team}",
-               f"PRODUCT_BUNDLE_IDENTIFIER={bundle_id}"]
+               f"PRODUCT_BUNDLE_IDENTIFIER={bundle_id}",
+               # WDA 的 IOSSettings.xcconfig 开了 GCC_TREAT_WARNINGS_AS_ERRORS=YES,
+               # clang(-Weverything)对 /usr/local/include 报 -Wpoison-system-directories
+               # (交叉编译不安全路径,与该目录是否存在无关),warning 当 error → clean build 直接挂
+               # 「include location '/usr/local/include' is unsafe for cross-compilation」。
+               # 注意:CLANG_WARN_POISON_SYSTEM_DIRECTORIES=NO 无效——xcconfig 的 -Weverything
+               # 排在其后会把这条重新打开。必须用 WARNING_CFLAGS 追加(排在 -Weverything 之后)
+               # 精准关掉这一条 -Wno-poison-system-directories 才能越过;$(inherited) 保留原有全部
+               # 严格告警,只多关这一条。
+               "WARNING_CFLAGS=$(inherited) -Wno-poison-system-directories"]
         log.info(f"[{udid}] building+starting WDA (full): {' '.join(cmd)}")
     subprocess.Popen(cmd, stdout=logf, stderr=logf, cwd=WDA_DIR)
 

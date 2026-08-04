@@ -179,6 +179,25 @@ def test_fetch_cases_sorts_by_order_stably(monkeypatch):
     entries = orchestrate.fetch_cases("gaotu")
     assert [e["record_id"] for e in entries] == ["r1", "r2", "r3"]
 
+def test_filter_record_subset_no_env_keeps_all(monkeypatch):
+    monkeypatch.delenv("ORCH_ONLY_RECORD_IDS", raising=False)
+    entries = [{"record_id": "r1"}, {"record_id": "r2"}]
+    assert orchestrate._filter_record_subset(entries) == entries
+
+
+def test_filter_record_subset_empty_env_keeps_all(monkeypatch):
+    monkeypatch.setenv("ORCH_ONLY_RECORD_IDS", " , ,")
+    entries = [{"record_id": "r1"}, {"record_id": "r2"}]
+    assert orchestrate._filter_record_subset(entries) == entries
+
+
+def test_filter_record_subset_keeps_only_listed(monkeypatch):
+    monkeypatch.setenv("ORCH_ONLY_RECORD_IDS", " r1 , r3 ,, missing_id ")
+    entries = [{"record_id": "r1"}, {"record_id": "r2"}, {"record_id": "r3"}]
+    kept = orchestrate._filter_record_subset(entries)
+    assert [e["record_id"] for e in kept] == ["r1", "r3"]
+
+
 def test_group_by_device():
     entries = [
         {"record_id": "r1", "android_device": "a1", "ios_device": "i1",

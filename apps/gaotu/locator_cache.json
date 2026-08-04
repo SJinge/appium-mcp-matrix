@@ -15,6 +15,14 @@
     "strategy": "id",
     "verified_version": "5.92.10"
   },
+  "协议弹窗同意按钮@验证码登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码登录页",
+    "selector": "com.gaotu100.superclass:id/customer_dialog_ok",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "底部我的tab@底部导航": {
     "hit_count": 0,
     "module": "启动登录",
@@ -33,7 +41,7 @@
   },
   "手机号输入框@验证码登录页": {
     "hit_count": 0,
-    "module": "",
+    "module": "启动登录",
     "page": "验证码登录页",
     "selector": "com.gaotu100.superclass:id/account_enter_et",
     "strategy": "id",
@@ -47,12 +55,60 @@
     "strategy": "id",
     "verified_version": "5.91.93"
   },
+  "点击上课tab": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "",
+    "selector": "//*[@resource-id='com.gaotu100.superclass:id/tab_title'][@text='上课']",
+    "strategy": "xpath",
+    "verified_version": "5.92.10"
+  },
+  "点击发现子tab@首页": {
+    "hit_count": 0,
+    "module": "",
+    "page": "首页",
+    "selector": "//*[@text='发现']",
+    "strategy": "xpath",
+    "verified_version": "5.92.10"
+  },
+  "点击圈子子tab@首页": {
+    "hit_count": 0,
+    "module": "",
+    "page": "首页",
+    "selector": "//*[@text='圈子']",
+    "strategy": "xpath",
+    "verified_version": "5.92.10"
+  },
+  "点击登录页关闭按钮X": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "",
+    "selector": "com.gaotu100.superclass:id/login_view_close_iv",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
+  "点击获取验证码": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "",
+    "selector": "com.gaotu100.superclass:id/account_sign_btn",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "点击获取验证码按钮@验证码登录页": {
     "hit_count": 0,
     "module": "",
     "page": "验证码登录页",
     "selector": "com.gaotu100.superclass:id/account_sign_btn",
     "strategy": "id",
+    "verified_version": "5.92.10"
+  },
+  "点击顶部右侧课程表入口@上课首页": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "上课首页",
+    "selector": "//*[@content-desc='课程表'][@clickable='true']",
+    "strategy": "xpath",
     "verified_version": "5.92.10"
   },
   "点击首页tab@首页tab": {
@@ -62,6 +118,14 @@
     "selector": "//*[@resource-id='com.gaotu100.superclass:id/tab_title'][@text='首页']",
     "strategy": "xpath",
     "verified_version": "5.91.93"
+  },
+  "点击验证码输入框": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "",
+    "selector": "com.gaotu100.superclass:id/verify_code_edit_text",
+    "strategy": "id",
+    "verified_version": "5.92.10"
   },
   "登录协议勾选容器@登录页": {
     "hit_count": 0,
@@ -95,6 +159,14 @@
     "strategy": "id",
     "verified_version": "5.91.93"
   },
+  "获取验证码按钮@验证码登录页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码登录页",
+    "selector": "com.gaotu100.superclass:id/account_sign_btn",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "设置icon@我的页": {
     "hit_count": 0,
     "module": "我的",
@@ -119,6 +191,14 @@
     "strategy": "id",
     "verified_version": "5.91.93"
   },
+  "输入手机号": {
+    "hit_count": 0,
+    "module": "上课",
+    "page": "",
+    "selector": "com.gaotu100.superclass:id/account_enter_et",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
   "首次启动协议同意按钮@启动弹窗": {
     "hit_count": 0,
     "module": "启动登录",
@@ -131,6 +211,14 @@
     "hit_count": 0,
     "module": "",
     "page": "请输入验证码页",
+    "selector": "com.gaotu100.superclass:id/verify_code_edit_text",
+    "strategy": "id",
+    "verified_version": "5.92.10"
+  },
+  "验证码输入框@验证码输入页": {
+    "hit_count": 0,
+    "module": "启动登录",
+    "page": "验证码输入页",
     "selector": "com.gaotu100.superclass:id/verify_code_edit_text",
     "strategy": "id",
     "verified_version": "5.92.10"

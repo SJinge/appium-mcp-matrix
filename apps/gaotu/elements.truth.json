@@ -1,15 +1,15 @@
 {
   "app_id": "gaotu",
   "package": "com.gaotu100.superclass",
-  "version": "5.91.93",
+  "version": "5.92.10",
   "platform": "android",
   "source": "aapt2 dump resources",
   "selector_template": "com.gaotu100.superclass:id/{id}",
-  "total": 9234,
-  "active_count": 9234,
-  "deprecated_count": 0,
-  "business_count": 9095,
-  "noise_count": 139,
+  "total": 9659,
+  "active_count": 9654,
+  "deprecated_count": 5,
+  "business_count": 9512,
+  "noise_count": 142,
   "ids": [
     "ALT",
     "BLOCK",
@@ -87,7 +87,10 @@
     "Translate",
     "XS",
     "_divide_line",
+    "_dot",
+    "_line",
     "_ll_temp",
+    "_title",
     "aac",
     "aacEld",
     "about_activity_error_view",
@@ -165,6 +168,7 @@
     "achievement_btn",
     "achievement_btn_finished",
     "achievement_parent",
+    "action",
     "action0",
     "action_bar",
     "action_bar_activity_content",
@@ -173,6 +177,7 @@
     "action_bar_spinner",
     "action_bar_subtitle",
     "action_bar_title",
+    "action_button",
     "action_coin_group",
     "action_coin_tv",
     "action_container",
@@ -343,6 +348,8 @@
     "adapter_data",
     "adapter_position",
     "add",
+    "addCarrotLayout",
+    "addIcon",
     "add_button_single_img",
     "add_photo_container",
     "add_teacher_count_tv",
@@ -367,6 +374,13 @@
     "address_user_info",
     "address_view",
     "admission_letter_textview",
+    "admission_tool_icon",
+    "admission_tool_subtitle",
+    "admission_tool_title",
+    "admission_tools_card",
+    "admission_tools_grid_container",
+    "admission_tools_title",
+    "admission_tools_title_decoration",
     "adv_button",
     "adv_container",
     "adv_icon",
@@ -391,12 +405,27 @@
     "aecm_speaker_phone",
     "agree_button",
     "agreement_check_box",
+    "ai2BasketLottie",
+    "ai2Carrot",
+    "ai2Icon",
+    "ai2Layout",
+    "ai3Basket",
+    "ai3BasketLottie",
+    "ai3Icon",
+    "ai3Layout",
+    "aiCover",
+    "aiLottie",
+    "aiName",
     "aiSubtitlePanel",
     "aiSubtitleScrollView",
     "aiSubtitleTextView",
     "aiSummarize",
+    "ai_click_bubble",
+    "ai_cover",
     "ai_generate_tip",
     "ai_generated_tag",
+    "ai_icon",
+    "ai_lottie",
     "ai_notes_container",
     "ai_search_header_bar",
     "ai_search_tab_view",
@@ -418,6 +447,7 @@
     "always",
     "analyse",
     "analyseBg",
+    "analyse_answer",
     "analysis_bottom_bg",
     "analysis_view",
     "anchor",
@@ -446,10 +476,14 @@
     "anonymou_text",
     "anonymou_unselect",
     "answer",
+    "answerContainer",
     "answerLayout",
     "answerLayout1",
     "answerLayout2",
     "answerLayout3",
+    "answerPlaceholder",
+    "answerTokenContainer",
+    "answerTokenFlow",
     "answer_animator_answer_right_count_tv",
     "answer_animator_answer_right_score_tv",
     "answer_animator_answer_right_star1_iv",
@@ -471,13 +505,18 @@
     "answer_animator_icon_tutu_iv",
     "answer_container",
     "answer_histogram",
+    "answer_icon",
     "answer_result",
     "answer_result_anim",
     "answer_result_title",
     "answer_result_title_line",
+    "answer_sheet",
     "answer_statistics_explain",
     "answer_statistics_title",
+    "answer_status",
     "answer_summary",
+    "answer_text_view",
+    "answer_title",
     "answer_title_url_bg",
     "answer_title_url_up_group",
     "answer_title_url_up_iv",
@@ -498,6 +537,7 @@
     "applyrefund_select_reason_view",
     "applyrefund_teacher_name_view",
     "arc",
+    "arc_progress",
     "area",
     "area_code_tv",
     "area_list",
@@ -527,9 +567,11 @@
     "attention_iv",
     "audioDuration",
     "audioLayout",
+    "audio_en_layout",
     "audio_frame_layout",
     "audio_input_method_bg",
     "audio_input_method_group",
+    "audio_loading",
     "audio_play_btn",
     "audio_seek_bar",
     "audio_source_camcorder",
@@ -541,6 +583,7 @@
     "audio_source_uplink",
     "audio_source_voice_call",
     "audio_state_lottie",
+    "audio_us_layout",
     "authsdk_back_btn",
     "authsdk_checkbox_view",
     "authsdk_iv_loading",
@@ -582,6 +625,7 @@
     "av_counter",
     "av_remaining_times_counter",
     "avatar",
+    "avatarBg",
     "avatarTeacher",
     "avatar_bg_iv",
     "avatar_container1",
@@ -685,6 +729,7 @@
     "b9",
     "bX",
     "back",
+    "back2",
     "backIv",
     "back_btn",
     "back_button",
@@ -715,17 +760,27 @@
     "barrage_tv",
     "barrage_view",
     "barrier",
+    "barrierGuide",
+    "barrierLast",
+    "barrierLayout",
     "base_line_view",
     "base_refer_view",
     "baseline",
+    "basket",
+    "bat",
     "bdel",
     "beauty_container_fl",
     "beginOnFirstDraw",
     "beginning",
+    "beisu",
     "below_interactive_container",
     "below_stick",
     "bevel",
     "bg",
+    "bg1",
+    "bg2",
+    "bgRecyclerView",
+    "bgView",
     "bg_add_teacher",
     "bg_iv",
     "bg_preview",
@@ -736,6 +791,9 @@
     "bg_yellow",
     "bgaqrcode_camera_preview",
     "big",
+    "bigCarrot",
+    "bigCarrotNum",
+    "bigCarrotText",
     "big_setting_tv",
     "big_toast_root",
     "big_toast_text",
@@ -744,6 +802,7 @@
     "bind_phone_success_line",
     "bind_phone_success_number_tv",
     "bind_phone_success_title",
+    "bj_play",
     "black_toast_text",
     "blindBoxAutoOpenContent",
     "blindBoxAutoOpenRoot",
@@ -767,9 +826,12 @@
     "board_rank_image",
     "board_rank_list_none",
     "board_rank_text",
+    "bomb",
+    "book",
     "book_binding_tips",
     "booking_tv",
     "border",
+    "border_layout",
     "border_view",
     "both_month_week_view",
     "bottom",
@@ -778,6 +840,7 @@
     "bottomPopupContainer",
     "bottomScrollView",
     "bottomToTop",
+    "bottom_bar",
     "bottom_bg",
     "bottom_bg_1",
     "bottom_bg_2",
@@ -790,6 +853,7 @@
     "bottom_guid_line",
     "bottom_guide_view",
     "bottom_guideline",
+    "bottom_layout",
     "bottom_letter_img",
     "bottom_line",
     "bottom_line_view",
@@ -816,12 +880,21 @@
     "bt_save_info",
     "bt_share",
     "btn",
+    "btnBack",
+    "btnBuyCourse",
     "btnCancel",
     "btnConfirm",
     "btnEdit",
+    "btnEvaluating",
     "btnFailReload",
+    "btnMyAudio",
     "btnNext",
+    "btnReRecord",
     "btnRecord",
+    "btnReview",
+    "btnSkip",
+    "btnStartRecord",
+    "btnStudy",
     "btnSubmit",
     "btn_action",
     "btn_address_clickBox",
@@ -868,6 +941,7 @@
     "btn_install_kernel",
     "btn_lead_ad_confirm",
     "btn_learn",
+    "btn_learn_next",
     "btn_left",
     "btn_limit",
     "btn_login_shanyan_login",
@@ -887,12 +961,14 @@
     "btn_open_v3",
     "btn_pad",
     "btn_pdf_form_preview",
+    "btn_play",
     "btn_play_voice",
     "btn_preview",
     "btn_preview_expired_play",
     "btn_preview_video_retry",
     "btn_recommend_action",
     "btn_record",
+    "btn_replay",
     "btn_retry",
     "btn_right",
     "btn_search",
@@ -906,8 +982,10 @@
     "btn_stop",
     "btn_stop_voice",
     "btn_submit",
+    "btn_subtitle_toggle",
     "btn_text",
     "btn_to_study",
+    "btn_translate",
     "btn_triad",
     "btn_undo",
     "btn_unlimited",
@@ -915,7 +993,11 @@
     "btn_view_version",
     "btn_watch_video_again",
     "btn_watch_video_again_left",
+    "bubble",
     "bubbleContainer",
+    "bubbleLayout",
+    "bubbleRoot",
+    "bubble_layout",
     "bubble_tip",
     "business_container",
     "button",
@@ -941,6 +1023,9 @@
     "button_submit",
     "button_sure",
     "button_top",
+    "buyCourseDescribe",
+    "buyDesc",
+    "buyTitle",
     "ca_web_view",
     "calculate_fragment",
     "calculate_guide",
@@ -985,6 +1070,7 @@
     "cannot_get_passcode",
     "capsuleLayout",
     "capsuleView",
+    "capsule_banner_indicator",
     "capsule_button",
     "capsule_button_svga",
     "capsule_button_title",
@@ -1044,6 +1130,13 @@
     "care_counts",
     "care_teacher",
     "caring_icon",
+    "carrot",
+    "carrotAmount",
+    "carrotIcon",
+    "carrotLayout",
+    "carrotLottie",
+    "carrotNum",
+    "carrotText",
     "cart_tv_promotion",
     "cart_tv_promotion_price",
     "cartdetail_listview",
@@ -1073,9 +1166,12 @@
     "cb_call_select",
     "cb_log",
     "cb_view",
+    "cc_tv_time",
+    "cc_tv_video_title",
     "center",
     "centerCrop",
     "centerInside",
+    "centerLayout",
     "centerPopupContainer",
     "centerProgressBar",
     "centerTitleLayout",
@@ -1093,6 +1189,7 @@
     "cg_colors",
     "chain",
     "chains",
+    "changeBook",
     "changeTopic",
     "change_course_item_difficulty_level",
     "changed_course_btn",
@@ -1159,6 +1256,7 @@
     "chat_view",
     "chat_zoom_in",
     "chat_zoom_out",
+    "checkWordBook",
     "check_box",
     "check_text_tv",
     "check_topic",
@@ -1166,12 +1264,15 @@
     "checkbox",
     "checkbox_anonymou_container",
     "checked",
+    "checkin",
     "chinese_acronym_index_bar",
+    "chinese_content",
     "chip",
     "chip1",
     "chip2",
     "chip3",
     "chip_group",
+    "choiceLayout",
     "choice_label_1",
     "choice_label_2",
     "choice_label_3",
@@ -1185,6 +1286,7 @@
     "chronometer",
     "cir_icon",
     "circle",
+    "circleProgress",
     "circle_center",
     "circle_label",
     "circular",
@@ -1192,7 +1294,9 @@
     "circular_main_speaker",
     "circular_view",
     "city",
+    "city_label",
     "civ_cover",
+    "cl",
     "cl_actions",
     "cl_bottom",
     "cl_bottom_container",
@@ -1211,6 +1315,7 @@
     "cl_info",
     "cl_info_layout",
     "cl_insert_layer",
+    "cl_into_bg",
     "cl_introduction_container",
     "cl_item_container",
     "cl_live_group_container",
@@ -1364,11 +1469,13 @@
     "click_right",
     "clip_horizontal",
     "clip_vertical",
+    "clock",
     "clock_hour",
     "clock_minite",
     "clockwise",
     "close",
     "close_btn",
+    "close_button",
     "close_container_rl",
     "close_dialog",
     "close_filter",
@@ -1466,6 +1573,7 @@
     "cms_video_tags",
     "coinCountTextView",
     "coinIconView",
+    "coin_amount_tv",
     "coin_animation",
     "coin_bg_iv",
     "coin_card_accept_iv",
@@ -1476,8 +1584,11 @@
     "coin_count_text",
     "coin_energy_view",
     "coin_guide_line",
+    "coin_icon",
     "coin_image",
+    "coin_pill",
     "coin_space",
+    "coin_tail",
     "coin_team_guide_line",
     "coin_tool_base_line",
     "coin_view",
@@ -1487,6 +1598,7 @@
     "color_content_view",
     "column_title",
     "column_view",
+    "combo",
     "comment_1",
     "comment_2",
     "comment_container",
@@ -1556,6 +1668,7 @@
     "companion_item_line",
     "companion_item_status_tv",
     "companion_item_time_tv",
+    "complete",
     "completion_progress",
     "comprehensive_sort_item",
     "compress",
@@ -1590,8 +1703,11 @@
     "container_parent",
     "container_title_reward",
     "content",
+    "contentContainer",
+    "contentEnd",
     "contentLayout",
     "contentPanel",
+    "contentStart",
     "content_bg",
     "content_cl",
     "content_column_entrance_view",
@@ -1599,10 +1715,12 @@
     "content_frame",
     "content_frame_view",
     "content_layout",
+    "content_left_ph",
     "content_list",
     "content_ll",
     "content_nps_question_title",
     "content_parent",
+    "content_right",
     "content_root",
     "content_score",
     "content_section",
@@ -1620,7 +1738,9 @@
     "control_top_container",
     "control_view",
     "control_view_container",
+    "controller_background",
     "coordinator",
+    "copy_button",
     "copy_content_tv",
     "correct_bottom_bg",
     "correct_status_view",
@@ -1649,8 +1769,10 @@
     "count_tip",
     "count_tv",
     "countdown",
+    "countdownAnim",
     "countdownNumberTextView",
     "countdownProgressView",
+    "countdownText",
     "countdownTitleTextView",
     "countdown_animation",
     "countdown_close",
@@ -1706,6 +1828,8 @@
     "couponitemview_select_tag",
     "course",
     "courseCardViewList",
+    "courseName",
+    "courseNoResourceDescribe",
     "course_ad",
     "course_app_bar",
     "course_book_ll",
@@ -1875,6 +1999,7 @@
     "current_title_star",
     "custom",
     "customPanel",
+    "custom_button",
     "custom_dialog_message",
     "custom_dialog_title",
     "custom_full_video_view",
@@ -1921,11 +2046,17 @@
     "cv_live_sale_introduction_cover",
     "cv_qr_code",
     "cv_teacher",
+    "cv_toast_message",
     "cv_triad_btn",
+    "daily_quxue_container",
+    "dan_mu_answer_view",
+    "dan_mu_display_view",
+    "dan_mu_question_view",
     "dark1",
     "dark2",
     "darklayout",
     "dash_line",
+    "dataBinding",
     "data_framelayout",
     "date_picker_actions",
     "day_desc",
@@ -1948,6 +2079,7 @@
     "default_view",
     "delete",
     "delete_btn_container",
+    "delete_button",
     "delete_expression",
     "delete_iv",
     "delete_photo_btn",
@@ -2001,6 +2133,7 @@
     "diagnostic_exam_tv_current_size",
     "diagnostic_exam_tv_timer",
     "diagnostic_exam_tv_total_size",
+    "dialogLayout",
     "dialog_announcement_et",
     "dialog_announcement_imageview",
     "dialog_announcement_top_bar",
@@ -2231,6 +2364,7 @@
     "dot_save_tv",
     "dot_time_tv",
     "dot_title_tv",
+    "dot_view",
     "double_click",
     "double_click_textview",
     "down_up",
@@ -2241,6 +2375,7 @@
     "downloadingfragment_listview",
     "dragDown",
     "dragEnd",
+    "dragLayout",
     "dragLeft",
     "dragRight",
     "dragStart",
@@ -2255,6 +2390,10 @@
     "dropdown_editable",
     "dropdown_menu",
     "dropdown_noneditable",
+    "duration",
+    "durationText",
+    "duration_image_tip",
+    "duration_progressbar",
     "dynamic",
     "easeIn",
     "easeInOut",
@@ -2273,6 +2412,7 @@
     "edit_group",
     "edit_photo",
     "edit_query",
+    "edit_text",
     "edit_text_alipay_account",
     "edit_text_alipay_name",
     "edit_view_container",
@@ -2284,6 +2424,8 @@
     "ellipsis_layout",
     "email",
     "emoji_iv",
+    "empty",
+    "emptyLayout",
     "empty_icon",
     "empty_teacher_iv",
     "empty_teacher_tv",
@@ -2291,6 +2433,8 @@
     "empty_view_content",
     "enable_service_text",
     "enabled",
+    "encourageText",
+    "encourageView",
     "end",
     "endToStart",
     "end_guide",
@@ -2313,6 +2457,7 @@
     "energy_star_close_tv",
     "energy_team_guide_line",
     "energy_tool_base_line",
+    "english_content",
     "enroll_bg",
     "enterAlways",
     "enterAlwaysCollapsed",
@@ -2331,6 +2476,8 @@
     "enter_guide_textureView",
     "enter_guide_tv",
     "envelope_container",
+    "errorContent",
+    "errorTv",
     "error_bg_iv",
     "error_book_course_iv_inclusion_close",
     "error_book_course_tv_inclusion_hint",
@@ -2339,6 +2486,7 @@
     "error_book_exercise_preview_header",
     "error_book_label_tag",
     "error_book_tag",
+    "error_btn",
     "error_container",
     "error_desc_view",
     "error_group",
@@ -2457,6 +2605,7 @@
     "excellentactivity_name_view2",
     "excellentactivity_share_container",
     "exchange_class_view",
+    "exclamationIcon",
     "exerciseSetting",
     "exercise_catalog_repo",
     "exercise_container",
@@ -2880,6 +3029,7 @@
     "fl_ip_container",
     "fl_ip_group",
     "fl_live",
+    "fl_parent",
     "fl_poster_pic_container",
     "fl_qr_container",
     "fl_screenshort_container",
@@ -2889,6 +3039,7 @@
     "fl_task_remind_capsule",
     "fl_team_count_down_container",
     "fl_un_login",
+    "flag",
     "flag_ic_iv",
     "flag_item",
     "flag_name_tv",
@@ -3006,12 +3157,17 @@
     "flow_tv_segment",
     "flow_tv_selection",
     "flow_tv_title",
+    "fluencyRatingbar",
+    "fluencyText",
     "fluorescent",
+    "flyLayout",
     "fly_view",
     "focusCrop",
     "focusMarkerContainer",
     "focusMarkerFill",
     "folder",
+    "follow",
+    "followText",
     "followdialog_close",
     "followdialog_copy_view",
     "followdialog_copy_wechat_view",
@@ -3037,6 +3193,7 @@
     "fr_tv_download_progress",
     "fr_ui_state_view",
     "frag_container",
+    "fragmentContainer",
     "fragment_ai_activity",
     "fragment_bg",
     "fragment_bottom_menu_chat_control_gsx_ll",
@@ -3213,6 +3370,7 @@
     "fragment_video_speak_video_rl",
     "fragment_video_speak_zoom_pack_up_rl",
     "fragment_video_spread_out_iv",
+    "frame",
     "frame_layout_rank",
     "frame_layout_top",
     "free_listener_view",
@@ -3239,9 +3397,13 @@
     "gallery_view_main_photo_size_tv",
     "gallery_view_main_scale_imageView",
     "gallery_view_main_viewpager",
+    "gesture_iv_progress",
+    "gesture_progress_layout",
     "gesture_progress_view",
     "get_marquee_view",
     "get_passcode",
+    "geture_tv_progress_time",
+    "geture_tv_progress_time0",
     "ghost_view",
     "ghost_view_holder",
     "gif",
@@ -3314,6 +3476,9 @@
     "goodspayactivity_total_discount_view",
     "goodspayactivity_total_price",
     "goon",
+    "goonStudy",
+    "goon_record",
+    "goon_record_layout",
     "gp_all_content",
     "gp_bottom_maintain_group",
     "gp_bottom_temp_group",
@@ -3331,6 +3496,7 @@
     "gp_speaking",
     "gp_tab_layout",
     "grade",
+    "grade_label",
     "graph",
     "graph_wrap",
     "gray_lien",
@@ -3371,6 +3537,13 @@
     "gsx_course_container",
     "gtui_grid_view",
     "gtui_search_bar",
+    "guess",
+    "guideCenterLayout",
+    "guideIcon",
+    "guideIcon1",
+    "guideIcon2",
+    "guideLayout",
+    "guideTitle",
     "guide_arrow_id",
     "guide_arrow_iv",
     "guide_before_enter_view",
@@ -3380,6 +3553,7 @@
     "guide_experience_tv",
     "guide_img",
     "guide_line",
+    "guide_line1",
     "guide_line_vertical",
     "guide_next_id",
     "guide_praise_line",
@@ -3388,12 +3562,15 @@
     "guide_skin_view",
     "guide_tv",
     "guide_view",
+    "guide_view_left",
+    "guide_view_right",
     "guideline",
     "gv_exercisecard",
     "gv_stratified_card",
     "h263",
     "h264",
     "had_update_tv",
+    "hand",
     "handle_bottom_tv",
     "handle_iv",
     "handle_mid_tv",
@@ -3441,6 +3618,7 @@
     "hint",
     "history",
     "holder_tools_container",
+    "hole_view",
     "holer",
     "home",
     "homeAsUp",
@@ -3476,7 +3654,10 @@
     "horizontal_interval",
     "horizontal_scrollView",
     "horn",
+    "hornSlow",
+    "horn_en",
     "horn_overlay",
+    "horn_us",
     "hostContainer",
     "hostContent",
     "hot_course",
@@ -3485,10 +3666,14 @@
     "hour_tens_iv",
     "hsv_parent",
     "hung_up",
+    "iKnow",
+    "ib_back",
     "ib_bg_bottom",
     "ib_clip_cancel",
     "ib_clip_done",
     "ib_clip_rotate",
+    "ib_full_screen",
+    "ib_play",
     "ic_arrow",
     "ic_close",
     "ic_guide_pdf_arrow",
@@ -3498,9 +3683,32 @@
     "ic_play",
     "ic_task",
     "icon",
+    "iconBarrier",
+    "iconBat",
+    "iconCarrot",
+    "iconCombo",
+    "iconDuration",
+    "iconFeedback",
+    "iconFollow",
+    "iconGrammar",
+    "iconGuide1",
+    "iconGuide2",
+    "iconLearning",
+    "iconList",
+    "iconNumber1",
+    "iconNumber2",
+    "iconNumber3",
+    "iconProgress",
+    "iconRabbit",
+    "iconRecommend",
     "iconRefreshTopic",
+    "iconReview",
+    "iconRight",
     "iconTimeOut",
     "iconTitle",
+    "iconWisdom",
+    "iconX",
+    "icon_ai",
     "icon_btn_class_prepare_1",
     "icon_btn_class_prepare_2",
     "icon_coming_live_play_section",
@@ -3527,6 +3735,7 @@
     "imageGif",
     "imageView",
     "imageView2",
+    "image_barrier",
     "image_board_loading",
     "image_browse_back_view",
     "image_browse_big_image",
@@ -3566,6 +3775,7 @@
     "image_view_luckiest_light",
     "image_view_mvp",
     "image_view_no_data",
+    "image_view_parent",
     "image_view_rank",
     "image_view_red_packet",
     "image_view_refund_flow",
@@ -3603,6 +3813,7 @@
     "img_icon",
     "img_icon_like",
     "img_icon_like_lottie",
+    "img_layout",
     "img_loading",
     "img_mute",
     "img_navi",
@@ -3617,13 +3828,16 @@
     "immersion_navigation_bar_view",
     "immersion_status_bar_view",
     "importance_tv",
+    "important_button",
     "in_grade",
     "in_grade_container",
     "in_grade_drag",
     "incandescent",
     "include_extend",
     "include_loading",
+    "indexText",
     "indicator",
+    "indicatorLayout",
     "indicator_bg",
     "indicator_container",
     "indicator_gray_part",
@@ -3631,10 +3845,12 @@
     "indicator_tv",
     "indicator_view",
     "info",
+    "inform_button",
     "initial_state",
     "inner",
     "inner_cl_preview_container",
     "inner_pic_view",
+    "input",
     "input_chat_forbid_iv",
     "input_chat_input_tv",
     "input_cl_container",
@@ -3667,6 +3883,11 @@
     "interactive_question_activity_tv_question_list",
     "interactive_question_activity_webView",
     "interactive_rv_question",
+    "into",
+    "into_button",
+    "into_close",
+    "into_icon",
+    "into_status",
     "intro",
     "introduction",
     "introduction_view",
@@ -3823,6 +4044,7 @@
     "item_video_render_notice_state",
     "item_video_speak_iv",
     "item_video_speak_vv",
+    "iv",
     "ivAllowBackground",
     "ivAllowUsing",
     "ivArrow",
@@ -3973,6 +4195,7 @@
     "iv_expression_top",
     "iv_extra_illus_btn_icon",
     "iv_fast_forward",
+    "iv_fast_progress",
     "iv_fast_rewind",
     "iv_fin_cast_close",
     "iv_fin_cast_selected",
@@ -4236,6 +4459,8 @@
     "iv_yuan",
     "jCameraView",
     "jcameraview",
+    "join_teacher_wechat_button",
+    "join_teacher_wechat_parent",
     "jp1v1_login_guide",
     "jpeg",
     "jumpToEnd",
@@ -4274,10 +4499,14 @@
     "kingkong_view",
     "know_ledge_point_iv",
     "know_ledge_tool_ll",
+    "knowledgeNum",
     "knowledge_consolidation_button",
+    "knowledge_example",
     "knowledge_marquee_iv",
     "knowledge_marquee_tv",
+    "knowledge_paraphrase",
     "knowledge_title_tv",
+    "knowledge_toast",
     "knowledge_tv",
     "label",
     "label_container",
@@ -4322,6 +4551,7 @@
     "layout_control_top_user_count",
     "layout_custom_toast_txt",
     "layout_double",
+    "layout_error_view",
     "layout_live_back_video_tip",
     "layout_liveback_bottom_control_amplification",
     "layout_liveback_bottom_control_call_service_phone",
@@ -4408,6 +4638,7 @@
     "learning_index_title_icon",
     "learning_index_value",
     "learningcenteractivity_errorview_container",
+    "leave",
     "leaveButton",
     "lecture_desc",
     "lecturedownload_empty_view",
@@ -4435,6 +4666,8 @@
     "lecturer_teacher_name_description",
     "lectures_list",
     "left",
+    "leftBgBlue",
+    "leftBgWhite",
     "leftBtn",
     "leftLayout",
     "leftProgressBar",
@@ -4486,6 +4719,10 @@
     "line",
     "line1",
     "line3",
+    "lineLeftBottom",
+    "lineLeftTop",
+    "lineRightBottom",
+    "lineRightTop",
     "line_arrow",
     "line_bottom",
     "line_container",
@@ -4962,12 +5199,14 @@
     "loading_pb",
     "loading_progress",
     "loading_progressbar",
+    "loading_rl",
     "loading_text",
     "loading_tv",
     "loading_view",
     "loadview",
     "location_btn",
     "location_pois",
+    "lock",
     "log_content",
     "log_switch",
     "login_agreement_tv",
@@ -5017,10 +5256,13 @@
     "look_listen_practice_tape_voice_header_view",
     "loop_avatar",
     "lose_efficacy_tag",
+    "lottiePraiseLayout",
+    "lottieRabbit",
     "lottieRipple",
     "lottieView",
     "lottie_animation_view",
     "lottie_layer_name",
+    "lottie_praise",
     "lottie_querying_loading",
     "lottie_tag",
     "lottie_view",
@@ -5179,6 +5421,7 @@
     "message_input_control",
     "message_input_et",
     "message_input_send_tv",
+    "message_layout",
     "message_rv",
     "message_text",
     "message_tips_ll",
@@ -5192,6 +5435,7 @@
     "messageitemview_message_tag",
     "messageitemview_message_time",
     "messageitemview_message_title",
+    "microphone",
     "microphone_adapter_margin_left",
     "microphone_content_switch_btn",
     "microphone_content_switch_parent",
@@ -5209,6 +5453,13 @@
     "microphone_waiting_mwv",
     "middle",
     "middleAnimationLayer",
+    "middleBgGreen",
+    "middleBgWhite",
+    "middleCarrot",
+    "middleCarrotNum",
+    "middleCarrotText",
+    "middleGroup",
+    "middleLayout",
     "middle_container",
     "mine_framelayout",
     "mini",
@@ -5225,6 +5476,7 @@
     "mon",
     "money_container",
     "mono",
+    "monsterView",
     "month_grid",
     "month_navigation_bar",
     "month_navigation_fragment_toggle",
@@ -5378,6 +5630,7 @@
     "no_network_tip",
     "none",
     "normal",
+    "normalLayout",
     "normal_catalog_item",
     "normal_fragment_do_question_view",
     "normal_fragment_look_question_view",
@@ -5386,6 +5639,7 @@
     "normal_mode",
     "normal_setting_tv",
     "not_pk_opponent_layout",
+    "not_understand_button",
     "note_barrier",
     "notes_close_iv",
     "notes_download_iv",
@@ -5410,8 +5664,13 @@
     "nps_question_new_view",
     "nps_question_view",
     "nsl_parent",
+    "num1",
+    "num2",
+    "num3",
+    "num4",
     "num_play",
     "number",
+    "numberLayout",
     "numberPassword",
     "off",
     "off_stage_arrow_iv",
@@ -5421,6 +5680,8 @@
     "ok_tv",
     "old_price_red",
     "on",
+    "onAttachStateChangeListener",
+    "onDateChanged",
     "onTouch",
     "one",
     "online_avatar_iv",
@@ -5430,6 +5691,7 @@
     "online_voice_scrollview",
     "only_measure_content_tv",
     "only_month_view",
+    "only_record_layout",
     "only_week_view",
     "open",
     "open_box_coin_count",
@@ -5474,6 +5736,10 @@
     "options_result_icon",
     "options_result_msg",
     "options_rv",
+    "oral_waiting_lottie",
+    "oral_waiting_text",
+    "order",
+    "orderLayout",
     "order_address_area_name",
     "order_address_city_name",
     "order_address_city_right_arrow",
@@ -5557,6 +5823,7 @@
     "oval",
     "packed",
     "pageLayout",
+    "pageNum",
     "page_indicator_text",
     "page_refresh",
     "page_turn_view_container",
@@ -5574,6 +5841,8 @@
     "panel_input_wrapper",
     "panel_layout",
     "parallax",
+    "paraphrase",
+    "paraphraseMark",
     "parent",
     "parentPanel",
     "parentRelative",
@@ -5663,8 +5932,12 @@
     "pb_flow_chat",
     "pb_intensity",
     "pb_loading",
+    "pb_small_window_player",
     "pb_video_loading_view",
     "pb_web_view_quiz",
+    "pdfContent",
+    "pdfImage",
+    "pdfNum",
     "pdf_bottom_container",
     "pdf_bottom_view",
     "pdf_imageView",
@@ -5798,6 +6071,7 @@
     "play_back_more_icon",
     "play_back_more_title",
     "play_back_title",
+    "play_layout",
     "play_list_dialog",
     "play_list_recycle_view",
     "play_svga",
@@ -5816,7 +6090,12 @@
     "playback_title",
     "playback_total_time",
     "playbacks_error",
+    "playerView",
+    "playerViewHolder",
+    "playerViewHolder2",
     "player_container",
+    "player_recycler",
+    "player_sv",
     "player_sv_control_component_container",
     "playing_anim",
     "pns_nav_return",
@@ -5827,7 +6106,10 @@
     "poi_address",
     "poi_name",
     "poi_selected",
+    "point_content",
+    "point_desc",
     "point_group",
+    "point_time",
     "pointer_events",
     "polish",
     "polish_layout",
@@ -5950,6 +6232,9 @@
     "price_tv",
     "price_yuan",
     "primary_btn",
+    "primary_task_btn",
+    "primary_task_sub_title_tv",
+    "primary_task_title_tv",
     "privacypolicy_textview",
     "prizeCard",
     "processLoadingMaskView",
@@ -5957,6 +6242,10 @@
     "process_img",
     "progress",
     "progressBar",
+    "progressCount",
+    "progressGroup",
+    "progressLayout",
+    "progressText",
     "progress_bar",
     "progress_circular",
     "progress_close",
@@ -5966,6 +6255,7 @@
     "progress_plan_completion",
     "progress_text",
     "progress_title",
+    "progress_tv",
     "progressbar",
     "promotion_count",
     "promotion_lin",
@@ -5977,6 +6267,9 @@
     "pronounceBarrier",
     "pronounceBg",
     "pronounceLayout",
+    "pronunciation",
+    "pronunciationRatingbar",
+    "pronunciationText",
     "province",
     "public_class_list_activity_header",
     "public_class_list_activity_list_view",
@@ -6011,9 +6304,18 @@
     "push_pure_bigview_banner",
     "push_pure_bigview_expanded",
     "qr_code",
+    "queryKnowledge",
+    "queryKnowledgeGuideBubble",
+    "querySentence",
+    "querySentenceGuideBubble",
+    "queryWord",
+    "queryWordGuideBubble",
     "query_done_header",
     "query_tv",
     "question",
+    "questionHit",
+    "questionStem",
+    "questionTag",
     "question_answer_analysis_item_audio_seek_bar",
     "question_answer_analysis_item_ll_audio",
     "question_answer_analysis_item_tv_iv_mix_view",
@@ -6036,6 +6338,7 @@
     "question_stem_content_view",
     "question_stem_view_container",
     "question_stem_view_content_view",
+    "question_text_view",
     "question_tile",
     "question_video_type_iv_cover",
     "question_video_type_tv_play",
@@ -6099,6 +6402,7 @@
     "quiz_praise_icon",
     "quiz_praise_summary",
     "quiz_praise_title",
+    "quiz_right_star_count",
     "quiz_rv",
     "quiz_statistics_explain_close",
     "quiz_statistics_explain_content",
@@ -6115,6 +6419,7 @@
     "quiz_up_text",
     "quiz_view",
     "quotation_iv",
+    "rabbitView",
     "radar_bottom_module",
     "radar_bottom_title",
     "radar_bottom_value",
@@ -6160,6 +6465,10 @@
     "rb_mosaic",
     "rc_live_group_share",
     "rc_video",
+    "reExercise",
+    "reStart",
+    "reStudy",
+    "reTry",
     "re_answer_tips_tv",
     "re_camera",
     "reactNativeFragment",
@@ -6195,18 +6504,23 @@
     "reconnectingHintSpinner",
     "reconnectingHintTextView",
     "reconnectingHintView",
+    "record",
     "recordArea",
     "recordButton",
     "recordEndTextView",
     "recordHintTextView",
     "recordLayout",
+    "recordMask",
     "recordMicIconTextView",
+    "recordResultLayout",
     "recordSendIconTextView",
     "recordStartContent",
     "recordStartTextView",
     "recordWaveView",
     "record_again_icon",
     "record_btn",
+    "record_layout",
+    "record_over",
     "record_remain_time",
     "record_remain_time_container",
     "record_success_icon",
@@ -6290,7 +6604,20 @@
     "remote_container",
     "render_view",
     "repeat",
+    "replay_back",
+    "replay_current_time",
+    "replay_divider",
+    "replay_duration",
+    "replay_full_screen",
+    "replay_hint_tv",
+    "replay_play_control_bottom",
+    "replay_play_control_top",
+    "replay_play_control_top_left",
+    "replay_play_icon",
+    "replay_title",
     "report",
+    "report2",
+    "reportName",
     "report_close_iv",
     "report_container",
     "report_item",
@@ -6304,6 +6631,7 @@
     "resetfragment_headbar",
     "restart",
     "restart_view",
+    "resultView",
     "result_bg_iv",
     "result_coin_bg",
     "result_coin_group",
@@ -6333,6 +6661,7 @@
     "retry_button",
     "reverse",
     "reverseSawtooth",
+    "rewardView",
     "rg_core_type",
     "rg_lp_debug_mode_aec",
     "rg_lp_debug_mode_aecm",
@@ -6342,9 +6671,14 @@
     "rg_play_position",
     "rg_record",
     "right",
+    "rightBgGreen",
+    "rightBgOrange",
+    "rightBgWhite",
     "rightBtn",
+    "rightText",
     "rightToLeft",
     "right_anim",
+    "right_answer",
     "right_arrow_icon",
     "right_bottom_icon",
     "right_bottom_title",
@@ -6354,6 +6688,7 @@
     "right_container",
     "right_group",
     "right_icon",
+    "right_label_container",
     "right_left",
     "right_line_container",
     "right_menu_size_rl",
@@ -6365,6 +6700,8 @@
     "right_top_title",
     "right_tv_sub_title",
     "right_tv_title",
+    "rippleLeft",
+    "rippleRight",
     "riv",
     "rlAboutApplet",
     "rlAppletInfo",
@@ -6581,8 +6918,10 @@
     "school",
     "school_explore_container",
     "scopeLinearLayout",
+    "scoreText",
     "score_recycler_view",
     "screen",
+    "screenBg",
     "screen_animation",
     "screen_bt",
     "screen_dialog_img",
@@ -6646,6 +6985,10 @@
     "second_tens_iv",
     "second_textview",
     "second_title",
+    "secondary_action_arrow_iv",
+    "secondary_action_bar",
+    "secondary_action_hint_tv",
+    "secondary_action_title_tv",
     "secondary_btn",
     "secondary_tv",
     "section_admission_letter_container",
@@ -6715,6 +7058,7 @@
     "selecting_course_item_title",
     "selectionContainer",
     "selection_container",
+    "selection_group",
     "selection_type",
     "selection_view",
     "selection_view_bg",
@@ -6744,13 +7088,17 @@
     "self_team_logo_container",
     "self_text",
     "self_unknow_team_logo",
+    "send",
+    "send_button",
     "send_fl",
     "send_status",
     "send_tv",
     "sender",
     "sentence",
     "sentence_analyse",
+    "sentence_example",
     "sentence_layout",
+    "sentence_paraphrase",
     "sentence_right",
     "sentry_privacy",
     "separate_line",
@@ -6768,6 +7116,7 @@
     "setting_tv",
     "shadow",
     "shadow_view",
+    "shangyige",
     "shanyan_group",
     "shanyan_group_tutu",
     "shanyan_group_tutu_layout2",
@@ -6891,7 +7240,9 @@
     "singular",
     "size",
     "skin_view",
+    "skip",
     "skipCollapsed",
+    "skipLesson",
     "skip_all",
     "skip_deepseek",
     "skip_deepseek_tip",
@@ -6904,8 +7255,13 @@
     "slide_time_tip",
     "slogan_loading",
     "small",
+    "smallCarrot",
+    "smallCarrotNum",
+    "smallCarrotText",
     "small_enroll_empty",
+    "small_seek_bar",
     "small_setting_tv",
+    "small_window_player_view",
     "snackbar_action",
     "snackbar_text",
     "snap",
@@ -6999,11 +7355,13 @@
     "standardAnswer",
     "standard_answer",
     "standard_title_content",
+    "star",
     "star1_iv",
     "star2_iv",
     "star3_iv",
     "star4_iv",
     "star5_iv",
+    "starLottie",
     "star_bg_iv",
     "star_group",
     "star_map_node_bubble",
@@ -7031,7 +7389,9 @@
     "starview_replay",
     "starview_small_class",
     "starview_total",
+    "state",
     "stateBar",
+    "stateBar2",
     "stateFrame",
     "state_container",
     "state_error_bt",
@@ -7057,6 +7417,8 @@
     "status_waiting_view",
     "statusselectview_graspView",
     "statusselectview_learningView",
+    "stemBlankLine",
+    "stemLayout",
     "step_line_left_selected",
     "step_line_left_unselected",
     "step_line_right_selected",
@@ -7145,9 +7507,13 @@
     "student_profile_teacher_comment_panel",
     "student_recycler_item_section_select_layout",
     "student_recycler_item_section_select_layout_title",
+    "study",
     "study2_home_header",
     "study2_home_state_view",
     "study2_home_state_view_container",
+    "studyDay",
+    "studyDivider",
+    "studyDivider2",
     "studyTime",
     "study_center_app_bar",
     "study_center_cards_container",
@@ -7312,6 +7678,9 @@
     "submitbar_text",
     "subtitleBlurHintTextView",
     "subtitle_content_tv",
+    "subtitle_layout",
+    "subtitle_view",
+    "subtitle_view_2",
     "summary_metrics_gap",
     "summation_container",
     "sun",
@@ -7360,6 +7729,8 @@
     "systemmessageactivity_message_listview",
     "systemmessageactivity_totop_view",
     "tabIcon",
+    "tabItem",
+    "tabLayout",
     "tabMode",
     "tabTitle",
     "tab_base_background",
@@ -7405,7 +7776,12 @@
     "tab_view",
     "tabs",
     "tag",
+    "tagBottom4",
+    "tagBottom7",
     "tagGroup",
+    "tagText",
+    "tagTop4",
+    "tagTop7",
     "tagViewHolder",
     "tag_1",
     "tag_2",
@@ -7420,8 +7796,10 @@
     "tag_flow_layout",
     "tag_horizontal_child_interceptor_installed",
     "tag_hotword_view",
+    "tag_icon",
     "tag_left",
     "tag_mid",
+    "tag_name",
     "tag_on_apply_window_listener",
     "tag_on_receive_content_listener",
     "tag_on_receive_content_mime_types",
@@ -7438,6 +7816,7 @@
     "tag_unhandled_key_listeners",
     "tag_view",
     "tag_window_insets_animation_callback",
+    "tagsLayout",
     "tags_container",
     "takePicture",
     "takePictureSnapshot",
@@ -7450,6 +7829,7 @@
     "task_button",
     "task_container",
     "task_list_bg",
+    "task_reward_coin",
     "task_status",
     "task_status_icon",
     "task_sub_title",
@@ -7493,6 +7873,7 @@
     "teacher_name_container",
     "teacher_name_tv",
     "teacher_picture",
+    "teacher_picture_iv",
     "teacher_role",
     "teacher_role_view",
     "teacher_role_view1",
@@ -7560,8 +7941,10 @@
     "test_checkbox_android_button_tint",
     "test_checkbox_app_button_tint",
     "test_item",
+    "test_name",
     "test_radiobutton_android_button_tint",
     "test_radiobutton_app_button_tint",
+    "test_title",
     "text",
     "text2",
     "textEnd",
@@ -7575,6 +7958,7 @@
     "textView2",
     "textView4",
     "textVisiblePassword",
+    "textWatcher",
     "textWebPassword",
     "text_content",
     "text_count_tv",
@@ -7589,12 +7973,14 @@
     "text_input_end_icon",
     "text_input_error_icon",
     "text_input_start_icon",
+    "text_play",
     "text_preview_content",
     "text_preview_score",
     "text_preview_title",
     "text_problem",
     "text_progress_bar",
     "text_replay",
+    "text_right_wrong",
     "text_single",
     "text_tip",
     "text_to_image_fl",
@@ -7717,6 +8103,7 @@
     "thumbnail_bg_view",
     "thumbnailitemview_imageview",
     "thumbnailitemview_img_bg",
+    "timber",
     "time",
     "timeTv",
     "time_container",
@@ -7726,8 +8113,10 @@
     "timerCapsuleContainer",
     "timerCapsuleIcon",
     "timerCapsuleTextView",
+    "timerView",
     "timer_view",
     "tip",
+    "tipBackground",
     "tip_animation",
     "tip_arrow",
     "tip_content",
@@ -7739,6 +8128,7 @@
     "tip_title",
     "tip_tv",
     "tips",
+    "tipsLayout",
     "tips_bottom",
     "tips_title",
     "title",
@@ -7753,6 +8143,7 @@
     "title_decoration",
     "title_icon",
     "title_iv",
+    "title_layout",
     "title_ll",
     "title_name",
     "title_scan",
@@ -7794,14 +8185,18 @@
     "toggle_arrow",
     "toggle_idea",
     "toggle_question",
+    "tokenPoolContainer",
+    "tokenPoolFlow",
     "tool_left",
     "tool_panel_container",
     "tool_panel_holder",
     "tool_right_bottom",
     "tool_right_top",
     "toolbar_group",
+    "toolsLayout",
     "tools_container",
     "tools_container_holder",
+    "tools_guide",
     "tools_recyclerview",
     "tools_rv",
     "top",
@@ -7845,6 +8240,7 @@
     "topic_title",
     "topicsLayout",
     "torch",
+    "total",
     "total_coin_count",
     "total_coin_icon",
     "touch_outside",
@@ -8030,6 +8426,7 @@
     "tv_catalog_title",
     "tv_catalogue",
     "tv_change",
+    "tv_change_speed",
     "tv_chapter_name",
     "tv_chat_audio",
     "tv_chat_text",
@@ -8217,6 +8614,7 @@
     "tv_extra_illus_btn",
     "tv_fake_tag",
     "tv_fake_title",
+    "tv_fast",
     "tv_favourable_price",
     "tv_feedback",
     "tv_feedback_desc",
@@ -8418,6 +8816,7 @@
     "tv_play_next",
     "tv_play_next_title",
     "tv_point",
+    "tv_point_name",
     "tv_policy",
     "tv_post_time",
     "tv_practice_status",
@@ -8497,6 +8896,7 @@
     "tv_reset_filter",
     "tv_reshoot",
     "tv_result",
+    "tv_retry",
     "tv_retry_btn",
     "tv_right",
     "tv_right_title",
@@ -8513,6 +8913,7 @@
     "tv_score_name",
     "tv_score_title",
     "tv_search_all",
+    "tv_sec",
     "tv_second",
     "tv_second_center",
     "tv_second_or_day_number",
@@ -8675,6 +9076,7 @@
     "tv_video_play_time",
     "tv_video_tag",
     "tv_video_temp",
+    "tv_video_title",
     "tv_video_total_time",
     "tv_voice",
     "tv_voice_coin",
@@ -8730,6 +9132,8 @@
     "unable_cover",
     "unchecked",
     "underline",
+    "underlineHolder",
+    "underlineLayout",
     "uniform",
     "unlabeled",
     "unselect_text",
@@ -8753,6 +9157,7 @@
     "userSex",
     "userSubject",
     "userTarget",
+    "user_answer",
     "user_avatar",
     "user_coin_card_layout",
     "user_contribution_value",
@@ -8766,13 +9171,10 @@
     "utvLeftIconView",
     "utvRightIconView",
     "utvTopIconView",
-    "v3_action_button",
     "v3_badge",
-    "v3_bottom_container",
     "v3_card_group",
     "v3_close",
     "v3_content_text",
-    "v3_mic",
     "v3_result_coin_group",
     "v3_result_coin_text",
     "v3_result_content",
@@ -8783,8 +9185,7 @@
     "v3_result_poster",
     "v3_result_rewards",
     "v3_result_view",
-    "v3_volume_ring",
-    "v3_wave_lottie",
+    "v3_volume_layout",
     "vLine",
     "v_address_devide",
     "v_address_footbar",
@@ -8829,9 +9230,11 @@
     "vertical_line",
     "video",
     "videoSeekBar",
+    "videoTime",
     "videoView",
     "video_Player",
     "video_back",
+    "video_bg",
     "video_coin_base_line",
     "video_coin_bg_iv",
     "video_coin_container_base_line",
@@ -8894,6 +9297,7 @@
     "video_info_bg",
     "video_label_container",
     "video_layout",
+    "video_lock_screen",
     "video_pager_item_grid_view",
     "video_play_button",
     "video_player",
@@ -8926,6 +9330,9 @@
     "video_player_surfaceView",
     "video_player_title",
     "video_player_title_bar",
+    "video_point",
+    "video_point_editor",
+    "video_point_view_pager",
     "video_preview",
     "video_seekbar",
     "video_skip",
@@ -8992,6 +9399,7 @@
     "view_loading_bg",
     "view_logo_left",
     "view_logo_right",
+    "view_margin_top",
     "view_mask",
     "view_meta_divider",
     "view_multiline_left_icon",
@@ -9148,6 +9556,7 @@
     "vote_title",
     "vpMenus",
     "vp_banner",
+    "vp_capsule_banner",
     "vp_container",
     "vp_image",
     "vp_left",
@@ -9207,9 +9616,18 @@
     "widget_container",
     "widget_title",
     "window_lottie",
+    "wisdomTextLayout",
+    "wisdomView",
     "withText",
     "withinBounds",
     "word",
+    "wordBook",
+    "wordCount",
+    "wordListView",
+    "wordMark",
+    "wordRadio",
+    "word_example",
+    "word_paraphrase",
     "wrap",
     "wrap_all",
     "wrap_content",
@@ -9240,9 +9658,11 @@
     "wzzb_setting_view",
     "xiaomi",
     "xiaomiBoldFull",
+    "xiayige",
     "xpopup_divider",
     "xpopup_divider1",
     "xpopup_divider2",
+    "yellowDot",
     "zero_corner_chip",
     "zoom"
   ],
@@ -9323,7 +9743,10 @@
     "Translate",
     "XS",
     "_divide_line",
+    "_dot",
+    "_line",
     "_ll_temp",
+    "_title",
     "aac",
     "aacEld",
     "about_activity_error_view",
@@ -9401,6 +9824,7 @@
     "achievement_btn",
     "achievement_btn_finished",
     "achievement_parent",
+    "action",
     "action0",
     "action_bar",
     "action_bar_activity_content",
@@ -9409,6 +9833,7 @@
     "action_bar_spinner",
     "action_bar_subtitle",
     "action_bar_title",
+    "action_button",
     "action_coin_group",
     "action_coin_tv",
     "action_container",
@@ -9579,6 +10004,8 @@
     "adapter_data",
     "adapter_position",
     "add",
+    "addCarrotLayout",
+    "addIcon",
     "add_button_single_img",
     "add_photo_container",
     "add_teacher_count_tv",
@@ -9603,6 +10030,13 @@
     "address_user_info",
     "address_view",
     "admission_letter_textview",
+    "admission_tool_icon",
+    "admission_tool_subtitle",
+    "admission_tool_title",
+    "admission_tools_card",
+    "admission_tools_grid_container",
+    "admission_tools_title",
+    "admission_tools_title_decoration",
     "adv_button",
     "adv_container",
     "adv_icon",
@@ -9627,12 +10061,27 @@
     "aecm_speaker_phone",
     "agree_button",
     "agreement_check_box",
+    "ai2BasketLottie",
+    "ai2Carrot",
+    "ai2Icon",
+    "ai2Layout",
+    "ai3Basket",
+    "ai3BasketLottie",
+    "ai3Icon",
+    "ai3Layout",
+    "aiCover",
+    "aiLottie",
+    "aiName",
     "aiSubtitlePanel",
     "aiSubtitleScrollView",
     "aiSubtitleTextView",
     "aiSummarize",
+    "ai_click_bubble",
+    "ai_cover",
     "ai_generate_tip",
     "ai_generated_tag",
+    "ai_icon",
+    "ai_lottie",
     "ai_notes_container",
     "ai_search_header_bar",
     "ai_search_tab_view",
@@ -9654,6 +10103,7 @@
     "always",
     "analyse",
     "analyseBg",
+    "analyse_answer",
     "analysis_bottom_bg",
     "analysis_view",
     "anchor",
@@ -9682,10 +10132,14 @@
     "anonymou_text",
     "anonymou_unselect",
     "answer",
+    "answerContainer",
     "answerLayout",
     "answerLayout1",
     "answerLayout2",
     "answerLayout3",
+    "answerPlaceholder",
+    "answerTokenContainer",
+    "answerTokenFlow",
     "answer_animator_answer_right_count_tv",
     "answer_animator_answer_right_score_tv",
     "answer_animator_answer_right_star1_iv",
@@ -9707,13 +10161,18 @@
     "answer_animator_icon_tutu_iv",
     "answer_container",
     "answer_histogram",
+    "answer_icon",
     "answer_result",
     "answer_result_anim",
     "answer_result_title",
     "answer_result_title_line",
+    "answer_sheet",
     "answer_statistics_explain",
     "answer_statistics_title",
+    "answer_status",
     "answer_summary",
+    "answer_text_view",
+    "answer_title",
     "answer_title_url_bg",
     "answer_title_url_up_group",
     "answer_title_url_up_iv",
@@ -9734,6 +10193,7 @@
     "applyrefund_select_reason_view",
     "applyrefund_teacher_name_view",
     "arc",
+    "arc_progress",
     "area",
     "area_code_tv",
     "area_list",
@@ -9763,9 +10223,11 @@
     "attention_iv",
     "audioDuration",
     "audioLayout",
+    "audio_en_layout",
     "audio_frame_layout",
     "audio_input_method_bg",
     "audio_input_method_group",
+    "audio_loading",
     "audio_play_btn",
     "audio_seek_bar",
     "audio_source_camcorder",
@@ -9777,6 +10239,7 @@
     "audio_source_uplink",
     "audio_source_voice_call",
     "audio_state_lottie",
+    "audio_us_layout",
     "authsdk_back_btn",
     "authsdk_checkbox_view",
     "authsdk_iv_loading",
@@ -9818,6 +10281,7 @@
     "av_counter",
     "av_remaining_times_counter",
     "avatar",
+    "avatarBg",
     "avatarTeacher",
     "avatar_bg_iv",
     "avatar_container1",
@@ -9921,6 +10385,7 @@
     "b9",
     "bX",
     "back",
+    "back2",
     "backIv",
     "back_btn",
     "back_button",
@@ -9951,17 +10416,27 @@
     "barrage_tv",
     "barrage_view",
     "barrier",
+    "barrierGuide",
+    "barrierLast",
+    "barrierLayout",
     "base_line_view",
     "base_refer_view",
     "baseline",
+    "basket",
+    "bat",
     "bdel",
     "beauty_container_fl",
     "beginOnFirstDraw",
     "beginning",
+    "beisu",
     "below_interactive_container",
     "below_stick",
     "bevel",
     "bg",
+    "bg1",
+    "bg2",
+    "bgRecyclerView",
+    "bgView",
     "bg_add_teacher",
     "bg_iv",
     "bg_preview",
@@ -9972,6 +10447,9 @@
     "bg_yellow",
     "bgaqrcode_camera_preview",
     "big",
+    "bigCarrot",
+    "bigCarrotNum",
+    "bigCarrotText",
     "big_setting_tv",
     "big_toast_root",
     "big_toast_text",
@@ -9980,6 +10458,7 @@
     "bind_phone_success_line",
     "bind_phone_success_number_tv",
     "bind_phone_success_title",
+    "bj_play",
     "black_toast_text",
     "blindBoxAutoOpenContent",
     "blindBoxAutoOpenRoot",
@@ -10003,9 +10482,12 @@
     "board_rank_image",
     "board_rank_list_none",
     "board_rank_text",
+    "bomb",
+    "book",
     "book_binding_tips",
     "booking_tv",
     "border",
+    "border_layout",
     "border_view",
     "both_month_week_view",
     "bottom",
@@ -10014,6 +10496,7 @@
     "bottomPopupContainer",
     "bottomScrollView",
     "bottomToTop",
+    "bottom_bar",
     "bottom_bg",
     "bottom_bg_1",
     "bottom_bg_2",
@@ -10026,6 +10509,7 @@
     "bottom_guid_line",
     "bottom_guide_view",
     "bottom_guideline",
+    "bottom_layout",
     "bottom_letter_img",
     "bottom_line",
     "bottom_line_view",
@@ -10052,12 +10536,21 @@
     "bt_save_info",
     "bt_share",
     "btn",
+    "btnBack",
+    "btnBuyCourse",
     "btnCancel",
     "btnConfirm",
     "btnEdit",
+    "btnEvaluating",
     "btnFailReload",
+    "btnMyAudio",
     "btnNext",
+    "btnReRecord",
     "btnRecord",
+    "btnReview",
+    "btnSkip",
+    "btnStartRecord",
+    "btnStudy",
     "btnSubmit",
     "btn_action",
     "btn_address_clickBox",
@@ -10104,6 +10597,7 @@
     "btn_install_kernel",
     "btn_lead_ad_confirm",
     "btn_learn",
+    "btn_learn_next",
     "btn_left",
     "btn_limit",
     "btn_login_shanyan_login",
@@ -10123,12 +10617,14 @@
     "btn_open_v3",
     "btn_pad",
     "btn_pdf_form_preview",
+    "btn_play",
     "btn_play_voice",
     "btn_preview",
     "btn_preview_expired_play",
     "btn_preview_video_retry",
     "btn_recommend_action",
     "btn_record",
+    "btn_replay",
     "btn_retry",
     "btn_right",
     "btn_search",
@@ -10142,8 +10638,10 @@
     "btn_stop",
     "btn_stop_voice",
     "btn_submit",
+    "btn_subtitle_toggle",
     "btn_text",
     "btn_to_study",
+    "btn_translate",
     "btn_triad",
     "btn_undo",
     "btn_unlimited",
@@ -10151,7 +10649,11 @@
     "btn_view_version",
     "btn_watch_video_again",
     "btn_watch_video_again_left",
+    "bubble",
     "bubbleContainer",
+    "bubbleLayout",
+    "bubbleRoot",
+    "bubble_layout",
     "bubble_tip",
     "business_container",
     "button",
@@ -10177,6 +10679,9 @@
     "button_submit",
     "button_sure",
     "button_top",
+    "buyCourseDescribe",
+    "buyDesc",
+    "buyTitle",
     "ca_web_view",
     "calculate_fragment",
     "calculate_guide",
@@ -10221,6 +10726,7 @@
     "cannot_get_passcode",
     "capsuleLayout",
     "capsuleView",
+    "capsule_banner_indicator",
     "capsule_button",
     "capsule_button_svga",
     "capsule_button_title",
@@ -10280,6 +10786,13 @@
     "care_counts",
     "care_teacher",
     "caring_icon",
+    "carrot",
+    "carrotAmount",
+    "carrotIcon",
+    "carrotLayout",
+    "carrotLottie",
+    "carrotNum",
+    "carrotText",
     "cart_tv_promotion",
     "cart_tv_promotion_price",
     "cartdetail_listview",
@@ -10309,9 +10822,12 @@
     "cb_call_select",
     "cb_log",
     "cb_view",
+    "cc_tv_time",
+    "cc_tv_video_title",
     "center",
     "centerCrop",
     "centerInside",
+    "centerLayout",
     "centerPopupContainer",
     "centerProgressBar",
     "centerTitleLayout",
@@ -10329,6 +10845,7 @@
     "cg_colors",
     "chain",
     "chains",
+    "changeBook",
     "changeTopic",
     "change_course_item_difficulty_level",
     "changed_course_btn",
@@ -10395,6 +10912,7 @@
     "chat_view",
     "chat_zoom_in",
     "chat_zoom_out",
+    "checkWordBook",
     "check_box",
     "check_text_tv",
     "check_topic",
@@ -10402,12 +10920,15 @@
     "checkbox",
     "checkbox_anonymou_container",
     "checked",
+    "checkin",
     "chinese_acronym_index_bar",
+    "chinese_content",
     "chip",
     "chip1",
     "chip2",
     "chip3",
     "chip_group",
+    "choiceLayout",
     "choice_label_1",
     "choice_label_2",
     "choice_label_3",
@@ -10421,6 +10942,7 @@
     "chronometer",
     "cir_icon",
     "circle",
+    "circleProgress",
     "circle_center",
     "circle_label",
     "circular",
@@ -10428,7 +10950,9 @@
     "circular_main_speaker",
     "circular_view",
     "city",
+    "city_label",
     "civ_cover",
+    "cl",
     "cl_actions",
     "cl_bottom",
     "cl_bottom_container",
@@ -10447,6 +10971,7 @@
     "cl_info",
     "cl_info_layout",
     "cl_insert_layer",
+    "cl_into_bg",
     "cl_introduction_container",
     "cl_item_container",
     "cl_live_group_container",
@@ -10600,11 +11125,13 @@
     "click_right",
     "clip_horizontal",
     "clip_vertical",
+    "clock",
     "clock_hour",
     "clock_minite",
     "clockwise",
     "close",
     "close_btn",
+    "close_button",
     "close_container_rl",
     "close_dialog",
     "close_filter",
@@ -10702,6 +11229,7 @@
     "cms_video_tags",
     "coinCountTextView",
     "coinIconView",
+    "coin_amount_tv",
     "coin_animation",
     "coin_bg_iv",
     "coin_card_accept_iv",
@@ -10712,8 +11240,11 @@
     "coin_count_text",
     "coin_energy_view",
     "coin_guide_line",
+    "coin_icon",
     "coin_image",
+    "coin_pill",
     "coin_space",
+    "coin_tail",
     "coin_team_guide_line",
     "coin_tool_base_line",
     "coin_view",
@@ -10723,6 +11254,7 @@
     "color_content_view",
     "column_title",
     "column_view",
+    "combo",
     "comment_1",
     "comment_2",
     "comment_container",
@@ -10792,6 +11324,7 @@
     "companion_item_line",
     "companion_item_status_tv",
     "companion_item_time_tv",
+    "complete",
     "completion_progress",
     "comprehensive_sort_item",
     "compress",
@@ -10826,8 +11359,11 @@
     "container_parent",
     "container_title_reward",
     "content",
+    "contentContainer",
+    "contentEnd",
     "contentLayout",
     "contentPanel",
+    "contentStart",
     "content_bg",
     "content_cl",
     "content_column_entrance_view",
@@ -10835,10 +11371,12 @@
     "content_frame",
     "content_frame_view",
     "content_layout",
+    "content_left_ph",
     "content_list",
     "content_ll",
     "content_nps_question_title",
     "content_parent",
+    "content_right",
     "content_root",
     "content_score",
     "content_section",
@@ -10856,7 +11394,9 @@
     "control_top_container",
     "control_view",
     "control_view_container",
+    "controller_background",
     "coordinator",
+    "copy_button",
     "copy_content_tv",
     "correct_bottom_bg",
     "correct_status_view",
@@ -10885,8 +11425,10 @@
     "count_tip",
     "count_tv",
     "countdown",
+    "countdownAnim",
     "countdownNumberTextView",
     "countdownProgressView",
+    "countdownText",
     "countdownTitleTextView",
     "countdown_animation",
     "countdown_close",
@@ -10942,6 +11484,8 @@
     "couponitemview_select_tag",
     "course",
     "courseCardViewList",
+    "courseName",
+    "courseNoResourceDescribe",
     "course_ad",
     "course_app_bar",
     "course_book_ll",
@@ -11111,6 +11655,7 @@
     "current_title_star",
     "custom",
     "customPanel",
+    "custom_button",
     "custom_dialog_message",
     "custom_dialog_title",
     "custom_full_video_view",
@@ -11157,11 +11702,17 @@
     "cv_live_sale_introduction_cover",
     "cv_qr_code",
     "cv_teacher",
+    "cv_toast_message",
     "cv_triad_btn",
+    "daily_quxue_container",
+    "dan_mu_answer_view",
+    "dan_mu_display_view",
+    "dan_mu_question_view",
     "dark1",
     "dark2",
     "darklayout",
     "dash_line",
+    "dataBinding",
     "data_framelayout",
     "date_picker_actions",
     "day_desc",
@@ -11184,6 +11735,7 @@
     "default_view",
     "delete",
     "delete_btn_container",
+    "delete_button",
     "delete_expression",
     "delete_iv",
     "delete_photo_btn",
@@ -11237,6 +11789,7 @@
     "diagnostic_exam_tv_current_size",
     "diagnostic_exam_tv_timer",
     "diagnostic_exam_tv_total_size",
+    "dialogLayout",
     "dialog_announcement_et",
     "dialog_announcement_imageview",
     "dialog_announcement_top_bar",
@@ -11467,6 +12020,7 @@
     "dot_save_tv",
     "dot_time_tv",
     "dot_title_tv",
+    "dot_view",
     "double_click",
     "double_click_textview",
     "down_up",
@@ -11477,6 +12031,7 @@
     "downloadingfragment_listview",
     "dragDown",
     "dragEnd",
+    "dragLayout",
     "dragLeft",
     "dragRight",
     "dragStart",
@@ -11491,6 +12046,10 @@
     "dropdown_editable",
     "dropdown_menu",
     "dropdown_noneditable",
+    "duration",
+    "durationText",
+    "duration_image_tip",
+    "duration_progressbar",
     "dynamic",
     "easeIn",
     "easeInOut",
@@ -11509,6 +12068,7 @@
     "edit_group",
     "edit_photo",
     "edit_query",
+    "edit_text",
     "edit_text_alipay_account",
     "edit_text_alipay_name",
     "edit_view_container",
@@ -11520,6 +12080,8 @@
     "ellipsis_layout",
     "email",
     "emoji_iv",
+    "empty",
+    "emptyLayout",
     "empty_icon",
     "empty_teacher_iv",
     "empty_teacher_tv",
@@ -11527,6 +12089,8 @@
     "empty_view_content",
     "enable_service_text",
     "enabled",
+    "encourageText",
+    "encourageView",
     "end",
     "endToStart",
     "end_guide",
@@ -11549,6 +12113,7 @@
     "energy_star_close_tv",
     "energy_team_guide_line",
     "energy_tool_base_line",
+    "english_content",
     "enroll_bg",
     "enterAlways",
     "enterAlwaysCollapsed",
@@ -11567,6 +12132,8 @@
     "enter_guide_textureView",
     "enter_guide_tv",
     "envelope_container",
+    "errorContent",
+    "errorTv",
     "error_bg_iv",
     "error_book_course_iv_inclusion_close",
     "error_book_course_tv_inclusion_hint",
@@ -11575,6 +12142,7 @@
     "error_book_exercise_preview_header",
     "error_book_label_tag",
     "error_book_tag",
+    "error_btn",
     "error_container",
     "error_desc_view",
     "error_group",
@@ -11693,6 +12261,7 @@
     "excellentactivity_name_view2",
     "excellentactivity_share_container",
     "exchange_class_view",
+    "exclamationIcon",
     "exerciseSetting",
     "exercise_catalog_repo",
     "exercise_container",
@@ -12116,6 +12685,7 @@
     "fl_ip_container",
     "fl_ip_group",
     "fl_live",
+    "fl_parent",
     "fl_poster_pic_container",
     "fl_qr_container",
     "fl_screenshort_container",
@@ -12125,6 +12695,7 @@
     "fl_task_remind_capsule",
     "fl_team_count_down_container",
     "fl_un_login",
+    "flag",
     "flag_ic_iv",
     "flag_item",
     "flag_name_tv",
@@ -12242,12 +12813,17 @@
     "flow_tv_segment",
     "flow_tv_selection",
     "flow_tv_title",
+    "fluencyRatingbar",
+    "fluencyText",
     "fluorescent",
+    "flyLayout",
     "fly_view",
     "focusCrop",
     "focusMarkerContainer",
     "focusMarkerFill",
     "folder",
+    "follow",
+    "followText",
     "followdialog_close",
     "followdialog_copy_view",
     "followdialog_copy_wechat_view",
@@ -12273,6 +12849,7 @@
     "fr_tv_download_progress",
     "fr_ui_state_view",
     "frag_container",
+    "fragmentContainer",
     "fragment_ai_activity",
     "fragment_bg",
     "fragment_bottom_menu_chat_control_gsx_ll",
@@ -12449,6 +13026,7 @@
     "fragment_video_speak_video_rl",
     "fragment_video_speak_zoom_pack_up_rl",
     "fragment_video_spread_out_iv",
+    "frame",
     "frame_layout_rank",
     "frame_layout_top",
     "free_listener_view",
@@ -12475,9 +13053,13 @@
     "gallery_view_main_photo_size_tv",
     "gallery_view_main_scale_imageView",
     "gallery_view_main_viewpager",
+    "gesture_iv_progress",
+    "gesture_progress_layout",
     "gesture_progress_view",
     "get_marquee_view",
     "get_passcode",
+    "geture_tv_progress_time",
+    "geture_tv_progress_time0",
     "ghost_view",
     "ghost_view_holder",
     "gif",
@@ -12550,6 +13132,9 @@
     "goodspayactivity_total_discount_view",
     "goodspayactivity_total_price",
     "goon",
+    "goonStudy",
+    "goon_record",
+    "goon_record_layout",
     "gp_all_content",
     "gp_bottom_maintain_group",
     "gp_bottom_temp_group",
@@ -12567,6 +13152,7 @@
     "gp_speaking",
     "gp_tab_layout",
     "grade",
+    "grade_label",
     "graph",
     "graph_wrap",
     "gray_lien",
@@ -12607,6 +13193,13 @@
     "gsx_course_container",
     "gtui_grid_view",
     "gtui_search_bar",
+    "guess",
+    "guideCenterLayout",
+    "guideIcon",
+    "guideIcon1",
+    "guideIcon2",
+    "guideLayout",
+    "guideTitle",
     "guide_arrow_id",
     "guide_arrow_iv",
     "guide_before_enter_view",
@@ -12616,6 +13209,7 @@
     "guide_experience_tv",
     "guide_img",
     "guide_line",
+    "guide_line1",
     "guide_line_vertical",
     "guide_next_id",
     "guide_praise_line",
@@ -12624,12 +13218,15 @@
     "guide_skin_view",
     "guide_tv",
     "guide_view",
+    "guide_view_left",
+    "guide_view_right",
     "guideline",
     "gv_exercisecard",
     "gv_stratified_card",
     "h263",
     "h264",
     "had_update_tv",
+    "hand",
     "handle_bottom_tv",
     "handle_iv",
     "handle_mid_tv",
@@ -12677,6 +13274,7 @@
     "hint",
     "history",
     "holder_tools_container",
+    "hole_view",
     "holer",
     "home",
     "homeAsUp",
@@ -12712,7 +13310,10 @@
     "horizontal_interval",
     "horizontal_scrollView",
     "horn",
+    "hornSlow",
+    "horn_en",
     "horn_overlay",
+    "horn_us",
     "hostContainer",
     "hostContent",
     "hot_course",
@@ -12721,10 +13322,14 @@
     "hour_tens_iv",
     "hsv_parent",
     "hung_up",
+    "iKnow",
+    "ib_back",
     "ib_bg_bottom",
     "ib_clip_cancel",
     "ib_clip_done",
     "ib_clip_rotate",
+    "ib_full_screen",
+    "ib_play",
     "ic_arrow",
     "ic_close",
     "ic_guide_pdf_arrow",
@@ -12734,9 +13339,32 @@
     "ic_play",
     "ic_task",
     "icon",
+    "iconBarrier",
+    "iconBat",
+    "iconCarrot",
+    "iconCombo",
+    "iconDuration",
+    "iconFeedback",
+    "iconFollow",
+    "iconGrammar",
+    "iconGuide1",
+    "iconGuide2",
+    "iconLearning",
+    "iconList",
+    "iconNumber1",
+    "iconNumber2",
+    "iconNumber3",
+    "iconProgress",
+    "iconRabbit",
+    "iconRecommend",
     "iconRefreshTopic",
+    "iconReview",
+    "iconRight",
     "iconTimeOut",
     "iconTitle",
+    "iconWisdom",
+    "iconX",
+    "icon_ai",
     "icon_btn_class_prepare_1",
     "icon_btn_class_prepare_2",
     "icon_coming_live_play_section",
@@ -12763,6 +13391,7 @@
     "imageGif",
     "imageView",
     "imageView2",
+    "image_barrier",
     "image_board_loading",
     "image_browse_back_view",
     "image_browse_big_image",
@@ -12802,6 +13431,7 @@
     "image_view_luckiest_light",
     "image_view_mvp",
     "image_view_no_data",
+    "image_view_parent",
     "image_view_rank",
     "image_view_red_packet",
     "image_view_refund_flow",
@@ -12839,6 +13469,7 @@
     "img_icon",
     "img_icon_like",
     "img_icon_like_lottie",
+    "img_layout",
     "img_loading",
     "img_mute",
     "img_navi",
@@ -12853,13 +13484,16 @@
     "immersion_navigation_bar_view",
     "immersion_status_bar_view",
     "importance_tv",
+    "important_button",
     "in_grade",
     "in_grade_container",
     "in_grade_drag",
     "incandescent",
     "include_extend",
     "include_loading",
+    "indexText",
     "indicator",
+    "indicatorLayout",
     "indicator_bg",
     "indicator_container",
     "indicator_gray_part",
@@ -12867,10 +13501,12 @@
     "indicator_tv",
     "indicator_view",
     "info",
+    "inform_button",
     "initial_state",
     "inner",
     "inner_cl_preview_container",
     "inner_pic_view",
+    "input",
     "input_chat_forbid_iv",
     "input_chat_input_tv",
     "input_cl_container",
@@ -12903,6 +13539,11 @@
     "interactive_question_activity_tv_question_list",
     "interactive_question_activity_webView",
     "interactive_rv_question",
+    "into",
+    "into_button",
+    "into_close",
+    "into_icon",
+    "into_status",
     "intro",
     "introduction",
     "introduction_view",
@@ -13059,6 +13700,7 @@
     "item_video_render_notice_state",
     "item_video_speak_iv",
     "item_video_speak_vv",
+    "iv",
     "ivAllowBackground",
     "ivAllowUsing",
     "ivArrow",
@@ -13209,6 +13851,7 @@
     "iv_expression_top",
     "iv_extra_illus_btn_icon",
     "iv_fast_forward",
+    "iv_fast_progress",
     "iv_fast_rewind",
     "iv_fin_cast_close",
     "iv_fin_cast_selected",
@@ -13472,6 +14115,8 @@
     "iv_yuan",
     "jCameraView",
     "jcameraview",
+    "join_teacher_wechat_button",
+    "join_teacher_wechat_parent",
     "jp1v1_login_guide",
     "jpeg",
     "jumpToEnd",
@@ -13510,10 +14155,14 @@
     "kingkong_view",
     "know_ledge_point_iv",
     "know_ledge_tool_ll",
+    "knowledgeNum",
     "knowledge_consolidation_button",
+    "knowledge_example",
     "knowledge_marquee_iv",
     "knowledge_marquee_tv",
+    "knowledge_paraphrase",
     "knowledge_title_tv",
+    "knowledge_toast",
     "knowledge_tv",
     "label",
     "label_container",
@@ -13558,6 +14207,7 @@
     "layout_control_top_user_count",
     "layout_custom_toast_txt",
     "layout_double",
+    "layout_error_view",
     "layout_live_back_video_tip",
     "layout_liveback_bottom_control_amplification",
     "layout_liveback_bottom_control_call_service_phone",
@@ -13644,6 +14294,7 @@
     "learning_index_title_icon",
     "learning_index_value",
     "learningcenteractivity_errorview_container",
+    "leave",
     "leaveButton",
     "lecture_desc",
     "lecturedownload_empty_view",
@@ -13671,6 +14322,8 @@
     "lecturer_teacher_name_description",
     "lectures_list",
     "left",
+    "leftBgBlue",
+    "leftBgWhite",
     "leftBtn",
     "leftLayout",
     "leftProgressBar",
@@ -13722,6 +14375,10 @@
     "line",
     "line1",
     "line3",
+    "lineLeftBottom",
+    "lineLeftTop",
+    "lineRightBottom",
+    "lineRightTop",
     "line_arrow",
     "line_bottom",
     "line_container",
@@ -14198,12 +14855,14 @@
     "loading_pb",
     "loading_progress",
     "loading_progressbar",
+    "loading_rl",
     "loading_text",
     "loading_tv",
     "loading_view",
     "loadview",
     "location_btn",
     "location_pois",
+    "lock",
     "log_content",
     "log_switch",
     "login_agreement_tv",
@@ -14253,10 +14912,13 @@
     "look_listen_practice_tape_voice_header_view",
     "loop_avatar",
     "lose_efficacy_tag",
+    "lottiePraiseLayout",
+    "lottieRabbit",
     "lottieRipple",
     "lottieView",
     "lottie_animation_view",
     "lottie_layer_name",
+    "lottie_praise",
     "lottie_querying_loading",
     "lottie_tag",
     "lottie_view",
@@ -14415,6 +15077,7 @@
     "message_input_control",
     "message_input_et",
     "message_input_send_tv",
+    "message_layout",
     "message_rv",
     "message_text",
     "message_tips_ll",
@@ -14428,6 +15091,7 @@
     "messageitemview_message_tag",
     "messageitemview_message_time",
     "messageitemview_message_title",
+    "microphone",
     "microphone_adapter_margin_left",
     "microphone_content_switch_btn",
     "microphone_content_switch_parent",
@@ -14445,6 +15109,13 @@
     "microphone_waiting_mwv",
     "middle",
     "middleAnimationLayer",
+    "middleBgGreen",
+    "middleBgWhite",
+    "middleCarrot",
+    "middleCarrotNum",
+    "middleCarrotText",
+    "middleGroup",
+    "middleLayout",
     "middle_container",
     "mine_framelayout",
     "mini",
@@ -14461,6 +15132,7 @@
     "mon",
     "money_container",
     "mono",
+    "monsterView",
     "month_grid",
     "month_navigation_bar",
     "month_navigation_fragment_toggle",
@@ -14614,6 +15286,7 @@
     "no_network_tip",
     "none",
     "normal",
+    "normalLayout",
     "normal_catalog_item",
     "normal_fragment_do_question_view",
     "normal_fragment_look_question_view",
@@ -14622,6 +15295,7 @@
     "normal_mode",
     "normal_setting_tv",
     "not_pk_opponent_layout",
+    "not_understand_button",
     "note_barrier",
     "notes_close_iv",
     "notes_download_iv",
@@ -14646,8 +15320,13 @@
     "nps_question_new_view",
     "nps_question_view",
     "nsl_parent",
+    "num1",
+    "num2",
+    "num3",
+    "num4",
     "num_play",
     "number",
+    "numberLayout",
     "numberPassword",
     "off",
     "off_stage_arrow_iv",
@@ -14657,6 +15336,8 @@
     "ok_tv",
     "old_price_red",
     "on",
+    "onAttachStateChangeListener",
+    "onDateChanged",
     "onTouch",
     "one",
     "online_avatar_iv",
@@ -14666,6 +15347,7 @@
     "online_voice_scrollview",
     "only_measure_content_tv",
     "only_month_view",
+    "only_record_layout",
     "only_week_view",
     "open",
     "open_box_coin_count",
@@ -14710,6 +15392,10 @@
     "options_result_icon",
     "options_result_msg",
     "options_rv",
+    "oral_waiting_lottie",
+    "oral_waiting_text",
+    "order",
+    "orderLayout",
     "order_address_area_name",
     "order_address_city_name",
     "order_address_city_right_arrow",
@@ -14793,6 +15479,7 @@
     "oval",
     "packed",
     "pageLayout",
+    "pageNum",
     "page_indicator_text",
     "page_refresh",
     "page_turn_view_container",
@@ -14810,6 +15497,8 @@
     "panel_input_wrapper",
     "panel_layout",
     "parallax",
+    "paraphrase",
+    "paraphraseMark",
     "parent",
     "parentPanel",
     "parentRelative",
@@ -14899,8 +15588,12 @@
     "pb_flow_chat",
     "pb_intensity",
     "pb_loading",
+    "pb_small_window_player",
     "pb_video_loading_view",
     "pb_web_view_quiz",
+    "pdfContent",
+    "pdfImage",
+    "pdfNum",
     "pdf_bottom_container",
     "pdf_bottom_view",
     "pdf_imageView",
@@ -15034,6 +15727,7 @@
     "play_back_more_icon",
     "play_back_more_title",
     "play_back_title",
+    "play_layout",
     "play_list_dialog",
     "play_list_recycle_view",
     "play_svga",
@@ -15052,7 +15746,12 @@
     "playback_title",
     "playback_total_time",
     "playbacks_error",
+    "playerView",
+    "playerViewHolder",
+    "playerViewHolder2",
     "player_container",
+    "player_recycler",
+    "player_sv",
     "player_sv_control_component_container",
     "playing_anim",
     "pns_nav_return",
@@ -15063,7 +15762,10 @@
     "poi_address",
     "poi_name",
     "poi_selected",
+    "point_content",
+    "point_desc",
     "point_group",
+    "point_time",
     "pointer_events",
     "polish",
     "polish_layout",
@@ -15186,6 +15888,9 @@
     "price_tv",
     "price_yuan",
     "primary_btn",
+    "primary_task_btn",
+    "primary_task_sub_title_tv",
+    "primary_task_title_tv",
     "privacypolicy_textview",
     "prizeCard",
     "processLoadingMaskView",
@@ -15193,6 +15898,10 @@
     "process_img",
     "progress",
     "progressBar",
+    "progressCount",
+    "progressGroup",
+    "progressLayout",
+    "progressText",
     "progress_bar",
     "progress_circular",
     "progress_close",
@@ -15202,6 +15911,7 @@
     "progress_plan_completion",
     "progress_text",
     "progress_title",
+    "progress_tv",
     "progressbar",
     "promotion_count",
     "promotion_lin",
@@ -15213,6 +15923,9 @@
     "pronounceBarrier",
     "pronounceBg",
     "pronounceLayout",
+    "pronunciation",
+    "pronunciationRatingbar",
+    "pronunciationText",
     "province",
     "public_class_list_activity_header",
     "public_class_list_activity_list_view",
@@ -15247,9 +15960,18 @@
     "push_pure_bigview_banner",
     "push_pure_bigview_expanded",
     "qr_code",
+    "queryKnowledge",
+    "queryKnowledgeGuideBubble",
+    "querySentence",
+    "querySentenceGuideBubble",
+    "queryWord",
+    "queryWordGuideBubble",
     "query_done_header",
     "query_tv",
     "question",
+    "questionHit",
+    "questionStem",
+    "questionTag",
     "question_answer_analysis_item_audio_seek_bar",
     "question_answer_analysis_item_ll_audio",
     "question_answer_analysis_item_tv_iv_mix_view",
@@ -15272,6 +15994,7 @@
     "question_stem_content_view",
     "question_stem_view_container",
     "question_stem_view_content_view",
+    "question_text_view",
     "question_tile",
     "question_video_type_iv_cover",
     "question_video_type_tv_play",
@@ -15335,6 +16058,7 @@
     "quiz_praise_icon",
     "quiz_praise_summary",
     "quiz_praise_title",
+    "quiz_right_star_count",
     "quiz_rv",
     "quiz_statistics_explain_close",
     "quiz_statistics_explain_content",
@@ -15351,6 +16075,7 @@
     "quiz_up_text",
     "quiz_view",
     "quotation_iv",
+    "rabbitView",
     "radar_bottom_module",
     "radar_bottom_title",
     "radar_bottom_value",
@@ -15396,6 +16121,10 @@
     "rb_mosaic",
     "rc_live_group_share",
     "rc_video",
+    "reExercise",
+    "reStart",
+    "reStudy",
+    "reTry",
     "re_answer_tips_tv",
     "re_camera",
     "reactNativeFragment",
@@ -15431,18 +16160,23 @@
     "reconnectingHintSpinner",
     "reconnectingHintTextView",
     "reconnectingHintView",
+    "record",
     "recordArea",
     "recordButton",
     "recordEndTextView",
     "recordHintTextView",
     "recordLayout",
+    "recordMask",
     "recordMicIconTextView",
+    "recordResultLayout",
     "recordSendIconTextView",
     "recordStartContent",
     "recordStartTextView",
     "recordWaveView",
     "record_again_icon",
     "record_btn",
+    "record_layout",
+    "record_over",
     "record_remain_time",
     "record_remain_time_container",
     "record_success_icon",
@@ -15526,7 +16260,20 @@
     "remote_container",
     "render_view",
     "repeat",
+    "replay_back",
+    "replay_current_time",
+    "replay_divider",
+    "replay_duration",
+    "replay_full_screen",
+    "replay_hint_tv",
+    "replay_play_control_bottom",
+    "replay_play_control_top",
+    "replay_play_control_top_left",
+    "replay_play_icon",
+    "replay_title",
     "report",
+    "report2",
+    "reportName",
     "report_close_iv",
     "report_container",
     "report_item",
@@ -15540,6 +16287,7 @@
     "resetfragment_headbar",
     "restart",
     "restart_view",
+    "resultView",
     "result_bg_iv",
     "result_coin_bg",
     "result_coin_group",
@@ -15569,6 +16317,7 @@
     "retry_button",
     "reverse",
     "reverseSawtooth",
+    "rewardView",
     "rg_core_type",
     "rg_lp_debug_mode_aec",
     "rg_lp_debug_mode_aecm",
@@ -15578,9 +16327,14 @@
     "rg_play_position",
     "rg_record",
     "right",
+    "rightBgGreen",
+    "rightBgOrange",
+    "rightBgWhite",
     "rightBtn",
+    "rightText",
     "rightToLeft",
     "right_anim",
+    "right_answer",
     "right_arrow_icon",
     "right_bottom_icon",
     "right_bottom_title",
@@ -15590,6 +16344,7 @@
     "right_container",
     "right_group",
     "right_icon",
+    "right_label_container",
     "right_left",
     "right_line_container",
     "right_menu_size_rl",
@@ -15601,6 +16356,8 @@
     "right_top_title",
     "right_tv_sub_title",
     "right_tv_title",
+    "rippleLeft",
+    "rippleRight",
     "riv",
     "rlAboutApplet",
     "rlAppletInfo",
@@ -15817,8 +16574,10 @@
     "school",
     "school_explore_container",
     "scopeLinearLayout",
+    "scoreText",
     "score_recycler_view",
     "screen",
+    "screenBg",
     "screen_animation",
     "screen_bt",
     "screen_dialog_img",
@@ -15882,6 +16641,10 @@
     "second_tens_iv",
     "second_textview",
     "second_title",
+    "secondary_action_arrow_iv",
+    "secondary_action_bar",
+    "secondary_action_hint_tv",
+    "secondary_action_title_tv",
     "secondary_btn",
     "secondary_tv",
     "section_admission_letter_container",
@@ -15951,6 +16714,7 @@
     "selecting_course_item_title",
     "selectionContainer",
     "selection_container",
+    "selection_group",
     "selection_type",
     "selection_view",
     "selection_view_bg",
@@ -15980,13 +16744,17 @@
     "self_team_logo_container",
     "self_text",
     "self_unknow_team_logo",
+    "send",
+    "send_button",
     "send_fl",
     "send_status",
     "send_tv",
     "sender",
     "sentence",
     "sentence_analyse",
+    "sentence_example",
     "sentence_layout",
+    "sentence_paraphrase",
     "sentence_right",
     "sentry_privacy",
     "separate_line",
@@ -16004,6 +16772,7 @@
     "setting_tv",
     "shadow",
     "shadow_view",
+    "shangyige",
     "shanyan_group",
     "shanyan_group_tutu",
     "shanyan_group_tutu_layout2",
@@ -16127,7 +16896,9 @@
     "singular",
     "size",
     "skin_view",
+    "skip",
     "skipCollapsed",
+    "skipLesson",
     "skip_all",
     "skip_deepseek",
     "skip_deepseek_tip",
@@ -16140,8 +16911,13 @@
     "slide_time_tip",
     "slogan_loading",
     "small",
+    "smallCarrot",
+    "smallCarrotNum",
+    "smallCarrotText",
     "small_enroll_empty",
+    "small_seek_bar",
     "small_setting_tv",
+    "small_window_player_view",
     "snackbar_action",
     "snackbar_text",
     "snap",
@@ -16235,11 +17011,13 @@
     "standardAnswer",
     "standard_answer",
     "standard_title_content",
+    "star",
     "star1_iv",
     "star2_iv",
     "star3_iv",
     "star4_iv",
     "star5_iv",
+    "starLottie",
     "star_bg_iv",
     "star_group",
     "star_map_node_bubble",
@@ -16267,7 +17045,9 @@
     "starview_replay",
     "starview_small_class",
     "starview_total",
+    "state",
     "stateBar",
+    "stateBar2",
     "stateFrame",
     "state_container",
     "state_error_bt",
@@ -16293,6 +17073,8 @@
     "status_waiting_view",
     "statusselectview_graspView",
     "statusselectview_learningView",
+    "stemBlankLine",
+    "stemLayout",
     "step_line_left_selected",
     "step_line_left_unselected",
     "step_line_right_selected",
@@ -16381,9 +17163,13 @@
     "student_profile_teacher_comment_panel",
     "student_recycler_item_section_select_layout",
     "student_recycler_item_section_select_layout_title",
+    "study",
     "study2_home_header",
     "study2_home_state_view",
     "study2_home_state_view_container",
+    "studyDay",
+    "studyDivider",
+    "studyDivider2",
     "studyTime",
     "study_center_app_bar",
     "study_center_cards_container",
@@ -16548,6 +17334,9 @@
     "submitbar_text",
     "subtitleBlurHintTextView",
     "subtitle_content_tv",
+    "subtitle_layout",
+    "subtitle_view",
+    "subtitle_view_2",
     "summary_metrics_gap",
     "summation_container",
     "sun",
@@ -16596,6 +17385,8 @@
     "systemmessageactivity_message_listview",
     "systemmessageactivity_totop_view",
     "tabIcon",
+    "tabItem",
+    "tabLayout",
     "tabMode",
     "tabTitle",
     "tab_base_background",
@@ -16641,7 +17432,12 @@
     "tab_view",
     "tabs",
     "tag",
+    "tagBottom4",
+    "tagBottom7",
     "tagGroup",
+    "tagText",
+    "tagTop4",
+    "tagTop7",
     "tagViewHolder",
     "tag_1",
     "tag_2",
@@ -16656,8 +17452,10 @@
     "tag_flow_layout",
     "tag_horizontal_child_interceptor_installed",
     "tag_hotword_view",
+    "tag_icon",
     "tag_left",
     "tag_mid",
+    "tag_name",
     "tag_on_apply_window_listener",
     "tag_on_receive_content_listener",
     "tag_on_receive_content_mime_types",
@@ -16674,6 +17472,7 @@
     "tag_unhandled_key_listeners",
     "tag_view",
     "tag_window_insets_animation_callback",
+    "tagsLayout",
     "tags_container",
     "takePicture",
     "takePictureSnapshot",
@@ -16686,6 +17485,7 @@
     "task_button",
     "task_container",
     "task_list_bg",
+    "task_reward_coin",
     "task_status",
     "task_status_icon",
     "task_sub_title",
@@ -16729,6 +17529,7 @@
     "teacher_name_container",
     "teacher_name_tv",
     "teacher_picture",
+    "teacher_picture_iv",
     "teacher_role",
     "teacher_role_view",
     "teacher_role_view1",
@@ -16796,8 +17597,10 @@
     "test_checkbox_android_button_tint",
     "test_checkbox_app_button_tint",
     "test_item",
+    "test_name",
     "test_radiobutton_android_button_tint",
     "test_radiobutton_app_button_tint",
+    "test_title",
     "text",
     "text2",
     "textEnd",
@@ -16811,6 +17614,7 @@
     "textView2",
     "textView4",
     "textVisiblePassword",
+    "textWatcher",
     "textWebPassword",
     "text_content",
     "text_count_tv",
@@ -16825,12 +17629,14 @@
     "text_input_end_icon",
     "text_input_error_icon",
     "text_input_start_icon",
+    "text_play",
     "text_preview_content",
     "text_preview_score",
     "text_preview_title",
     "text_problem",
     "text_progress_bar",
     "text_replay",
+    "text_right_wrong",
     "text_single",
     "text_tip",
     "text_to_image_fl",
@@ -16953,6 +17759,7 @@
     "thumbnail_bg_view",
     "thumbnailitemview_imageview",
     "thumbnailitemview_img_bg",
+    "timber",
     "time",
     "timeTv",
     "time_container",
@@ -16962,8 +17769,10 @@
     "timerCapsuleContainer",
     "timerCapsuleIcon",
     "timerCapsuleTextView",
+    "timerView",
     "timer_view",
     "tip",
+    "tipBackground",
     "tip_animation",
     "tip_arrow",
     "tip_content",
@@ -16975,6 +17784,7 @@
     "tip_title",
     "tip_tv",
     "tips",
+    "tipsLayout",
     "tips_bottom",
     "tips_title",
     "title",
@@ -16989,6 +17799,7 @@
     "title_decoration",
     "title_icon",
     "title_iv",
+    "title_layout",
     "title_ll",
     "title_name",
     "title_scan",
@@ -17030,14 +17841,18 @@
     "toggle_arrow",
     "toggle_idea",
     "toggle_question",
+    "tokenPoolContainer",
+    "tokenPoolFlow",
     "tool_left",
     "tool_panel_container",
     "tool_panel_holder",
     "tool_right_bottom",
     "tool_right_top",
     "toolbar_group",
+    "toolsLayout",
     "tools_container",
     "tools_container_holder",
+    "tools_guide",
     "tools_recyclerview",
     "tools_rv",
     "top",
@@ -17081,6 +17896,7 @@
     "topic_title",
     "topicsLayout",
     "torch",
+    "total",
     "total_coin_count",
     "total_coin_icon",
     "touch_outside",
@@ -17266,6 +18082,7 @@
     "tv_catalog_title",
     "tv_catalogue",
     "tv_change",
+    "tv_change_speed",
     "tv_chapter_name",
     "tv_chat_audio",
     "tv_chat_text",
@@ -17453,6 +18270,7 @@
     "tv_extra_illus_btn",
     "tv_fake_tag",
     "tv_fake_title",
+    "tv_fast",
     "tv_favourable_price",
     "tv_feedback",
     "tv_feedback_desc",
@@ -17654,6 +18472,7 @@
     "tv_play_next",
     "tv_play_next_title",
     "tv_point",
+    "tv_point_name",
     "tv_policy",
     "tv_post_time",
     "tv_practice_status",
@@ -17733,6 +18552,7 @@
     "tv_reset_filter",
     "tv_reshoot",
     "tv_result",
+    "tv_retry",
     "tv_retry_btn",
     "tv_right",
     "tv_right_title",
@@ -17749,6 +18569,7 @@
     "tv_score_name",
     "tv_score_title",
     "tv_search_all",
+    "tv_sec",
     "tv_second",
     "tv_second_center",
     "tv_second_or_day_number",
@@ -17911,6 +18732,7 @@
     "tv_video_play_time",
     "tv_video_tag",
     "tv_video_temp",
+    "tv_video_title",
     "tv_video_total_time",
     "tv_voice",
     "tv_voice_coin",
@@ -17966,6 +18788,8 @@
     "unable_cover",
     "unchecked",
     "underline",
+    "underlineHolder",
+    "underlineLayout",
     "uniform",
     "unlabeled",
     "unselect_text",
@@ -17989,6 +18813,7 @@
     "userSex",
     "userSubject",
     "userTarget",
+    "user_answer",
     "user_avatar",
     "user_coin_card_layout",
     "user_contribution_value",
@@ -18002,13 +18827,10 @@
     "utvLeftIconView",
     "utvRightIconView",
     "utvTopIconView",
-    "v3_action_button",
     "v3_badge",
-    "v3_bottom_container",
     "v3_card_group",
     "v3_close",
     "v3_content_text",
-    "v3_mic",
     "v3_result_coin_group",
     "v3_result_coin_text",
     "v3_result_content",
@@ -18019,8 +18841,7 @@
     "v3_result_poster",
     "v3_result_rewards",
     "v3_result_view",
-    "v3_volume_ring",
-    "v3_wave_lottie",
+    "v3_volume_layout",
     "vLine",
     "v_address_devide",
     "v_address_footbar",
@@ -18065,9 +18886,11 @@
     "vertical_line",
     "video",
     "videoSeekBar",
+    "videoTime",
     "videoView",
     "video_Player",
     "video_back",
+    "video_bg",
     "video_coin_base_line",
     "video_coin_bg_iv",
     "video_coin_container_base_line",
@@ -18130,6 +18953,7 @@
     "video_info_bg",
     "video_label_container",
     "video_layout",
+    "video_lock_screen",
     "video_pager_item_grid_view",
     "video_play_button",
     "video_player",
@@ -18162,6 +18986,9 @@
     "video_player_surfaceView",
     "video_player_title",
     "video_player_title_bar",
+    "video_point",
+    "video_point_editor",
+    "video_point_view_pager",
     "video_preview",
     "video_seekbar",
     "video_skip",
@@ -18228,6 +19055,7 @@
     "view_loading_bg",
     "view_logo_left",
     "view_logo_right",
+    "view_margin_top",
     "view_mask",
     "view_meta_divider",
     "view_multiline_left_icon",
@@ -18384,6 +19212,7 @@
     "vote_title",
     "vpMenus",
     "vp_banner",
+    "vp_capsule_banner",
     "vp_container",
     "vp_image",
     "vp_left",
@@ -18443,9 +19272,18 @@
     "widget_container",
     "widget_title",
     "window_lottie",
+    "wisdomTextLayout",
+    "wisdomView",
     "withText",
     "withinBounds",
     "word",
+    "wordBook",
+    "wordCount",
+    "wordListView",
+    "wordMark",
+    "wordRadio",
+    "word_example",
+    "word_paraphrase",
     "wrap",
     "wrap_all",
     "wrap_content",
@@ -18476,13 +19314,21 @@
     "wzzb_setting_view",
     "xiaomi",
     "xiaomiBoldFull",
+    "xiayige",
     "xpopup_divider",
     "xpopup_divider1",
     "xpopup_divider2",
+    "yellowDot",
     "zero_corner_chip",
     "zoom"
   ],
-  "deprecated_ids": [],
+  "deprecated_ids": [
+    "v3_action_button",
+    "v3_bottom_container",
+    "v3_mic",
+    "v3_volume_ring",
+    "v3_wave_lottie"
+  ],
   "entries": [
     {
       "id": "ALT",
@@ -18789,7 +19635,19 @@
       "deprecated": false
     },
     {
+      "id": "_dot",
+      "deprecated": false
+    },
+    {
+      "id": "_line",
+      "deprecated": false
+    },
+    {
       "id": "_ll_temp",
+      "deprecated": false
+    },
+    {
+      "id": "_title",
       "deprecated": false
     },
     {
@@ -19101,6 +19959,10 @@
       "deprecated": false
     },
     {
+      "id": "action",
+      "deprecated": false
+    },
+    {
       "id": "action0",
       "deprecated": false
     },
@@ -19130,6 +19992,10 @@
     },
     {
       "id": "action_bar_title",
+      "deprecated": false
+    },
+    {
+      "id": "action_button",
       "deprecated": false
     },
     {
@@ -19813,6 +20679,14 @@
       "deprecated": false
     },
     {
+      "id": "addCarrotLayout",
+      "deprecated": false
+    },
+    {
+      "id": "addIcon",
+      "deprecated": false
+    },
+    {
       "id": "add_button_single_img",
       "deprecated": false
     },
@@ -19906,6 +20780,34 @@
     },
     {
       "id": "admission_letter_textview",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tool_icon",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tool_subtitle",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tool_title",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tools_card",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tools_grid_container",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tools_title",
+      "deprecated": false
+    },
+    {
+      "id": "admission_tools_title_decoration",
       "deprecated": false
     },
     {
@@ -20005,6 +20907,50 @@
       "deprecated": false
     },
     {
+      "id": "ai2BasketLottie",
+      "deprecated": false
+    },
+    {
+      "id": "ai2Carrot",
+      "deprecated": false
+    },
+    {
+      "id": "ai2Icon",
+      "deprecated": false
+    },
+    {
+      "id": "ai2Layout",
+      "deprecated": false
+    },
+    {
+      "id": "ai3Basket",
+      "deprecated": false
+    },
+    {
+      "id": "ai3BasketLottie",
+      "deprecated": false
+    },
+    {
+      "id": "ai3Icon",
+      "deprecated": false
+    },
+    {
+      "id": "ai3Layout",
+      "deprecated": false
+    },
+    {
+      "id": "aiCover",
+      "deprecated": false
+    },
+    {
+      "id": "aiLottie",
+      "deprecated": false
+    },
+    {
+      "id": "aiName",
+      "deprecated": false
+    },
+    {
       "id": "aiSubtitlePanel",
       "deprecated": false
     },
@@ -20021,11 +20967,27 @@
       "deprecated": false
     },
     {
+      "id": "ai_click_bubble",
+      "deprecated": false
+    },
+    {
+      "id": "ai_cover",
+      "deprecated": false
+    },
+    {
       "id": "ai_generate_tip",
       "deprecated": false
     },
     {
       "id": "ai_generated_tag",
+      "deprecated": false
+    },
+    {
+      "id": "ai_icon",
+      "deprecated": false
+    },
+    {
+      "id": "ai_lottie",
       "deprecated": false
     },
     {
@@ -20110,6 +21072,10 @@
     },
     {
       "id": "analyseBg",
+      "deprecated": false
+    },
+    {
+      "id": "analyse_answer",
       "deprecated": false
     },
     {
@@ -20225,6 +21191,10 @@
       "deprecated": false
     },
     {
+      "id": "answerContainer",
+      "deprecated": false
+    },
+    {
       "id": "answerLayout",
       "deprecated": false
     },
@@ -20238,6 +21208,18 @@
     },
     {
       "id": "answerLayout3",
+      "deprecated": false
+    },
+    {
+      "id": "answerPlaceholder",
+      "deprecated": false
+    },
+    {
+      "id": "answerTokenContainer",
+      "deprecated": false
+    },
+    {
+      "id": "answerTokenFlow",
       "deprecated": false
     },
     {
@@ -20325,6 +21307,10 @@
       "deprecated": false
     },
     {
+      "id": "answer_icon",
+      "deprecated": false
+    },
+    {
       "id": "answer_result",
       "deprecated": false
     },
@@ -20341,6 +21327,10 @@
       "deprecated": false
     },
     {
+      "id": "answer_sheet",
+      "deprecated": false
+    },
+    {
       "id": "answer_statistics_explain",
       "deprecated": false
     },
@@ -20349,7 +21339,19 @@
       "deprecated": false
     },
     {
+      "id": "answer_status",
+      "deprecated": false
+    },
+    {
       "id": "answer_summary",
+      "deprecated": false
+    },
+    {
+      "id": "answer_text_view",
+      "deprecated": false
+    },
+    {
+      "id": "answer_title",
       "deprecated": false
     },
     {
@@ -20430,6 +21432,10 @@
     },
     {
       "id": "arc",
+      "deprecated": false
+    },
+    {
+      "id": "arc_progress",
       "deprecated": false
     },
     {
@@ -20549,6 +21555,10 @@
       "deprecated": false
     },
     {
+      "id": "audio_en_layout",
+      "deprecated": false
+    },
+    {
       "id": "audio_frame_layout",
       "deprecated": false
     },
@@ -20558,6 +21568,10 @@
     },
     {
       "id": "audio_input_method_group",
+      "deprecated": false
+    },
+    {
+      "id": "audio_loading",
       "deprecated": false
     },
     {
@@ -20602,6 +21616,10 @@
     },
     {
       "id": "audio_state_lottie",
+      "deprecated": false
+    },
+    {
+      "id": "audio_us_layout",
       "deprecated": false
     },
     {
@@ -20766,6 +21784,10 @@
     },
     {
       "id": "avatar",
+      "deprecated": false
+    },
+    {
+      "id": "avatarBg",
       "deprecated": false
     },
     {
@@ -21181,6 +22203,10 @@
       "deprecated": false
     },
     {
+      "id": "back2",
+      "deprecated": false
+    },
+    {
       "id": "backIv",
       "deprecated": false
     },
@@ -21301,6 +22327,18 @@
       "deprecated": false
     },
     {
+      "id": "barrierGuide",
+      "deprecated": false
+    },
+    {
+      "id": "barrierLast",
+      "deprecated": false
+    },
+    {
+      "id": "barrierLayout",
+      "deprecated": false
+    },
+    {
       "id": "base_line_view",
       "deprecated": false
     },
@@ -21310,6 +22348,14 @@
     },
     {
       "id": "baseline",
+      "deprecated": false
+    },
+    {
+      "id": "basket",
+      "deprecated": false
+    },
+    {
+      "id": "bat",
       "deprecated": false
     },
     {
@@ -21329,6 +22375,10 @@
       "deprecated": false
     },
     {
+      "id": "beisu",
+      "deprecated": false
+    },
+    {
       "id": "below_interactive_container",
       "deprecated": false
     },
@@ -21342,6 +22392,22 @@
     },
     {
       "id": "bg",
+      "deprecated": false
+    },
+    {
+      "id": "bg1",
+      "deprecated": false
+    },
+    {
+      "id": "bg2",
+      "deprecated": false
+    },
+    {
+      "id": "bgRecyclerView",
+      "deprecated": false
+    },
+    {
+      "id": "bgView",
       "deprecated": false
     },
     {
@@ -21385,6 +22451,18 @@
       "deprecated": false
     },
     {
+      "id": "bigCarrot",
+      "deprecated": false
+    },
+    {
+      "id": "bigCarrotNum",
+      "deprecated": false
+    },
+    {
+      "id": "bigCarrotText",
+      "deprecated": false
+    },
+    {
       "id": "big_setting_tv",
       "deprecated": false
     },
@@ -21414,6 +22492,10 @@
     },
     {
       "id": "bind_phone_success_title",
+      "deprecated": false
+    },
+    {
+      "id": "bj_play",
       "deprecated": false
     },
     {
@@ -21509,6 +22591,14 @@
       "deprecated": false
     },
     {
+      "id": "bomb",
+      "deprecated": false
+    },
+    {
+      "id": "book",
+      "deprecated": false
+    },
+    {
       "id": "book_binding_tips",
       "deprecated": false
     },
@@ -21518,6 +22608,10 @@
     },
     {
       "id": "border",
+      "deprecated": false
+    },
+    {
+      "id": "border_layout",
       "deprecated": false
     },
     {
@@ -21550,6 +22644,10 @@
     },
     {
       "id": "bottomToTop",
+      "deprecated": false
+    },
+    {
+      "id": "bottom_bar",
       "deprecated": false
     },
     {
@@ -21598,6 +22696,10 @@
     },
     {
       "id": "bottom_guideline",
+      "deprecated": false
+    },
+    {
+      "id": "bottom_layout",
       "deprecated": false
     },
     {
@@ -21705,6 +22807,14 @@
       "deprecated": false
     },
     {
+      "id": "btnBack",
+      "deprecated": false
+    },
+    {
+      "id": "btnBuyCourse",
+      "deprecated": false
+    },
+    {
       "id": "btnCancel",
       "deprecated": false
     },
@@ -21717,7 +22827,15 @@
       "deprecated": false
     },
     {
+      "id": "btnEvaluating",
+      "deprecated": false
+    },
+    {
       "id": "btnFailReload",
+      "deprecated": false
+    },
+    {
+      "id": "btnMyAudio",
       "deprecated": false
     },
     {
@@ -21725,7 +22843,27 @@
       "deprecated": false
     },
     {
+      "id": "btnReRecord",
+      "deprecated": false
+    },
+    {
       "id": "btnRecord",
+      "deprecated": false
+    },
+    {
+      "id": "btnReview",
+      "deprecated": false
+    },
+    {
+      "id": "btnSkip",
+      "deprecated": false
+    },
+    {
+      "id": "btnStartRecord",
+      "deprecated": false
+    },
+    {
+      "id": "btnStudy",
       "deprecated": false
     },
     {
@@ -21913,6 +23051,10 @@
       "deprecated": false
     },
     {
+      "id": "btn_learn_next",
+      "deprecated": false
+    },
+    {
       "id": "btn_left",
       "deprecated": false
     },
@@ -21989,6 +23131,10 @@
       "deprecated": false
     },
     {
+      "id": "btn_play",
+      "deprecated": false
+    },
+    {
       "id": "btn_play_voice",
       "deprecated": false
     },
@@ -22010,6 +23156,10 @@
     },
     {
       "id": "btn_record",
+      "deprecated": false
+    },
+    {
+      "id": "btn_replay",
       "deprecated": false
     },
     {
@@ -22065,11 +23215,19 @@
       "deprecated": false
     },
     {
+      "id": "btn_subtitle_toggle",
+      "deprecated": false
+    },
+    {
       "id": "btn_text",
       "deprecated": false
     },
     {
       "id": "btn_to_study",
+      "deprecated": false
+    },
+    {
+      "id": "btn_translate",
       "deprecated": false
     },
     {
@@ -22101,7 +23259,23 @@
       "deprecated": false
     },
     {
+      "id": "bubble",
+      "deprecated": false
+    },
+    {
       "id": "bubbleContainer",
+      "deprecated": false
+    },
+    {
+      "id": "bubbleLayout",
+      "deprecated": false
+    },
+    {
+      "id": "bubbleRoot",
+      "deprecated": false
+    },
+    {
+      "id": "bubble_layout",
       "deprecated": false
     },
     {
@@ -22202,6 +23376,18 @@
     },
     {
       "id": "button_top",
+      "deprecated": false
+    },
+    {
+      "id": "buyCourseDescribe",
+      "deprecated": false
+    },
+    {
+      "id": "buyDesc",
+      "deprecated": false
+    },
+    {
+      "id": "buyTitle",
       "deprecated": false
     },
     {
@@ -22378,6 +23564,10 @@
     },
     {
       "id": "capsuleView",
+      "deprecated": false
+    },
+    {
+      "id": "capsule_banner_indicator",
       "deprecated": false
     },
     {
@@ -22617,6 +23807,34 @@
       "deprecated": false
     },
     {
+      "id": "carrot",
+      "deprecated": false
+    },
+    {
+      "id": "carrotAmount",
+      "deprecated": false
+    },
+    {
+      "id": "carrotIcon",
+      "deprecated": false
+    },
+    {
+      "id": "carrotLayout",
+      "deprecated": false
+    },
+    {
+      "id": "carrotLottie",
+      "deprecated": false
+    },
+    {
+      "id": "carrotNum",
+      "deprecated": false
+    },
+    {
+      "id": "carrotText",
+      "deprecated": false
+    },
+    {
       "id": "cart_tv_promotion",
       "deprecated": false
     },
@@ -22733,6 +23951,14 @@
       "deprecated": false
     },
     {
+      "id": "cc_tv_time",
+      "deprecated": false
+    },
+    {
+      "id": "cc_tv_video_title",
+      "deprecated": false
+    },
+    {
       "id": "center",
       "deprecated": false
     },
@@ -22742,6 +23968,10 @@
     },
     {
       "id": "centerInside",
+      "deprecated": false
+    },
+    {
+      "id": "centerLayout",
       "deprecated": false
     },
     {
@@ -22810,6 +24040,10 @@
     },
     {
       "id": "chains",
+      "deprecated": false
+    },
+    {
+      "id": "changeBook",
       "deprecated": false
     },
     {
@@ -23077,6 +24311,10 @@
       "deprecated": false
     },
     {
+      "id": "checkWordBook",
+      "deprecated": false
+    },
+    {
       "id": "check_box",
       "deprecated": false
     },
@@ -23105,7 +24343,15 @@
       "deprecated": false
     },
     {
+      "id": "checkin",
+      "deprecated": false
+    },
+    {
       "id": "chinese_acronym_index_bar",
+      "deprecated": false
+    },
+    {
+      "id": "chinese_content",
       "deprecated": false
     },
     {
@@ -23126,6 +24372,10 @@
     },
     {
       "id": "chip_group",
+      "deprecated": false
+    },
+    {
+      "id": "choiceLayout",
       "deprecated": false
     },
     {
@@ -23181,6 +24431,10 @@
       "deprecated": false
     },
     {
+      "id": "circleProgress",
+      "deprecated": false
+    },
+    {
       "id": "circle_center",
       "deprecated": false
     },
@@ -23209,7 +24463,15 @@
       "deprecated": false
     },
     {
+      "id": "city_label",
+      "deprecated": false
+    },
+    {
       "id": "civ_cover",
+      "deprecated": false
+    },
+    {
+      "id": "cl",
       "deprecated": false
     },
     {
@@ -23282,6 +24544,10 @@
     },
     {
       "id": "cl_insert_layer",
+      "deprecated": false
+    },
+    {
+      "id": "cl_into_bg",
       "deprecated": false
     },
     {
@@ -23897,6 +25163,10 @@
       "deprecated": false
     },
     {
+      "id": "clock",
+      "deprecated": false
+    },
+    {
       "id": "clock_hour",
       "deprecated": false
     },
@@ -23914,6 +25184,10 @@
     },
     {
       "id": "close_btn",
+      "deprecated": false
+    },
+    {
+      "id": "close_button",
       "deprecated": false
     },
     {
@@ -24305,6 +25579,10 @@
       "deprecated": false
     },
     {
+      "id": "coin_amount_tv",
+      "deprecated": false
+    },
+    {
       "id": "coin_animation",
       "deprecated": false
     },
@@ -24345,11 +25623,23 @@
       "deprecated": false
     },
     {
+      "id": "coin_icon",
+      "deprecated": false
+    },
+    {
       "id": "coin_image",
       "deprecated": false
     },
     {
+      "id": "coin_pill",
+      "deprecated": false
+    },
+    {
       "id": "coin_space",
+      "deprecated": false
+    },
+    {
+      "id": "coin_tail",
       "deprecated": false
     },
     {
@@ -24386,6 +25676,10 @@
     },
     {
       "id": "column_view",
+      "deprecated": false
+    },
+    {
+      "id": "combo",
       "deprecated": false
     },
     {
@@ -24665,6 +25959,10 @@
       "deprecated": false
     },
     {
+      "id": "complete",
+      "deprecated": false
+    },
+    {
       "id": "completion_progress",
       "deprecated": false
     },
@@ -24801,11 +26099,23 @@
       "deprecated": false
     },
     {
+      "id": "contentContainer",
+      "deprecated": false
+    },
+    {
+      "id": "contentEnd",
+      "deprecated": false
+    },
+    {
       "id": "contentLayout",
       "deprecated": false
     },
     {
       "id": "contentPanel",
+      "deprecated": false
+    },
+    {
+      "id": "contentStart",
       "deprecated": false
     },
     {
@@ -24837,6 +26147,10 @@
       "deprecated": false
     },
     {
+      "id": "content_left_ph",
+      "deprecated": false
+    },
+    {
       "id": "content_list",
       "deprecated": false
     },
@@ -24850,6 +26164,10 @@
     },
     {
       "id": "content_parent",
+      "deprecated": false
+    },
+    {
+      "id": "content_right",
       "deprecated": false
     },
     {
@@ -24921,7 +26239,15 @@
       "deprecated": false
     },
     {
+      "id": "controller_background",
+      "deprecated": false
+    },
+    {
       "id": "coordinator",
+      "deprecated": false
+    },
+    {
+      "id": "copy_button",
       "deprecated": false
     },
     {
@@ -25037,11 +26363,19 @@
       "deprecated": false
     },
     {
+      "id": "countdownAnim",
+      "deprecated": false
+    },
+    {
       "id": "countdownNumberTextView",
       "deprecated": false
     },
     {
       "id": "countdownProgressView",
+      "deprecated": false
+    },
+    {
+      "id": "countdownText",
       "deprecated": false
     },
     {
@@ -25262,6 +26596,14 @@
     },
     {
       "id": "courseCardViewList",
+      "deprecated": false
+    },
+    {
+      "id": "courseName",
+      "deprecated": false
+    },
+    {
+      "id": "courseNoResourceDescribe",
       "deprecated": false
     },
     {
@@ -25941,6 +27283,10 @@
       "deprecated": false
     },
     {
+      "id": "custom_button",
+      "deprecated": false
+    },
+    {
       "id": "custom_dialog_message",
       "deprecated": false
     },
@@ -26125,7 +27471,27 @@
       "deprecated": false
     },
     {
+      "id": "cv_toast_message",
+      "deprecated": false
+    },
+    {
       "id": "cv_triad_btn",
+      "deprecated": false
+    },
+    {
+      "id": "daily_quxue_container",
+      "deprecated": false
+    },
+    {
+      "id": "dan_mu_answer_view",
+      "deprecated": false
+    },
+    {
+      "id": "dan_mu_display_view",
+      "deprecated": false
+    },
+    {
+      "id": "dan_mu_question_view",
       "deprecated": false
     },
     {
@@ -26142,6 +27508,10 @@
     },
     {
       "id": "dash_line",
+      "deprecated": false
+    },
+    {
+      "id": "dataBinding",
       "deprecated": false
     },
     {
@@ -26230,6 +27600,10 @@
     },
     {
       "id": "delete_btn_container",
+      "deprecated": false
+    },
+    {
+      "id": "delete_button",
       "deprecated": false
     },
     {
@@ -26442,6 +27816,10 @@
     },
     {
       "id": "diagnostic_exam_tv_total_size",
+      "deprecated": false
+    },
+    {
+      "id": "dialogLayout",
       "deprecated": false
     },
     {
@@ -27365,6 +28743,10 @@
       "deprecated": false
     },
     {
+      "id": "dot_view",
+      "deprecated": false
+    },
+    {
       "id": "double_click",
       "deprecated": false
     },
@@ -27402,6 +28784,10 @@
     },
     {
       "id": "dragEnd",
+      "deprecated": false
+    },
+    {
+      "id": "dragLayout",
       "deprecated": false
     },
     {
@@ -27458,6 +28844,22 @@
     },
     {
       "id": "dropdown_noneditable",
+      "deprecated": false
+    },
+    {
+      "id": "duration",
+      "deprecated": false
+    },
+    {
+      "id": "durationText",
+      "deprecated": false
+    },
+    {
+      "id": "duration_image_tip",
+      "deprecated": false
+    },
+    {
+      "id": "duration_progressbar",
       "deprecated": false
     },
     {
@@ -27533,6 +28935,10 @@
       "deprecated": false
     },
     {
+      "id": "edit_text",
+      "deprecated": false
+    },
+    {
       "id": "edit_text_alipay_account",
       "deprecated": false
     },
@@ -27577,6 +28983,14 @@
       "deprecated": false
     },
     {
+      "id": "empty",
+      "deprecated": false
+    },
+    {
+      "id": "emptyLayout",
+      "deprecated": false
+    },
+    {
       "id": "empty_icon",
       "deprecated": false
     },
@@ -27602,6 +29016,14 @@
     },
     {
       "id": "enabled",
+      "deprecated": false
+    },
+    {
+      "id": "encourageText",
+      "deprecated": false
+    },
+    {
+      "id": "encourageView",
       "deprecated": false
     },
     {
@@ -27693,6 +29115,10 @@
       "deprecated": false
     },
     {
+      "id": "english_content",
+      "deprecated": false
+    },
+    {
       "id": "enroll_bg",
       "deprecated": false
     },
@@ -27765,6 +29191,14 @@
       "deprecated": false
     },
     {
+      "id": "errorContent",
+      "deprecated": false
+    },
+    {
+      "id": "errorTv",
+      "deprecated": false
+    },
+    {
       "id": "error_bg_iv",
       "deprecated": false
     },
@@ -27794,6 +29228,10 @@
     },
     {
       "id": "error_book_tag",
+      "deprecated": false
+    },
+    {
+      "id": "error_btn",
       "deprecated": false
     },
     {
@@ -28266,6 +29704,10 @@
     },
     {
       "id": "exchange_class_view",
+      "deprecated": false
+    },
+    {
+      "id": "exclamationIcon",
       "deprecated": false
     },
     {
@@ -29961,6 +31403,10 @@
       "deprecated": false
     },
     {
+      "id": "fl_parent",
+      "deprecated": false
+    },
+    {
       "id": "fl_poster_pic_container",
       "deprecated": false
     },
@@ -29994,6 +31440,10 @@
     },
     {
       "id": "fl_un_login",
+      "deprecated": false
+    },
+    {
+      "id": "flag",
       "deprecated": false
     },
     {
@@ -30465,7 +31915,19 @@
       "deprecated": false
     },
     {
+      "id": "fluencyRatingbar",
+      "deprecated": false
+    },
+    {
+      "id": "fluencyText",
+      "deprecated": false
+    },
+    {
       "id": "fluorescent",
+      "deprecated": false
+    },
+    {
+      "id": "flyLayout",
       "deprecated": false
     },
     {
@@ -30486,6 +31948,14 @@
     },
     {
       "id": "folder",
+      "deprecated": false
+    },
+    {
+      "id": "follow",
+      "deprecated": false
+    },
+    {
+      "id": "followText",
       "deprecated": false
     },
     {
@@ -30586,6 +32056,10 @@
     },
     {
       "id": "frag_container",
+      "deprecated": false
+    },
+    {
+      "id": "fragmentContainer",
       "deprecated": false
     },
     {
@@ -31293,6 +32767,10 @@
       "deprecated": false
     },
     {
+      "id": "frame",
+      "deprecated": false
+    },
+    {
       "id": "frame_layout_rank",
       "deprecated": false
     },
@@ -31397,6 +32875,14 @@
       "deprecated": false
     },
     {
+      "id": "gesture_iv_progress",
+      "deprecated": false
+    },
+    {
+      "id": "gesture_progress_layout",
+      "deprecated": false
+    },
+    {
       "id": "gesture_progress_view",
       "deprecated": false
     },
@@ -31406,6 +32892,14 @@
     },
     {
       "id": "get_passcode",
+      "deprecated": false
+    },
+    {
+      "id": "geture_tv_progress_time",
+      "deprecated": false
+    },
+    {
+      "id": "geture_tv_progress_time0",
       "deprecated": false
     },
     {
@@ -31697,6 +33191,18 @@
       "deprecated": false
     },
     {
+      "id": "goonStudy",
+      "deprecated": false
+    },
+    {
+      "id": "goon_record",
+      "deprecated": false
+    },
+    {
+      "id": "goon_record_layout",
+      "deprecated": false
+    },
+    {
       "id": "gp_all_content",
       "deprecated": false
     },
@@ -31762,6 +33268,10 @@
     },
     {
       "id": "grade",
+      "deprecated": false
+    },
+    {
+      "id": "grade_label",
       "deprecated": false
     },
     {
@@ -31925,6 +33435,34 @@
       "deprecated": false
     },
     {
+      "id": "guess",
+      "deprecated": false
+    },
+    {
+      "id": "guideCenterLayout",
+      "deprecated": false
+    },
+    {
+      "id": "guideIcon",
+      "deprecated": false
+    },
+    {
+      "id": "guideIcon1",
+      "deprecated": false
+    },
+    {
+      "id": "guideIcon2",
+      "deprecated": false
+    },
+    {
+      "id": "guideLayout",
+      "deprecated": false
+    },
+    {
+      "id": "guideTitle",
+      "deprecated": false
+    },
+    {
       "id": "guide_arrow_id",
       "deprecated": false
     },
@@ -31961,6 +33499,10 @@
       "deprecated": false
     },
     {
+      "id": "guide_line1",
+      "deprecated": false
+    },
+    {
       "id": "guide_line_vertical",
       "deprecated": false
     },
@@ -31993,6 +33535,14 @@
       "deprecated": false
     },
     {
+      "id": "guide_view_left",
+      "deprecated": false
+    },
+    {
+      "id": "guide_view_right",
+      "deprecated": false
+    },
+    {
       "id": "guideline",
       "deprecated": false
     },
@@ -32014,6 +33564,10 @@
     },
     {
       "id": "had_update_tv",
+      "deprecated": false
+    },
+    {
+      "id": "hand",
       "deprecated": false
     },
     {
@@ -32205,6 +33759,10 @@
       "deprecated": false
     },
     {
+      "id": "hole_view",
+      "deprecated": false
+    },
+    {
       "id": "holer",
       "deprecated": false
     },
@@ -32345,7 +33903,19 @@
       "deprecated": false
     },
     {
+      "id": "hornSlow",
+      "deprecated": false
+    },
+    {
+      "id": "horn_en",
+      "deprecated": false
+    },
+    {
       "id": "horn_overlay",
+      "deprecated": false
+    },
+    {
+      "id": "horn_us",
       "deprecated": false
     },
     {
@@ -32381,6 +33951,14 @@
       "deprecated": false
     },
     {
+      "id": "iKnow",
+      "deprecated": false
+    },
+    {
+      "id": "ib_back",
+      "deprecated": false
+    },
+    {
       "id": "ib_bg_bottom",
       "deprecated": false
     },
@@ -32394,6 +33972,14 @@
     },
     {
       "id": "ib_clip_rotate",
+      "deprecated": false
+    },
+    {
+      "id": "ib_full_screen",
+      "deprecated": false
+    },
+    {
+      "id": "ib_play",
       "deprecated": false
     },
     {
@@ -32433,7 +34019,87 @@
       "deprecated": false
     },
     {
+      "id": "iconBarrier",
+      "deprecated": false
+    },
+    {
+      "id": "iconBat",
+      "deprecated": false
+    },
+    {
+      "id": "iconCarrot",
+      "deprecated": false
+    },
+    {
+      "id": "iconCombo",
+      "deprecated": false
+    },
+    {
+      "id": "iconDuration",
+      "deprecated": false
+    },
+    {
+      "id": "iconFeedback",
+      "deprecated": false
+    },
+    {
+      "id": "iconFollow",
+      "deprecated": false
+    },
+    {
+      "id": "iconGrammar",
+      "deprecated": false
+    },
+    {
+      "id": "iconGuide1",
+      "deprecated": false
+    },
+    {
+      "id": "iconGuide2",
+      "deprecated": false
+    },
+    {
+      "id": "iconLearning",
+      "deprecated": false
+    },
+    {
+      "id": "iconList",
+      "deprecated": false
+    },
+    {
+      "id": "iconNumber1",
+      "deprecated": false
+    },
+    {
+      "id": "iconNumber2",
+      "deprecated": false
+    },
+    {
+      "id": "iconNumber3",
+      "deprecated": false
+    },
+    {
+      "id": "iconProgress",
+      "deprecated": false
+    },
+    {
+      "id": "iconRabbit",
+      "deprecated": false
+    },
+    {
+      "id": "iconRecommend",
+      "deprecated": false
+    },
+    {
       "id": "iconRefreshTopic",
+      "deprecated": false
+    },
+    {
+      "id": "iconReview",
+      "deprecated": false
+    },
+    {
+      "id": "iconRight",
       "deprecated": false
     },
     {
@@ -32442,6 +34108,18 @@
     },
     {
       "id": "iconTitle",
+      "deprecated": false
+    },
+    {
+      "id": "iconWisdom",
+      "deprecated": false
+    },
+    {
+      "id": "iconX",
+      "deprecated": false
+    },
+    {
+      "id": "icon_ai",
       "deprecated": false
     },
     {
@@ -32546,6 +34224,10 @@
     },
     {
       "id": "imageView2",
+      "deprecated": false
+    },
+    {
+      "id": "image_barrier",
       "deprecated": false
     },
     {
@@ -32705,6 +34387,10 @@
       "deprecated": false
     },
     {
+      "id": "image_view_parent",
+      "deprecated": false
+    },
+    {
       "id": "image_view_rank",
       "deprecated": false
     },
@@ -32853,6 +34539,10 @@
       "deprecated": false
     },
     {
+      "id": "img_layout",
+      "deprecated": false
+    },
+    {
       "id": "img_loading",
       "deprecated": false
     },
@@ -32909,6 +34599,10 @@
       "deprecated": false
     },
     {
+      "id": "important_button",
+      "deprecated": false
+    },
+    {
       "id": "in_grade",
       "deprecated": false
     },
@@ -32933,7 +34627,15 @@
       "deprecated": false
     },
     {
+      "id": "indexText",
+      "deprecated": false
+    },
+    {
       "id": "indicator",
+      "deprecated": false
+    },
+    {
+      "id": "indicatorLayout",
       "deprecated": false
     },
     {
@@ -32965,6 +34667,10 @@
       "deprecated": false
     },
     {
+      "id": "inform_button",
+      "deprecated": false
+    },
+    {
       "id": "initial_state",
       "deprecated": false
     },
@@ -32978,6 +34684,10 @@
     },
     {
       "id": "inner_pic_view",
+      "deprecated": false
+    },
+    {
+      "id": "input",
       "deprecated": false
     },
     {
@@ -33106,6 +34816,26 @@
     },
     {
       "id": "interactive_rv_question",
+      "deprecated": false
+    },
+    {
+      "id": "into",
+      "deprecated": false
+    },
+    {
+      "id": "into_button",
+      "deprecated": false
+    },
+    {
+      "id": "into_close",
+      "deprecated": false
+    },
+    {
+      "id": "into_icon",
+      "deprecated": false
+    },
+    {
+      "id": "into_status",
       "deprecated": false
     },
     {
@@ -33733,6 +35463,10 @@
       "deprecated": false
     },
     {
+      "id": "iv",
+      "deprecated": false
+    },
+    {
       "id": "ivAllowBackground",
       "deprecated": false
     },
@@ -34330,6 +36064,10 @@
     },
     {
       "id": "iv_fast_forward",
+      "deprecated": false
+    },
+    {
+      "id": "iv_fast_progress",
       "deprecated": false
     },
     {
@@ -35385,6 +37123,14 @@
       "deprecated": false
     },
     {
+      "id": "join_teacher_wechat_button",
+      "deprecated": false
+    },
+    {
+      "id": "join_teacher_wechat_parent",
+      "deprecated": false
+    },
+    {
       "id": "jp1v1_login_guide",
       "deprecated": false
     },
@@ -35537,7 +37283,15 @@
       "deprecated": false
     },
     {
+      "id": "knowledgeNum",
+      "deprecated": false
+    },
+    {
       "id": "knowledge_consolidation_button",
+      "deprecated": false
+    },
+    {
+      "id": "knowledge_example",
       "deprecated": false
     },
     {
@@ -35549,7 +37303,15 @@
       "deprecated": false
     },
     {
+      "id": "knowledge_paraphrase",
+      "deprecated": false
+    },
+    {
       "id": "knowledge_title_tv",
+      "deprecated": false
+    },
+    {
+      "id": "knowledge_toast",
       "deprecated": false
     },
     {
@@ -35726,6 +37488,10 @@
     },
     {
       "id": "layout_double",
+      "deprecated": false
+    },
+    {
+      "id": "layout_error_view",
       "deprecated": false
     },
     {
@@ -36073,6 +37839,10 @@
       "deprecated": false
     },
     {
+      "id": "leave",
+      "deprecated": false
+    },
+    {
       "id": "leaveButton",
       "deprecated": false
     },
@@ -36178,6 +37948,14 @@
     },
     {
       "id": "left",
+      "deprecated": false
+    },
+    {
+      "id": "leftBgBlue",
+      "deprecated": false
+    },
+    {
+      "id": "leftBgWhite",
       "deprecated": false
     },
     {
@@ -36382,6 +38160,22 @@
     },
     {
       "id": "line3",
+      "deprecated": false
+    },
+    {
+      "id": "lineLeftBottom",
+      "deprecated": false
+    },
+    {
+      "id": "lineLeftTop",
+      "deprecated": false
+    },
+    {
+      "id": "lineRightBottom",
+      "deprecated": false
+    },
+    {
+      "id": "lineRightTop",
       "deprecated": false
     },
     {
@@ -38289,6 +40083,10 @@
       "deprecated": false
     },
     {
+      "id": "loading_rl",
+      "deprecated": false
+    },
+    {
       "id": "loading_text",
       "deprecated": false
     },
@@ -38310,6 +40108,10 @@
     },
     {
       "id": "location_pois",
+      "deprecated": false
+    },
+    {
+      "id": "lock",
       "deprecated": false
     },
     {
@@ -38509,6 +40311,14 @@
       "deprecated": false
     },
     {
+      "id": "lottiePraiseLayout",
+      "deprecated": false
+    },
+    {
+      "id": "lottieRabbit",
+      "deprecated": false
+    },
+    {
       "id": "lottieRipple",
       "deprecated": false
     },
@@ -38522,6 +40332,10 @@
     },
     {
       "id": "lottie_layer_name",
+      "deprecated": false
+    },
+    {
+      "id": "lottie_praise",
       "deprecated": false
     },
     {
@@ -39157,6 +40971,10 @@
       "deprecated": false
     },
     {
+      "id": "message_layout",
+      "deprecated": false
+    },
+    {
       "id": "message_rv",
       "deprecated": false
     },
@@ -39206,6 +41024,10 @@
     },
     {
       "id": "messageitemview_message_title",
+      "deprecated": false
+    },
+    {
+      "id": "microphone",
       "deprecated": false
     },
     {
@@ -39277,6 +41099,34 @@
       "deprecated": false
     },
     {
+      "id": "middleBgGreen",
+      "deprecated": false
+    },
+    {
+      "id": "middleBgWhite",
+      "deprecated": false
+    },
+    {
+      "id": "middleCarrot",
+      "deprecated": false
+    },
+    {
+      "id": "middleCarrotNum",
+      "deprecated": false
+    },
+    {
+      "id": "middleCarrotText",
+      "deprecated": false
+    },
+    {
+      "id": "middleGroup",
+      "deprecated": false
+    },
+    {
+      "id": "middleLayout",
+      "deprecated": false
+    },
+    {
       "id": "middle_container",
       "deprecated": false
     },
@@ -39338,6 +41188,10 @@
     },
     {
       "id": "mono",
+      "deprecated": false
+    },
+    {
+      "id": "monsterView",
       "deprecated": false
     },
     {
@@ -39953,6 +41807,10 @@
       "deprecated": false
     },
     {
+      "id": "normalLayout",
+      "deprecated": false
+    },
+    {
       "id": "normal_catalog_item",
       "deprecated": false
     },
@@ -39982,6 +41840,10 @@
     },
     {
       "id": "not_pk_opponent_layout",
+      "deprecated": false
+    },
+    {
+      "id": "not_understand_button",
       "deprecated": false
     },
     {
@@ -40081,11 +41943,31 @@
       "deprecated": false
     },
     {
+      "id": "num1",
+      "deprecated": false
+    },
+    {
+      "id": "num2",
+      "deprecated": false
+    },
+    {
+      "id": "num3",
+      "deprecated": false
+    },
+    {
+      "id": "num4",
+      "deprecated": false
+    },
+    {
       "id": "num_play",
       "deprecated": false
     },
     {
       "id": "number",
+      "deprecated": false
+    },
+    {
+      "id": "numberLayout",
       "deprecated": false
     },
     {
@@ -40125,6 +42007,14 @@
       "deprecated": false
     },
     {
+      "id": "onAttachStateChangeListener",
+      "deprecated": false
+    },
+    {
+      "id": "onDateChanged",
+      "deprecated": false
+    },
+    {
       "id": "onTouch",
       "deprecated": false
     },
@@ -40158,6 +42048,10 @@
     },
     {
       "id": "only_month_view",
+      "deprecated": false
+    },
+    {
+      "id": "only_record_layout",
       "deprecated": false
     },
     {
@@ -40334,6 +42228,22 @@
     },
     {
       "id": "options_rv",
+      "deprecated": false
+    },
+    {
+      "id": "oral_waiting_lottie",
+      "deprecated": false
+    },
+    {
+      "id": "oral_waiting_text",
+      "deprecated": false
+    },
+    {
+      "id": "order",
+      "deprecated": false
+    },
+    {
+      "id": "orderLayout",
       "deprecated": false
     },
     {
@@ -40669,6 +42579,10 @@
       "deprecated": false
     },
     {
+      "id": "pageNum",
+      "deprecated": false
+    },
+    {
       "id": "page_indicator_text",
       "deprecated": false
     },
@@ -40734,6 +42648,14 @@
     },
     {
       "id": "parallax",
+      "deprecated": false
+    },
+    {
+      "id": "paraphrase",
+      "deprecated": false
+    },
+    {
+      "id": "paraphraseMark",
       "deprecated": false
     },
     {
@@ -41093,11 +43015,27 @@
       "deprecated": false
     },
     {
+      "id": "pb_small_window_player",
+      "deprecated": false
+    },
+    {
       "id": "pb_video_loading_view",
       "deprecated": false
     },
     {
       "id": "pb_web_view_quiz",
+      "deprecated": false
+    },
+    {
+      "id": "pdfContent",
+      "deprecated": false
+    },
+    {
+      "id": "pdfImage",
+      "deprecated": false
+    },
+    {
+      "id": "pdfNum",
       "deprecated": false
     },
     {
@@ -41633,6 +43571,10 @@
       "deprecated": false
     },
     {
+      "id": "play_layout",
+      "deprecated": false
+    },
+    {
       "id": "play_list_dialog",
       "deprecated": false
     },
@@ -41705,7 +43647,27 @@
       "deprecated": false
     },
     {
+      "id": "playerView",
+      "deprecated": false
+    },
+    {
+      "id": "playerViewHolder",
+      "deprecated": false
+    },
+    {
+      "id": "playerViewHolder2",
+      "deprecated": false
+    },
+    {
       "id": "player_container",
+      "deprecated": false
+    },
+    {
+      "id": "player_recycler",
+      "deprecated": false
+    },
+    {
+      "id": "player_sv",
       "deprecated": false
     },
     {
@@ -41749,7 +43711,19 @@
       "deprecated": false
     },
     {
+      "id": "point_content",
+      "deprecated": false
+    },
+    {
+      "id": "point_desc",
+      "deprecated": false
+    },
+    {
       "id": "point_group",
+      "deprecated": false
+    },
+    {
+      "id": "point_time",
       "deprecated": false
     },
     {
@@ -42241,6 +44215,18 @@
       "deprecated": false
     },
     {
+      "id": "primary_task_btn",
+      "deprecated": false
+    },
+    {
+      "id": "primary_task_sub_title_tv",
+      "deprecated": false
+    },
+    {
+      "id": "primary_task_title_tv",
+      "deprecated": false
+    },
+    {
       "id": "privacypolicy_textview",
       "deprecated": false
     },
@@ -42266,6 +44252,22 @@
     },
     {
       "id": "progressBar",
+      "deprecated": false
+    },
+    {
+      "id": "progressCount",
+      "deprecated": false
+    },
+    {
+      "id": "progressGroup",
+      "deprecated": false
+    },
+    {
+      "id": "progressLayout",
+      "deprecated": false
+    },
+    {
+      "id": "progressText",
       "deprecated": false
     },
     {
@@ -42302,6 +44304,10 @@
     },
     {
       "id": "progress_title",
+      "deprecated": false
+    },
+    {
+      "id": "progress_tv",
       "deprecated": false
     },
     {
@@ -42346,6 +44352,18 @@
     },
     {
       "id": "pronounceLayout",
+      "deprecated": false
+    },
+    {
+      "id": "pronunciation",
+      "deprecated": false
+    },
+    {
+      "id": "pronunciationRatingbar",
+      "deprecated": false
+    },
+    {
+      "id": "pronunciationText",
       "deprecated": false
     },
     {
@@ -42485,6 +44503,30 @@
       "deprecated": false
     },
     {
+      "id": "queryKnowledge",
+      "deprecated": false
+    },
+    {
+      "id": "queryKnowledgeGuideBubble",
+      "deprecated": false
+    },
+    {
+      "id": "querySentence",
+      "deprecated": false
+    },
+    {
+      "id": "querySentenceGuideBubble",
+      "deprecated": false
+    },
+    {
+      "id": "queryWord",
+      "deprecated": false
+    },
+    {
+      "id": "queryWordGuideBubble",
+      "deprecated": false
+    },
+    {
       "id": "query_done_header",
       "deprecated": false
     },
@@ -42494,6 +44536,18 @@
     },
     {
       "id": "question",
+      "deprecated": false
+    },
+    {
+      "id": "questionHit",
+      "deprecated": false
+    },
+    {
+      "id": "questionStem",
+      "deprecated": false
+    },
+    {
+      "id": "questionTag",
       "deprecated": false
     },
     {
@@ -42582,6 +44636,10 @@
     },
     {
       "id": "question_stem_view_content_view",
+      "deprecated": false
+    },
+    {
+      "id": "question_text_view",
       "deprecated": false
     },
     {
@@ -42837,6 +44895,10 @@
       "deprecated": false
     },
     {
+      "id": "quiz_right_star_count",
+      "deprecated": false
+    },
+    {
       "id": "quiz_rv",
       "deprecated": false
     },
@@ -42898,6 +44960,10 @@
     },
     {
       "id": "quotation_iv",
+      "deprecated": false
+    },
+    {
+      "id": "rabbitView",
       "deprecated": false
     },
     {
@@ -43081,6 +45147,22 @@
       "deprecated": false
     },
     {
+      "id": "reExercise",
+      "deprecated": false
+    },
+    {
+      "id": "reStart",
+      "deprecated": false
+    },
+    {
+      "id": "reStudy",
+      "deprecated": false
+    },
+    {
+      "id": "reTry",
+      "deprecated": false
+    },
+    {
       "id": "re_answer_tips_tv",
       "deprecated": false
     },
@@ -43221,6 +45303,10 @@
       "deprecated": false
     },
     {
+      "id": "record",
+      "deprecated": false
+    },
+    {
       "id": "recordArea",
       "deprecated": false
     },
@@ -43241,7 +45327,15 @@
       "deprecated": false
     },
     {
+      "id": "recordMask",
+      "deprecated": false
+    },
+    {
       "id": "recordMicIconTextView",
+      "deprecated": false
+    },
+    {
+      "id": "recordResultLayout",
       "deprecated": false
     },
     {
@@ -43266,6 +45360,14 @@
     },
     {
       "id": "record_btn",
+      "deprecated": false
+    },
+    {
+      "id": "record_layout",
+      "deprecated": false
+    },
+    {
+      "id": "record_over",
       "deprecated": false
     },
     {
@@ -43601,7 +45703,59 @@
       "deprecated": false
     },
     {
+      "id": "replay_back",
+      "deprecated": false
+    },
+    {
+      "id": "replay_current_time",
+      "deprecated": false
+    },
+    {
+      "id": "replay_divider",
+      "deprecated": false
+    },
+    {
+      "id": "replay_duration",
+      "deprecated": false
+    },
+    {
+      "id": "replay_full_screen",
+      "deprecated": false
+    },
+    {
+      "id": "replay_hint_tv",
+      "deprecated": false
+    },
+    {
+      "id": "replay_play_control_bottom",
+      "deprecated": false
+    },
+    {
+      "id": "replay_play_control_top",
+      "deprecated": false
+    },
+    {
+      "id": "replay_play_control_top_left",
+      "deprecated": false
+    },
+    {
+      "id": "replay_play_icon",
+      "deprecated": false
+    },
+    {
+      "id": "replay_title",
+      "deprecated": false
+    },
+    {
       "id": "report",
+      "deprecated": false
+    },
+    {
+      "id": "report2",
+      "deprecated": false
+    },
+    {
+      "id": "reportName",
       "deprecated": false
     },
     {
@@ -43654,6 +45808,10 @@
     },
     {
       "id": "restart_view",
+      "deprecated": false
+    },
+    {
+      "id": "resultView",
       "deprecated": false
     },
     {
@@ -43773,6 +45931,10 @@
       "deprecated": false
     },
     {
+      "id": "rewardView",
+      "deprecated": false
+    },
+    {
       "id": "rg_core_type",
       "deprecated": false
     },
@@ -43809,7 +45971,23 @@
       "deprecated": false
     },
     {
+      "id": "rightBgGreen",
+      "deprecated": false
+    },
+    {
+      "id": "rightBgOrange",
+      "deprecated": false
+    },
+    {
+      "id": "rightBgWhite",
+      "deprecated": false
+    },
+    {
       "id": "rightBtn",
+      "deprecated": false
+    },
+    {
+      "id": "rightText",
       "deprecated": false
     },
     {
@@ -43818,6 +45996,10 @@
     },
     {
       "id": "right_anim",
+      "deprecated": false
+    },
+    {
+      "id": "right_answer",
       "deprecated": false
     },
     {
@@ -43854,6 +46036,10 @@
     },
     {
       "id": "right_icon",
+      "deprecated": false
+    },
+    {
+      "id": "right_label_container",
       "deprecated": false
     },
     {
@@ -43898,6 +46084,14 @@
     },
     {
       "id": "right_tv_title",
+      "deprecated": false
+    },
+    {
+      "id": "rippleLeft",
+      "deprecated": false
+    },
+    {
+      "id": "rippleRight",
       "deprecated": false
     },
     {
@@ -44765,11 +46959,19 @@
       "deprecated": false
     },
     {
+      "id": "scoreText",
+      "deprecated": false
+    },
+    {
       "id": "score_recycler_view",
       "deprecated": false
     },
     {
       "id": "screen",
+      "deprecated": false
+    },
+    {
+      "id": "screenBg",
       "deprecated": false
     },
     {
@@ -45022,6 +47224,22 @@
     },
     {
       "id": "second_title",
+      "deprecated": false
+    },
+    {
+      "id": "secondary_action_arrow_iv",
+      "deprecated": false
+    },
+    {
+      "id": "secondary_action_bar",
+      "deprecated": false
+    },
+    {
+      "id": "secondary_action_hint_tv",
+      "deprecated": false
+    },
+    {
+      "id": "secondary_action_title_tv",
       "deprecated": false
     },
     {
@@ -45301,6 +47519,10 @@
       "deprecated": false
     },
     {
+      "id": "selection_group",
+      "deprecated": false
+    },
+    {
       "id": "selection_type",
       "deprecated": false
     },
@@ -45417,6 +47639,14 @@
       "deprecated": false
     },
     {
+      "id": "send",
+      "deprecated": false
+    },
+    {
+      "id": "send_button",
+      "deprecated": false
+    },
+    {
       "id": "send_fl",
       "deprecated": false
     },
@@ -45441,7 +47671,15 @@
       "deprecated": false
     },
     {
+      "id": "sentence_example",
+      "deprecated": false
+    },
+    {
       "id": "sentence_layout",
+      "deprecated": false
+    },
+    {
+      "id": "sentence_paraphrase",
       "deprecated": false
     },
     {
@@ -45510,6 +47748,10 @@
     },
     {
       "id": "shadow_view",
+      "deprecated": false
+    },
+    {
+      "id": "shangyige",
       "deprecated": false
     },
     {
@@ -46005,7 +48247,15 @@
       "deprecated": false
     },
     {
+      "id": "skip",
+      "deprecated": false
+    },
+    {
       "id": "skipCollapsed",
+      "deprecated": false
+    },
+    {
+      "id": "skipLesson",
       "deprecated": false
     },
     {
@@ -46057,11 +48307,31 @@
       "deprecated": false
     },
     {
+      "id": "smallCarrot",
+      "deprecated": false
+    },
+    {
+      "id": "smallCarrotNum",
+      "deprecated": false
+    },
+    {
+      "id": "smallCarrotText",
+      "deprecated": false
+    },
+    {
       "id": "small_enroll_empty",
       "deprecated": false
     },
     {
+      "id": "small_seek_bar",
+      "deprecated": false
+    },
+    {
       "id": "small_setting_tv",
+      "deprecated": false
+    },
+    {
+      "id": "small_window_player_view",
       "deprecated": false
     },
     {
@@ -46437,6 +48707,10 @@
       "deprecated": false
     },
     {
+      "id": "star",
+      "deprecated": false
+    },
+    {
       "id": "star1_iv",
       "deprecated": false
     },
@@ -46454,6 +48728,10 @@
     },
     {
       "id": "star5_iv",
+      "deprecated": false
+    },
+    {
+      "id": "starLottie",
       "deprecated": false
     },
     {
@@ -46565,7 +48843,15 @@
       "deprecated": false
     },
     {
+      "id": "state",
+      "deprecated": false
+    },
+    {
       "id": "stateBar",
+      "deprecated": false
+    },
+    {
+      "id": "stateBar2",
       "deprecated": false
     },
     {
@@ -46666,6 +48952,14 @@
     },
     {
       "id": "statusselectview_learningView",
+      "deprecated": false
+    },
+    {
+      "id": "stemBlankLine",
+      "deprecated": false
+    },
+    {
+      "id": "stemLayout",
       "deprecated": false
     },
     {
@@ -47021,6 +49315,10 @@
       "deprecated": false
     },
     {
+      "id": "study",
+      "deprecated": false
+    },
+    {
       "id": "study2_home_header",
       "deprecated": false
     },
@@ -47030,6 +49328,18 @@
     },
     {
       "id": "study2_home_state_view_container",
+      "deprecated": false
+    },
+    {
+      "id": "studyDay",
+      "deprecated": false
+    },
+    {
+      "id": "studyDivider",
+      "deprecated": false
+    },
+    {
+      "id": "studyDivider2",
       "deprecated": false
     },
     {
@@ -47689,6 +49999,18 @@
       "deprecated": false
     },
     {
+      "id": "subtitle_layout",
+      "deprecated": false
+    },
+    {
+      "id": "subtitle_view",
+      "deprecated": false
+    },
+    {
+      "id": "subtitle_view_2",
+      "deprecated": false
+    },
+    {
       "id": "summary_metrics_gap",
       "deprecated": false
     },
@@ -47881,6 +50203,14 @@
       "deprecated": false
     },
     {
+      "id": "tabItem",
+      "deprecated": false
+    },
+    {
+      "id": "tabLayout",
+      "deprecated": false
+    },
+    {
       "id": "tabMode",
       "deprecated": false
     },
@@ -48061,7 +50391,27 @@
       "deprecated": false
     },
     {
+      "id": "tagBottom4",
+      "deprecated": false
+    },
+    {
+      "id": "tagBottom7",
+      "deprecated": false
+    },
+    {
       "id": "tagGroup",
+      "deprecated": false
+    },
+    {
+      "id": "tagText",
+      "deprecated": false
+    },
+    {
+      "id": "tagTop4",
+      "deprecated": false
+    },
+    {
+      "id": "tagTop7",
       "deprecated": false
     },
     {
@@ -48121,11 +50471,19 @@
       "deprecated": false
     },
     {
+      "id": "tag_icon",
+      "deprecated": false
+    },
+    {
       "id": "tag_left",
       "deprecated": false
     },
     {
       "id": "tag_mid",
+      "deprecated": false
+    },
+    {
+      "id": "tag_name",
       "deprecated": false
     },
     {
@@ -48193,6 +50551,10 @@
       "deprecated": false
     },
     {
+      "id": "tagsLayout",
+      "deprecated": false
+    },
+    {
       "id": "tags_container",
       "deprecated": false
     },
@@ -48238,6 +50600,10 @@
     },
     {
       "id": "task_list_bg",
+      "deprecated": false
+    },
+    {
+      "id": "task_reward_coin",
       "deprecated": false
     },
     {
@@ -48410,6 +50776,10 @@
     },
     {
       "id": "teacher_picture",
+      "deprecated": false
+    },
+    {
+      "id": "teacher_picture_iv",
       "deprecated": false
     },
     {
@@ -48681,11 +51051,19 @@
       "deprecated": false
     },
     {
+      "id": "test_name",
+      "deprecated": false
+    },
+    {
       "id": "test_radiobutton_android_button_tint",
       "deprecated": false
     },
     {
       "id": "test_radiobutton_app_button_tint",
+      "deprecated": false
+    },
+    {
+      "id": "test_title",
       "deprecated": false
     },
     {
@@ -48738,6 +51116,10 @@
     },
     {
       "id": "textVisiblePassword",
+      "deprecated": false
+    },
+    {
+      "id": "textWatcher",
       "deprecated": false
     },
     {
@@ -48797,6 +51179,10 @@
       "deprecated": false
     },
     {
+      "id": "text_play",
+      "deprecated": false
+    },
+    {
       "id": "text_preview_content",
       "deprecated": false
     },
@@ -48818,6 +51204,10 @@
     },
     {
       "id": "text_replay",
+      "deprecated": false
+    },
+    {
+      "id": "text_right_wrong",
       "deprecated": false
     },
     {
@@ -49309,6 +51699,10 @@
       "deprecated": false
     },
     {
+      "id": "timber",
+      "deprecated": false
+    },
+    {
       "id": "time",
       "deprecated": false
     },
@@ -49345,11 +51739,19 @@
       "deprecated": false
     },
     {
+      "id": "timerView",
+      "deprecated": false
+    },
+    {
       "id": "timer_view",
       "deprecated": false
     },
     {
       "id": "tip",
+      "deprecated": false
+    },
+    {
+      "id": "tipBackground",
       "deprecated": false
     },
     {
@@ -49394,6 +51796,10 @@
     },
     {
       "id": "tips",
+      "deprecated": false
+    },
+    {
+      "id": "tipsLayout",
       "deprecated": false
     },
     {
@@ -49450,6 +51856,10 @@
     },
     {
       "id": "title_iv",
+      "deprecated": false
+    },
+    {
+      "id": "title_layout",
       "deprecated": false
     },
     {
@@ -49617,6 +52027,14 @@
       "deprecated": false
     },
     {
+      "id": "tokenPoolContainer",
+      "deprecated": false
+    },
+    {
+      "id": "tokenPoolFlow",
+      "deprecated": false
+    },
+    {
       "id": "tool_left",
       "deprecated": false
     },
@@ -49641,11 +52059,19 @@
       "deprecated": false
     },
     {
+      "id": "toolsLayout",
+      "deprecated": false
+    },
+    {
       "id": "tools_container",
       "deprecated": false
     },
     {
       "id": "tools_container_holder",
+      "deprecated": false
+    },
+    {
+      "id": "tools_guide",
       "deprecated": false
     },
     {
@@ -49818,6 +52244,10 @@
     },
     {
       "id": "torch",
+      "deprecated": false
+    },
+    {
+      "id": "total",
       "deprecated": false
     },
     {
@@ -50558,6 +52988,10 @@
     },
     {
       "id": "tv_change",
+      "deprecated": false
+    },
+    {
+      "id": "tv_change_speed",
       "deprecated": false
     },
     {
@@ -51306,6 +53740,10 @@
     },
     {
       "id": "tv_fake_title",
+      "deprecated": false
+    },
+    {
+      "id": "tv_fast",
       "deprecated": false
     },
     {
@@ -52113,6 +54551,10 @@
       "deprecated": false
     },
     {
+      "id": "tv_point_name",
+      "deprecated": false
+    },
+    {
       "id": "tv_policy",
       "deprecated": false
     },
@@ -52429,6 +54871,10 @@
       "deprecated": false
     },
     {
+      "id": "tv_retry",
+      "deprecated": false
+    },
+    {
       "id": "tv_retry_btn",
       "deprecated": false
     },
@@ -52490,6 +54936,10 @@
     },
     {
       "id": "tv_search_all",
+      "deprecated": false
+    },
+    {
+      "id": "tv_sec",
       "deprecated": false
     },
     {
@@ -53141,6 +55591,10 @@
       "deprecated": false
     },
     {
+      "id": "tv_video_title",
+      "deprecated": false
+    },
+    {
       "id": "tv_video_total_time",
       "deprecated": false
     },
@@ -53361,6 +55815,14 @@
       "deprecated": false
     },
     {
+      "id": "underlineHolder",
+      "deprecated": false
+    },
+    {
+      "id": "underlineLayout",
+      "deprecated": false
+    },
+    {
       "id": "uniform",
       "deprecated": false
     },
@@ -53453,6 +55915,10 @@
       "deprecated": false
     },
     {
+      "id": "user_answer",
+      "deprecated": false
+    },
+    {
       "id": "user_avatar",
       "deprecated": false
     },
@@ -53506,7 +55972,7 @@
     },
     {
       "id": "v3_action_button",
-      "deprecated": false
+      "deprecated": true
     },
     {
       "id": "v3_badge",
@@ -53514,7 +55980,7 @@
     },
     {
       "id": "v3_bottom_container",
-      "deprecated": false
+      "deprecated": true
     },
     {
       "id": "v3_card_group",
@@ -53530,7 +55996,7 @@
     },
     {
       "id": "v3_mic",
-      "deprecated": false
+      "deprecated": true
     },
     {
       "id": "v3_result_coin_group",
@@ -53573,12 +56039,16 @@
       "deprecated": false
     },
     {
-      "id": "v3_volume_ring",
+      "id": "v3_volume_layout",
       "deprecated": false
     },
     {
+      "id": "v3_volume_ring",
+      "deprecated": true
+    },
+    {
       "id": "v3_wave_lottie",
-      "deprecated": false
+      "deprecated": true
     },
     {
       "id": "vLine",
@@ -53757,6 +56227,10 @@
       "deprecated": false
     },
     {
+      "id": "videoTime",
+      "deprecated": false
+    },
+    {
       "id": "videoView",
       "deprecated": false
     },
@@ -53766,6 +56240,10 @@
     },
     {
       "id": "video_back",
+      "deprecated": false
+    },
+    {
+      "id": "video_bg",
       "deprecated": false
     },
     {
@@ -54017,6 +56495,10 @@
       "deprecated": false
     },
     {
+      "id": "video_lock_screen",
+      "deprecated": false
+    },
+    {
       "id": "video_pager_item_grid_view",
       "deprecated": false
     },
@@ -54142,6 +56624,18 @@
     },
     {
       "id": "video_player_title_bar",
+      "deprecated": false
+    },
+    {
+      "id": "video_point",
+      "deprecated": false
+    },
+    {
+      "id": "video_point_editor",
+      "deprecated": false
+    },
+    {
+      "id": "video_point_view_pager",
       "deprecated": false
     },
     {
@@ -54406,6 +56900,10 @@
     },
     {
       "id": "view_logo_right",
+      "deprecated": false
+    },
+    {
+      "id": "view_margin_top",
       "deprecated": false
     },
     {
@@ -55033,6 +57531,10 @@
       "deprecated": false
     },
     {
+      "id": "vp_capsule_banner",
+      "deprecated": false
+    },
+    {
       "id": "vp_container",
       "deprecated": false
     },
@@ -55269,6 +57771,14 @@
       "deprecated": false
     },
     {
+      "id": "wisdomTextLayout",
+      "deprecated": false
+    },
+    {
+      "id": "wisdomView",
+      "deprecated": false
+    },
+    {
       "id": "withText",
       "deprecated": false
     },
@@ -55278,6 +57788,34 @@
     },
     {
       "id": "word",
+      "deprecated": false
+    },
+    {
+      "id": "wordBook",
+      "deprecated": false
+    },
+    {
+      "id": "wordCount",
+      "deprecated": false
+    },
+    {
+      "id": "wordListView",
+      "deprecated": false
+    },
+    {
+      "id": "wordMark",
+      "deprecated": false
+    },
+    {
+      "id": "wordRadio",
+      "deprecated": false
+    },
+    {
+      "id": "word_example",
+      "deprecated": false
+    },
+    {
+      "id": "word_paraphrase",
       "deprecated": false
     },
     {
@@ -55401,6 +57939,10 @@
       "deprecated": false
     },
     {
+      "id": "xiayige",
+      "deprecated": false
+    },
+    {
       "id": "xpopup_divider",
       "deprecated": false
     },
@@ -55410,6 +57952,10 @@
     },
     {
       "id": "xpopup_divider2",
+      "deprecated": false
+    },
+    {
+      "id": "yellowDot",
       "deprecated": false
     },
     {

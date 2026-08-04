@@ -428,6 +428,30 @@ def _get_token() -> str:
     return json.load(urllib.request.urlopen(req))["tenant_access_token"]
 
 
+def _filter_record_subset(entries: list) -> list:
+    """定向补跑过滤：ORCH_ONLY_RECORD_IDS(逗号分隔 record_id)存在时只保留这批用例。
+
+    用于只补跑上一轮 429/批次死的失败(不重跑真失败、不整轮重触发)；留空维持全量。
+    未命中的 record_id 记 warning，方便发现 id 写错或用例已被删/改。
+    """
+    only_ids = {
+        rid.strip() for rid in os.environ.get("ORCH_ONLY_RECORD_IDS", "").split(",")
+        if rid.strip()
+    }
+    if not only_ids:
+        return entries
+    before = len(entries)
+    kept = [e for e in entries if e.get("record_id") in only_ids]
+    matched = {e.get("record_id") for e in kept}
+    missing = only_ids - matched
+    log.info(f"ORCH_ONLY_RECORD_IDS 定向子集：{before} → {len(kept)} 条"
+             f"(命中 {len(matched)}/{len(only_ids)})")
+    if missing:
+        log.warning(f"ORCH_ONLY_RECORD_IDS 有 {len(missing)} 个 record_id 未在用例表命中："
+                    f"{sorted(missing)}")
+    return kept
+
+
 def fetch_cases(app_id: str) -> list:
     cfg   = BITABLE_CONFIGS[app_id]
     token = _get_token()
@@ -2635,6 +2659,7 @@ def _run(app_id, version, apk_url, ipa_url, platforms=None, run_id=None):
         _notify(app_id, version, f"❌ Bitable 读取失败：{e}")
         run_status.finish(run_id, "failed", f"Bitable 读取失败：{e}")
         return
+    entries = _filter_record_subset(entries)
     groups = _prepare_executable_groups(app_id, version, entries, android_ok, ios_ok, platforms)
     if not groups:
         run_status.finish(run_id, "done", "无可执行用例")

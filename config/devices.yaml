@@ -13,7 +13,9 @@ default:
         bundle_id: "com.shijinge.WebDriverAgentRunner"
         port: 8100
     # 长期离线(tidevice list 查无此机),每轮 install failed 被跳过；接回来再解注释
-    # - udid: "00008110-00180CD9348B801E"
-    #   name: "iPhone (iOS 18.7.8)"
-    #   wda:
-    #     port: 8101
+    - udid: "00008110-00180CD9348B801E"
+      name: "iPhone (iOS 18.7.8)"
+      wda:
+        team: "5YX44746D6"
+        bundle_id: "com.shijinge.WebDriverAgentRunner"
+        port: 8101
