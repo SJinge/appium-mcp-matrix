@@ -1733,9 +1733,10 @@ def execute_case_via_agent(app_id: str, platform: str, udid: str, entry: dict,
             continue
         break
 
-    _notify(
-        app_id, version,
-        f"⚠️ 设备 {udid} 用例 {entry['name']} agent 执行失败({last_data})。日志末尾：{last_tail}",
+    # 单条失败不再逐条发群（429/环境类问题会刷屏）：只落日志，
+    # 失败结果仍进结果表 + 最终报告统一汇总。
+    log.warning(
+        f"设备 {udid} 用例 {entry['name']} agent 执行失败({last_data})。日志末尾：{last_tail}"
     )
     return {
         "record_id": entry["record_id"],
