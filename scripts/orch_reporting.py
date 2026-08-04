@@ -43,6 +43,58 @@ def incr_status(run_id, udid, path, load_jsonl_fn, run_status_module):
     })
 
 
+# 失败归类：关键词按优先级匹配 case.note + 失败步 note/text（小写）
+_FAILURE_KEYWORD_RULES = [
+    ("额度耗尽(429)", ("429", "日限额", "quota")),
+    ("网关无可用账号(503)", ("503", "无可用账号")),
+    ("执行超时", ("超时", "timeout")),
+    ("环境/WDA/会话", ("wda", "session", "无法启动", "环境阻断", "连接失败", "未就绪")),
+    ("脚本失效", ("script crashed", "脚本执行异常", "脚本机制", "定位器全 miss")),
+]
+
+
+def classify_failure(case: dict) -> str:
+    """把一条失败用例归到单一失败主因类别，供群消息汇总。"""
+    steps = case.get("steps") or []
+    text = (case.get("note") or "")
+    for step in steps:
+        if not step.get("pass", True):
+            text += " " + (step.get("note") or "") + " " + (step.get("text") or "")
+    low = text.lower()
+    for label, keywords in _FAILURE_KEYWORD_RULES:
+        if any(kw.lower() in low for kw in keywords):
+            return label
+    # exec_source 兜底：批级未落盘失败 note 不含 429/超时明细，靠执行层打的标区分
+    source = case.get("exec_source")
+    if source == "agent_timeout":
+        return "执行超时"
+    if source == "agent_failed":
+        return "agent异常(未落盘)"
+    # 真实断言不符：失败步是取证类 ASSERT（id/text/vision），排除 runtime 合成步
+    if any(s.get("type") == "ASSERT" and not s.get("pass", True)
+           and s.get("verify_method") in ("id", "text", "vision")
+           for s in steps):
+        return "断言不符"
+    return "其他"
+
+
+def summarize_failures(cases: list, top: int = 3) -> str:
+    """汇总失败主因，形如「失败主因：额度耗尽(429) 5、断言不符 3」；无失败返回空串。"""
+    failed = [c for c in cases if not c.get("passed")]
+    if not failed:
+        return ""
+    counts = {}
+    for case in failed:
+        label = classify_failure(case)
+        counts[label] = counts.get(label, 0) + 1
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    seg = "、".join(f"{label} {n}" for label, n in ordered[:top])
+    rest = sum(n for _, n in ordered[top:])
+    if rest:
+        seg += f"、其他 {rest}"
+    return f"失败主因：{seg}"
+
+
 def collect_results(
     procs: dict,
     load_jsonl_fn,
@@ -240,6 +292,9 @@ def generate_reports(
             parts.append(f"{unexec}条未执行")
         lines.append(f"{prefix}【{platform}】📱 {app_id} {version} {head}\n")
         lines.append("，".join(parts))
+        fail_summary = summarize_failures(cases)
+        if fail_summary:
+            lines.append(fail_summary)
         if url:
             lines.append(f"执行报告 📄： {url}")
     lines.append(f"\n总耗时：{duration // 60}分{duration % 60}秒")
