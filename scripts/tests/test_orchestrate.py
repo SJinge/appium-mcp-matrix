@@ -346,7 +346,7 @@ def test_execute_case_via_agent_no_retry_on_429(monkeypatch):
     result = orchestrate.execute_case_via_agent("gaotu", "android", "dev1", entry, version="1.0")
     assert result["passed"] is False
     assert calls["n"] == 1  # 429 不重试,只跑一次
-    assert len(notified) == 1  # 最终失败统一报警一次
+    assert notified == []  # 单条失败不再逐条发群,只落日志,由最终报告汇总
 
 
 def test_execute_case_via_agent_backfills_record_id_from_entry(monkeypatch):
@@ -3854,6 +3854,59 @@ def test_generate_reports_zero_completion_still_notifies():
         assert notify.called
         body = notify.call_args[0][2]
         assert "7条未执行" in body
+
+
+def test_classify_failure_buckets():
+    cf = orchestrate.orch_reporting.classify_failure
+    # 429 关键词(单条 agent 失败 note 带 tail)
+    assert cf({"passed": False, "note": "agent execution failed | 429 日限额已用完"}) == "额度耗尽(429)"
+    # 503 无可用账号
+    assert cf({"passed": False, "note": "网关 503 无可用账号"}) == "网关无可用账号(503)"
+    # exec_source 兜底:批级超时未落盘(note 不含明细)
+    assert cf({"passed": False, "exec_source": "agent_timeout",
+               "note": "agent 执行超时未落盘结果: batch 1/2"}) == "执行超时"
+    assert cf({"passed": False, "exec_source": "agent_failed",
+               "note": "agent 执行异常未落盘结果: batch 1/2"}) == "agent异常(未落盘)"
+    # 真实取证断言失败 → 断言不符
+    assert cf({"passed": False, "steps": [
+        {"type": "ASSERT", "pass": False, "verify_method": "text", "note": "文本不匹配"}]}) == "断言不符"
+    # runtime 合成步不算断言不符,落其他
+    assert cf({"passed": False, "steps": [
+        {"type": "ASSERT", "pass": False, "verify_method": "runtime", "note": "落盘"}]}) == "其他"
+
+
+def test_summarize_failures_orders_and_lumps():
+    sf = orchestrate.orch_reporting.summarize_failures
+    assert sf([{"passed": True}]) == ""  # 无失败
+    cases = (
+        [{"passed": False, "note": "429 日限额"}] * 5
+        + [{"passed": False, "steps": [{"type": "ASSERT", "pass": False, "verify_method": "id"}]}] * 3
+        + [{"passed": False, "note": "网关 503 无可用账号"}] * 1
+        + [{"passed": False, "note": "彻底不明"}] * 2  # 其他
+    )
+    out = sf(cases, top=2)
+    assert out.startswith("失败主因：")
+    assert "额度耗尽(429) 5" in out
+    assert "断言不符 3" in out
+    # top=2 之外(503 1 + 其他 2)并入「其他 3」
+    assert "其他 3" in out
+
+
+def test_generate_reports_includes_failure_summary():
+    results = {"a1": [
+        {"platform": "Android", "passed": False, "note": "429 日限额已用完"},
+        {"platform": "Android", "passed": False, "note": "429 日限额已用完"},
+        {"platform": "Android", "passed": True},
+    ]}
+    with patch("orchestrate._notify") as notify, \
+         patch("orchestrate.write_results_to_table"), \
+         patch("orchestrate.subprocess.run") as sr:
+        sr.return_value.stdout = ""
+        orchestrate.generate_reports("gaotu", "9.9.9", results, 60,
+                                     start_time_str="00:00:00",
+                                     device_totals={"a1": {"total": 3, "platform": "Android"}})
+        body = notify.call_args[0][2]
+        assert "失败主因：额度耗尽(429) 2" in body
 
 
 def test_load_devices_parses_ios_wda(tmp_path):

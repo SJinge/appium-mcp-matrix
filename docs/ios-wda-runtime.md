@@ -69,6 +69,40 @@ tunneld(LaunchDaemon 常驻,registry http://127.0.0.1:49151/)
 - 两道防线接掉它:①预热 `prepare_ios_network_permission` 轮询到 alert 出现点「无线局域网与蜂窝网络」;②执行层 `dismiss_system_alert` 在首个 ASSERT 前再清一遍。
 - 详见 memory `ios_startup_network_alert_blocker`。
 
+## 换机前置:DeviceSupport(build 能跑 ≠ 真机能跑)
+
+新 Mac 上 WDA 起不来,最常见不是 SDK/签名,而是 **Xcode 缺设备 iOS 版本的 DeviceSupport**。
+
+**关键结论:能不能跑真机,取决于该 Xcode 的 DeviceSupport 目录里有没有设备对应 iOS 版本的符号文件,跟 Xcode 版本号无关。**
+- 安装"iOS 平台组件"(`xcodebuild -downloadPlatform iOS`)只解决 **build**(编译 SDK),不等于能在真机上 **run**。
+- 设备 iOS 比 Xcode 出厂支持的还新时(如 Xcode 16.4 出厂最高 iOS 18.5、设备 18.7.8),`xcodebuild test` 会报找不到 device support,WDA 起不来。
+
+主力机(这台)是 **Xcode 15.3**——原生根本没有 iOS 18——却能跑 18.7.8 真机,就是因为手动往它 DeviceSupport 塞了对应文件:
+
+```
+~/Library/Developer/Xcode/iOS DeviceSupport/
+  iPhone13,2 18.7.8 (22H352)   ← iPhone 12
+  iPhone14,5 18.7.8 (22H352)   ← iPhone 13
+```
+
+设备系统 = **iOS 18.7.8 / build 22H352**。搭新机不必降级 Xcode,把这两个目录整个拷到新机同路径即可:
+
+```bash
+mkdir -p ~/Library/Developer/Xcode/iOS\ DeviceSupport/
+scp -r ~/Library/Developer/Xcode/iOS\ DeviceSupport/iPhone1{3,4}*\ 18.7.8\ \(22H352\) \
+       <newmac>:'~/Library/Developer/Xcode/iOS DeviceSupport/'
+# 新机确认 + 若 Xcode 不认"型号 版本 (build)"命名,复制一份改成"版本 (build)":
+#   cd ~/Library/Developer/Xcode/iOS\ DeviceSupport/ && cp -r "iPhone13,2 18.7.8 (22H352)" "18.7.8 (22H352)"
+# 拷完重启 Xcode 再跑 WDA
+```
+
+DeviceSupport 之外,真机跑 WDA 还需三样齐全(缺一起不来):
+1. 设备**开发者模式**开启(设置→隐私与安全性→开发者模式,iOS16+);
+2. 「VPN与设备管理」信任签名用的开发者证书(高途组织 team,自动签名),全程解锁;
+3. **tunnel** 常驻(iOS17+,`:49151` registry 有该 udid 的 tunnel-address)。
+
+> 详见 memory `ios_realdevice_wda_setup`。
+
 ## 排障速查
 
 ```bash
