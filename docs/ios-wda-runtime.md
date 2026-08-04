@@ -40,6 +40,63 @@ tunneld(LaunchDaemon 常驻,registry http://127.0.0.1:49151/)
 ### 端口坑(`_device_wda_port`)
 设备侧端口**不一定是 8100**,由 xctestrun 里烤进的 `USE_PORT` 决定(Appium 按 wdaLocalPort 烤成 8101/8102...)。proxy 上游必须连对,否则 Connection refused。
 
+## TeamID 配置 & WDA 编译安装到设备(换机 / 换证书必读)
+
+### TeamID 在哪配、用哪个
+
+WDA 用哪个 Apple 开发者团队签名,决定证书稳不稳。配置两处,`devices.yaml` 每设备覆盖优先于默认:
+- [config/devices.yaml](../config/devices.yaml) 每台 iOS 的 `wda.team`(实际生效值);
+- [scripts/orch_config.py](../scripts/orch_config.py) `DEFAULT_WDA_TEAM`(未配 `wda.team` 的新设备继承)。
+
+`team` 传给 `xcodebuild` 的 `DEVELOPMENT_TEAM=`,配合 `CODE_SIGN_STYLE=Automatic`+`-allowProvisioningUpdates` 自动签名。本项目两个可选团队(**team id = 证书 subject 的 OU 字段**,不是括号里那串):
+
+| team id | 归属 | 证书名 | 有效期 | 适合 |
+|---------|------|--------|--------|------|
+| `LU2B796CHV` | Guangzhou Gaotu **组织付费** | `Apple Development: 金鸽 石 (TV3FCP39YB)` | **1 年** | ✅ headless CI(当前用这个) |
+| `5YX44746D6` | jinge.shi@icloud.com **个人免费** | `Apple Development: jinge.shi@icloud.com (F54B58M263)` | **7 天** | 仅临时调试 |
+
+**为什么用组织团队**:个人免费证书 7 天到期,每次过期/重签,设备端「VPN与设备管理」的信任就失效,headless CI 会周期性因"未信任"挂;组织付费证书 1 年有效,信任一次扛很久。
+
+查某张证书属于哪个 team:
+```bash
+security find-identity -v -p codesigning                       # 列所有可签名身份
+security find-certificate -c "Apple Development: 金鸽 石 (TV3FCP39YB)" -p login.keychain-db \
+  | openssl x509 -noout -subject                               # 看 OU=<team id>
+```
+
+### WDA 怎么编译并装到设备(`_start_wda` 全量构建路径)
+
+`ensure_wda_ready` 在没有 `.xctestrun` 产物时走全量构建,命令等价于:
+```bash
+xcodebuild test \
+  -project <appium-webdriveragent>/WebDriverAgent.xcodeproj \
+  -scheme WebDriverAgentRunner \
+  -destination "id=<udid>" \
+  -derivedDataPath /tmp/wda_derived/<udid> \
+  -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM=LU2B796CHV \
+  PRODUCT_BUNDLE_IDENTIFIER=com.shijinge.WebDriverAgentRunner \
+  'WARNING_CFLAGS=$(inherited) -Wno-poison-system-directories'
+```
+`xcodebuild test` 一步做完:**编译 → 自动签名(拉/装 provisioning profile)→ 安装到设备 → 启动 runner**(设备侧监听 8100,日志出现 `ServerURLHere->http://<设备IP>:8100<-ServerURLHere` 即起来了)。runner 是常驻长命进程,之后 `test-without-building` 复用。WDA 源码目录由 `_resolve_wda_dir()` 探测(可 `ORCH_WDA_DIR` 覆盖)。
+
+**全量 clean build 的三层坑(换机 / 换团队必踩,按 build log 关键字逐层定位)**:
+
+1. `include location '/usr/local/include' is unsafe for cross-compilation`(**poison,交叉编译不安全路径**)
+   WDA 的 `IOSSettings.xcconfig` 开了 `-Weverything` + `GCC_TREAT_WARNINGS_AS_ERRORS=YES`,clang 对 pbxproj `HEADER_SEARCH_PATHS` 注入的 `-I /usr/local/include` 报 `-Wpoison-system-directories`,warning 当 error 直接挂(**与该目录是否真实存在无关**)。
+   ⚠️ `CLANG_WARN_POISON_SYSTEM_DIRECTORIES=NO` **无效**——被排在其后的 `-Weverything` 重新打开。
+   ✅ 传 `'WARNING_CFLAGS=$(inherited) -Wno-poison-system-directories'`(追加在 -Weverything 之后精准关这一条,不降整体严格度)。已固化进 [scripts/ios_wda.py](../scripts/ios_wda.py)。
+
+2. `Apple Development: xxx (XXXXXXXXXX): ambiguous`(**codesign 身份歧义**)
+   钥匙串有**两张同名证书**(常见:一张已吊销 `CSSMERR_TP_CERT_REVOKED` 没清)→ codesign 按名字选不出唯一身份 → "Embed app icon into Runner.app" 脚本非零退出 → `** TEST INTERRUPTED **`。
+   ✅ 按 SHA-1 删掉吊销那张:`security delete-certificate -Z <吊销证书SHA-1> login.keychain-db`(SHA-1 从 `security find-identity -v -p codesigning` 取)。
+
+3. `does not match installed application's application-identifier; rejecting upgrade`(**跨团队升级被拒**)
+   换签名团队后 app-id 前缀变了(如 `5YX44746D6.` → `LU2B796CHV.`),iOS 不允许把已装的包"升级"成另一团队的包。
+   ✅ 先卸旧的再装:`xcrun devicectl device uninstall app --device <udid> com.shijinge.WebDriverAgentRunner.xctrunner`,然后重跑构建。
+
+> 组织团队(LU2B796CHV)证书在**当前主力设备已被信任**,卸旧重装后 runner 直接起,无需再手点信任。换到没信任过组织账号的新设备时,仍需在设备上手动信任一次(见下「换机前置」第 2 条)。
+
 ## 每台设备的就绪握手(`ensure_wda_ready`)
 
 装完 App 后按序:

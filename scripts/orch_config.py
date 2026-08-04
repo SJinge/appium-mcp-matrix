@@ -18,7 +18,7 @@ APP_DISPLAY_NAMES = {
     "ketang":  "高途素养",
 }
 
-DEFAULT_WDA_TEAM = "5YX44746D6"
+DEFAULT_WDA_TEAM = "LU2B796CHV"  # 高途组织付费团队(金鸽石 TV3FCP39YB),证书1年有效,比个人免费7天证书稳
 DEFAULT_WDA_BUNDLE = "com.shijinge.WebDriverAgentRunner"
 DEFAULT_WDA_PORT = 8100
 DEFAULT_BATCH_SIZE = 20

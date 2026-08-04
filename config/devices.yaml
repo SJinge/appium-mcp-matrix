@@ -9,13 +9,13 @@ default:
     - udid: "00008101-001E28D436E0001E"
       name: "111的iPhone12 (iOS 18.7.8)"
       wda:
-        team: "5YX44746D6"
+        team: "LU2B796CHV"
         bundle_id: "com.shijinge.WebDriverAgentRunner"
         port: 8100
     # 长期离线(tidevice list 查无此机),每轮 install failed 被跳过；接回来再解注释
     - udid: "00008110-00180CD9348B801E"
       name: "iPhone (iOS 18.7.8)"
       wda:
-        team: "5YX44746D6"
+        team: "LU2B796CHV"
         bundle_id: "com.shijinge.WebDriverAgentRunner"
         port: 8101
